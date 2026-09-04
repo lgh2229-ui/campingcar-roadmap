@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>캠핑카족 로드맵</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--text:#16212b;--muted:#64717d;--accent:#1976d2;--line:#dfe5ea}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;background:var(--bg);color:var(--text)}
+#app{height:100dvh;display:flex;flex-direction:column}.top{background:#fff;padding:10px 12px 8px;box-shadow:0 1px 6px #0001;z-index:500}.brand{display:flex;align-items:center;justify-content:space-between}.brand b{font-size:21px}.loc{font-size:12px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chips{display:flex;gap:7px;overflow:auto;margin-top:9px;padding-bottom:2px}.chip{border:0;background:#eef2f5;padding:7px 11px;border-radius:18px;white-space:nowrap;font-size:13px}.chip.on{background:#1f7ae0;color:#fff}.mapwrap{position:relative;flex:1;min-height:0}#map{height:100%;width:100%}.fab{position:absolute;right:15px;bottom:20px;z-index:450;border:0;background:#1976d2;color:#fff;border-radius:28px;padding:13px 17px;font-weight:700;box-shadow:0 4px 14px #0004}.bottom{height:68px;background:#fff;display:grid;grid-template-columns:repeat(5,1fr);box-shadow:0 -1px 6px #0001;z-index:500}.nav{border:0;background:#fff;font-size:11px;color:#46525c}.nav span{display:block;font-size:20px;margin-bottom:2px}.modal{position:fixed;inset:0;background:#0007;z-index:1000;display:none;align-items:flex-end}.modal.show{display:flex}.sheet{background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:91dvh;overflow:auto;padding:17px 16px 26px}.row{display:flex;gap:8px}.field{margin:10px 0}.field label{display:block;font-size:12px;color:#66727b;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;border:1px solid var(--line);border-radius:11px;padding:11px;font-size:15px;background:#fff}.field textarea{min-height:80px;resize:vertical}.btns{display:flex;gap:8px;margin-top:14px}.btn{flex:1;border:0;border-radius:12px;padding:12px;font-weight:700}.primary{background:#1976d2;color:#fff}.ghost{background:#edf1f4}.detail-photo{width:100%;height:185px;object-fit:cover;border-radius:12px;background:#eef2f5}.badge{display:inline-block;padding:4px 8px;border-radius:12px;background:#eef2f5;font-size:12px;margin-right:4px}.price{font-size:20px;font-weight:800;margin:8px 0}.small{font-size:12px;color:#6b7882}.statusbar{display:flex;gap:6px;margin-top:14px}.statusbar button{flex:1;border:0;border-radius:10px;padding:9px;font-size:12px}.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.photo-grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px}.warn{background:#fff6df;border:1px solid #f1d58b;border-radius:10px;padding:9px;font-size:12px;color:#725a16}.section-title{font-size:17px;font-weight:800;margin:2px 0 8px}.checks{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:7px}.checkitem{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;font-size:13px}.checkitem input{width:auto;margin:0}.radioitem{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff;font-size:13px}.radioitem input{width:auto;margin:0}.saved-row{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding:10px 0}.saved-row:last-child{border-bottom:none}.xbtn{border:0;background:transparent;font-size:20px;line-height:1;padding:4px 7px;cursor:pointer;opacity:.7}.xbtn:active{opacity:1}
+
+.authgate{position:fixed;inset:0;z-index:5000;background:linear-gradient(180deg,#eef6ff,#f7f8fa);display:flex;align-items:center;justify-content:center;padding:20px}.authcard{width:min(440px,100%);background:#fff;border-radius:24px;padding:24px 20px;box-shadow:0 12px 40px #0002}.authlogo{text-align:center;font-size:48px}.authtitle{text-align:center;font-size:24px;font-weight:900;margin:8px 0 4px}.authsub{text-align:center;color:#6b7882;font-size:13px;margin-bottom:18px}.tabs{display:grid;grid-template-columns:1fr 1fr;background:#eef2f5;border-radius:12px;padding:4px;margin-bottom:14px}.tabs button{border:0;background:transparent;padding:10px;border-radius:9px;font-weight:800}.tabs button.on{background:#fff;box-shadow:0 1px 5px #0001;color:#1976d2}.authnote{font-size:11px;color:#7a8790;margin-top:10px;line-height:1.5}.userline{font-size:12px;color:#64717d;margin-top:3px}.logout{border:0;background:#f1f3f5;padding:8px 10px;border-radius:10px;font-size:12px}
+
+/* V12: 하단 4개 메뉴 완전 균등 배치 */
+.bottom,.bottomnav,.bottom-nav,nav.bottom-nav{
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  width:100% !important;
+  gap:0 !important;
+}
+.bottom>button,.bottomnav>button,.bottom-nav>button,nav.bottom-nav>button,
+.bottom>a,.bottomnav>a,.bottom-nav>a,nav.bottom-nav>a{
+  width:100% !important;
+  min-width:0 !important;
+  max-width:none !important;
+  margin:0 !important;
+  padding-left:2px !important;
+  padding-right:2px !important;
+  justify-self:stretch !important;
+  box-sizing:border-box !important;
+}
+
+
+.multi-service-marker{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  background:#fff;
+  border:2px solid #333;
+  border-radius:18px;
+  padding:4px 7px;
+  font-size:18px;
+  line-height:1;
+  white-space:nowrap;
+  box-shadow:0 1px 4px #0003;
+}
+
+
+.review-list{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.review-item{padding:9px 0;border-bottom:1px solid var(--line)}
+.review-head{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.review-user{font-weight:700}
+.review-text{font-size:13px;margin-top:4px;white-space:pre-wrap}
+.review-status{font-weight:700}
+
+
+.marker-label{display:none!important}
+
+
+
+/* V23: 동일 좌표 중복 마커 통합 + 서비스 2x2 셀 */
+.service-marker-wrap{
+  background:transparent !important;
+  border:0 !important;
+  overflow:visible !important;
+}
+.service-marker{
+  display:grid !important;
+  place-content:center !important;
+  place-items:center !important;
+  background:#fff !important;
+  border:2px solid #222 !important;
+  border-radius:10px !important;
+  box-sizing:border-box !important;
+  box-shadow:0 2px 5px rgba(0,0,0,.25) !important;
+  overflow:hidden !important;
+  font-size:19px !important;
+  line-height:1 !important;
+}
+.service-marker.s1{
+  width:42px !important;
+  height:42px !important;
+  grid-template-columns:30px !important;
+  grid-template-rows:30px !important;
+}
+.service-marker.s2{
+  width:66px !important;
+  height:42px !important;
+  grid-template-columns:28px 28px !important;
+  grid-template-rows:30px !important;
+  column-gap:2px !important;
+}
+.service-marker.s3,
+.service-marker.s4{
+  width:66px !important;
+  height:66px !important;
+  grid-template-columns:28px 28px !important;
+  grid-template-rows:28px 28px !important;
+  gap:2px !important;
+}
+.service-marker .svc{
+  width:28px !important;
+  height:28px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+  margin:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  overflow:visible !important;
+}
+.service-marker.s3 .svc:nth-child(3){
+  grid-column:1 / 3 !important;
+}
+
+
+.authlinks{display:flex;justify-content:center;align-items:center;gap:10px;margin-top:12px;font-size:12px}
+.authlinks button{border:0;background:transparent;color:#1976d2;padding:5px 3px;font-weight:700}
+.authlinks .sep{color:#b5bdc4}
+.recovery-result{margin-top:12px;padding:12px;border-radius:11px;background:#eef6ff;border:1px solid #cfe3fb;text-align:center}
+
+
+/* V28: 하단 지도/저장/내정보 3개만 정확히 1/3 균등 배치 */
+.bottom{
+  display:grid !important;
+  grid-template-columns:repeat(3,1fr) !important;
+  width:100% !important;
+  gap:0 !important;
+}
+.bottom>button{
+  display:flex !important;
+  width:100% !important;
+  min-width:0 !important;
+  max-width:none !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+
+/* V29: 지도 지역/주소 검색 */
+.map-search{
+  position:absolute;
+  z-index:1200;
+  top:12px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(92%,520px);
+  display:flex;
+  gap:7px;
+  padding:7px;
+  border-radius:12px;
+  background:rgba(255,255,255,.96);
+  box-shadow:0 2px 10px rgba(0,0,0,.20);
+  box-sizing:border-box;
+}
+.map-search input{
+  flex:1;
+  min-width:0;
+  height:40px;
+  border:1px solid #cfd7df;
+  border-radius:9px;
+  padding:0 11px;
+  font-size:14px;
+  outline:none;
+}
+.map-search button{
+  flex:0 0 68px;
+  height:40px;
+  border:0;
+  border-radius:9px;
+  font-weight:800;
+  background:#1976d2;
+  color:#fff;
+}
+.map-search-results{
+  position:absolute;
+  z-index:1250;
+  top:65px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(92%,520px);
+  max-height:260px;
+  overflow:auto;
+  background:#fff;
+  border-radius:12px;
+  box-shadow:0 3px 12px rgba(0,0,0,.22);
+  display:none;
+}
+.map-search-item{
+  padding:11px 13px;
+  border-bottom:1px solid #eef1f4;
+  cursor:pointer;
+  font-size:13px;
+  line-height:1.35;
+}
+.map-search-item:last-child{border-bottom:0}
+.map-search-item:hover{background:#f5f8fb}
+
+</style></head><body>
+<div id="authGate"></div>
+<div id="app" style="display:none">
+<div class="top"><div class="brand"><b>🚐 캠핑카족 로드맵</b><button class="chip" onclick="locate(true)">◎ 내 위치</button></div><div class="loc" id="locText">현재 위치 확인 중…</div><div class="chips" id="chips"></div></div>
+<div class="mapwrap">
+<div class="map-search">
+  <input id="mapSearchInput" type="search" placeholder="지역명 또는 주소 검색"
+         onkeydown="if(event.key==='Enter')searchMapAddress()">
+  <button onclick="searchMapAddress()">검색</button>
+</div>
+<div id="mapSearchResults" class="map-search-results"></div>
+
+<div id="map"></div><button class="fab" onclick="openAdd()">＋ 장소등록</button></div>
+<div class="bottom"><button class="nav" onclick="closeAll()"><span>🗺️</span>지도</button><button class="nav" onclick="showSaved()"><span>⭐</span>저장</button><button class="nav" onclick="openProfile()"><span>👤</span>내정보</button></div></div>
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+function getUsers(){return JSON.parse(localStorage.getItem('roadmap_users')||'[]')}
+function currentUser(){let id=localStorage.getItem('roadmap_session');return getUsers().find(u=>u.id===id)||null}
+let smsState={phone:'',code:'',verified:false};
+let recoveryState={mode:'',phone:'',userId:'',code:'',verified:false};
+function normalizePhone(v=''){return v.replace(/[^0-9]/g,'')}
+function validUserId(v=''){return /^[A-Za-z0-9_]{4,20}$/.test(v)}
+function validPassword(v=''){return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,20}$/.test(v)}
+function checkedValues(name){return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(x=>x.value)}
+function checkedRadio(name){return document.querySelector(`input[name="${name}"]:checked`)?.value||''}
+function vehicleSignupFields(){
+ const status=document.getElementById('joinVehicleStatus')?.value||'';
+ const box=document.getElementById('joinVehicleOwnedFields'); if(box) box.style.display=status==='owned'?'block':'none';
+}
+function showAuth(tab='login'){
+  smsState={phone:'',code:'',verified:false};
+  const gate=document.getElementById('authGate'); document.getElementById('app').style.display='none';
+  gate.className='authgate'; gate.style.display='flex';
+  gate.innerHTML=`<div class="authcard"><div class="authlogo">🚐</div><div class="authtitle">캠핑카족 로드맵</div><div class="authsub">캠핑카족이 함께 만드는 전국 편의시설 지도</div><div class="tabs"><button class="${tab==='login'?'on':''}" onclick="showAuth('login')">로그인</button><button class="${tab==='signup'?'on':''}" onclick="showAuth('signup')">회원가입</button></div>${tab==='login'?`<div class="field"><label>아이디</label><input id="loginUserId" autocomplete="username" maxlength="20" placeholder="아이디"></div><div class="field"><label>비밀번호</label><input id="loginPw" type="password" autocomplete="current-password" placeholder="비밀번호"></div><button class="btn primary" style="width:100%" onclick="loginUser()">로그인하고 시작</button><div class="authlinks"><button onclick="showRecovery('id')">아이디 찾기</button><span class="sep">|</span><button onclick="showRecovery('pw')">비밀번호 찾기</button></div><div class="authnote">처음 이용한다면 위의 <b>회원가입</b>을 눌러 가입해주세요.</div>`:`<div class="field"><label>아이디</label><input id="joinUserId" maxlength="20" autocomplete="username" placeholder="영문/숫자/밑줄 4~20자"><div class="small" style="margin-top:5px">영문자, 숫자, 밑줄(_)만 사용할 수 있습니다.</div></div><div class="field"><label>휴대폰 번호 <b style="color:#d32f2f">필수</b></label><div class="row"><input id="joinPhone" inputmode="tel" autocomplete="tel" placeholder="010-1234-5678" style="flex:1"><button class="btn ghost" style="flex:0 0 104px" onclick="sendSmsCode()">인증번호 받기</button></div></div><div class="field"><label>문자 인증번호</label><div class="row"><input id="joinSmsCode" inputmode="numeric" maxlength="6" placeholder="6자리 인증번호" style="flex:1"><button class="btn ghost" style="flex:0 0 104px" onclick="verifySmsCode()">인증 확인</button></div><div id="smsStatus" class="small" style="margin-top:6px">휴대폰 문자 인증이 필요합니다.</div></div><div class="field"><label>비밀번호</label><input id="joinPw" type="password" autocomplete="new-password" placeholder="영문+숫자+특수문자, 8~20자"><div class="small" style="margin-top:5px">영문자·숫자·특수문자를 각각 1개 이상 포함해야 합니다.</div></div><div class="field"><label>비밀번호 확인</label><input id="joinPw2" type="password" autocomplete="new-password" placeholder="비밀번호 다시 입력"></div><div class="section-title" style="margin-top:14px">🚐 차량 정보</div><div class="field"><label>차량 상태 <b style="color:#d32f2f">필수</b></label><select id="joinVehicleStatus" onchange="vehicleSignupFields()"><option value="" selected disabled>선택해주세요</option><option value="planned">구매예정</option><option value="owned">보유중</option></select></div><div id="joinVehicleOwnedFields" style="display:none"><div class="field"><label>차량 이름/모델</label><input id="joinVehicleName" placeholder="예: 렉스턴 스포츠 칸 캠핑카"></div><div class="field"><label>차량 높이(mm)</label><input id="joinVehicleH" inputmode="numeric" placeholder="예: 3000"></div><div class="field"><label>오수/정화조 방식 <b style="color:#d32f2f">필수</b></label><div class="checks"><label class="radioitem"><input type="radio" name="joinTank" value="블랙탱크">블랙탱크</label><label class="radioitem"><input type="radio" name="joinTank" value="그레이탱크">그레이탱크</label><label class="radioitem"><input type="radio" name="joinTank" value="카트리지">카트리지</label></div></div></div><button class="btn primary" style="width:100%" onclick="signupUser()">회원가입하고 시작</button><div class="authnote">테스트판에서는 실제 SMS 서버가 연결되지 않아 인증번호가 화면에 표시됩니다.</div>`}</div>`;
+}
+function sendSmsCode(){
+ const phone=normalizePhone(document.getElementById('joinPhone').value);
+ if(!/^01[016789]\d{7,8}$/.test(phone)){alert('올바른 휴대폰 번호를 입력해주세요');return}
+ smsState={phone,code:String(Math.floor(100000+Math.random()*900000)),verified:false};
+ document.getElementById('smsStatus').innerHTML=`📨 테스트 인증번호: <b>${smsState.code}</b> (실서비스에서는 문자로 발송)`;
+ alert('테스트판이라 인증번호를 화면에 표시했습니다.');
+}
+function verifySmsCode(){
+ const phone=normalizePhone(document.getElementById('joinPhone').value), code=document.getElementById('joinSmsCode').value.trim();
+ if(!smsState.code||smsState.phone!==phone){alert('먼저 현재 휴대폰 번호로 인증번호를 받아주세요');return}
+ if(code!==smsState.code){alert('인증번호가 일치하지 않습니다');return}
+ smsState.verified=true; document.getElementById('smsStatus').innerHTML='✅ 휴대폰 인증이 완료되었습니다.';
+}
+function signupUser(){
+ const userId=document.getElementById('joinUserId').value.trim(), phone=normalizePhone(document.getElementById('joinPhone').value), pw=document.getElementById('joinPw').value, pw2=document.getElementById('joinPw2').value;
+ if(!validUserId(userId)){alert('아이디는 영문자, 숫자, 밑줄(_)로 4~20자 입력해주세요');return}
+ if(!/^01[016789]\d{7,8}$/.test(phone)){alert('휴대폰 번호는 필수입니다');return}
+ if(!smsState.verified||smsState.phone!==phone){alert('휴대폰 문자 인증을 완료해주세요');return}
+ if(!validPassword(pw)){alert('비밀번호는 8~20자이며 영문자, 숫자, 특수문자를 모두 포함해야 합니다');return}
+ if(pw!==pw2){alert('비밀번호가 일치하지 않습니다');return}
+ let users=getUsers(); if(users.some(u=>u.userId?.toLowerCase()===userId.toLowerCase())){alert('이미 사용 중인 아이디입니다');return}
+ if(users.some(u=>u.phone===phone)){alert('이미 가입된 휴대폰 번호입니다');return}
+ const vehicleStatus=document.getElementById('joinVehicleStatus').value;
+ if(!vehicleStatus){alert('차량 상태를 구매예정 또는 보유중에서 선택해주세요');return}
+ let vehicle={status:vehicleStatus,name:'',h:'',tank:''};
+ if(vehicleStatus==='owned'){
+   vehicle.name=document.getElementById('joinVehicleName').value.trim(); vehicle.h=document.getElementById('joinVehicleH').value.trim(); vehicle.tank=checkedRadio('joinTank');
+   if(!vehicle.name){alert('보유 중인 차량의 이름/모델을 입력해주세요');return}
+   if(!vehicle.tank){alert('블랙탱크, 그레이탱크, 카트리지 중 1개를 선택해주세요');return}
+ }
+ let u={id:'u'+Date.now(),userId,phone,pw,phoneVerified:true,vehicle,joinedAt:new Date().toISOString()}; users.push(u); localStorage.setItem('roadmap_users',JSON.stringify(users)); localStorage.setItem('roadmap_session',u.id); enterApp();
+}
+
+function showRecovery(mode){
+  recoveryState={mode,phone:'',userId:'',code:'',verified:false};
+  const gate=document.getElementById('authGate');
+  document.getElementById('app').style.display='none';
+  gate.className='authgate';
+  gate.style.display='flex';
+
+  const isId=mode==='id';
+  gate.innerHTML=`<div class="authcard">
+    <div class="authlogo">🚐</div>
+    <div class="authtitle">${isId?'아이디 찾기':'비밀번호 찾기'}</div>
+    <div class="authsub">회원가입 시 등록한 휴대폰 번호로 본인 인증합니다.</div>
+
+    ${isId?'':`<div class="field"><label>아이디</label><input id="recoverUserId" maxlength="20" autocomplete="username" placeholder="가입한 아이디"></div>`}
+
+    <div class="field">
+      <label>등록된 휴대폰 번호</label>
+      <div class="row">
+        <input id="recoverPhone" inputmode="tel" autocomplete="tel" placeholder="010-1234-5678" style="flex:1">
+        <button class="btn ghost" style="flex:0 0 104px" onclick="sendRecoverySms()">인증번호 받기</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>문자 인증번호</label>
+      <div class="row">
+        <input id="recoverSmsCode" inputmode="numeric" maxlength="6" placeholder="6자리 인증번호" style="flex:1">
+        <button class="btn ghost" style="flex:0 0 104px" onclick="verifyRecoverySms()">인증 확인</button>
+      </div>
+      <div id="recoverSmsStatus" class="small" style="margin-top:6px">휴대폰 문자 인증이 필요합니다.</div>
+    </div>
+
+    <div id="recoverResult"></div>
+
+    <div class="btns">
+      <button class="btn ghost" onclick="showAuth('login')">로그인으로 돌아가기</button>
+    </div>
+  </div>`;
+}
+
+function sendRecoverySms(){
+  const phone=normalizePhone(document.getElementById('recoverPhone')?.value||'');
+  if(!/^01[016789]\d{7,8}$/.test(phone)){
+    alert('올바른 휴대폰 번호를 입력해주세요');
+    return;
+  }
+
+  const users=getUsers();
+  let user=null;
+
+  if(recoveryState.mode==='id'){
+    user=users.find(u=>u.phone===phone);
+    if(!user){
+      alert('해당 휴대폰 번호로 가입된 계정을 찾을 수 없습니다.');
+      return;
+    }
+  }else{
+    const userId=(document.getElementById('recoverUserId')?.value||'').trim();
+    if(!userId){
+      alert('가입한 아이디를 입력해주세요');
+      return;
+    }
+    user=users.find(u=>u.phone===phone && String(u.userId||'').toLowerCase()===userId.toLowerCase());
+    if(!user){
+      alert('아이디와 등록된 휴대폰 번호가 일치하는 계정을 찾을 수 없습니다.');
+      return;
+    }
+    recoveryState.userId=user.userId;
+  }
+
+  recoveryState.phone=phone;
+  recoveryState.code=String(Math.floor(100000+Math.random()*900000));
+  recoveryState.verified=false;
+
+  const status=document.getElementById('recoverSmsStatus');
+  if(status) status.innerHTML=`📨 테스트 인증번호: <b>${recoveryState.code}</b> (실서비스에서는 문자로 발송)`;
+  alert('테스트판이라 인증번호를 화면에 표시했습니다.');
+}
+
+function verifyRecoverySms(){
+  const phone=normalizePhone(document.getElementById('recoverPhone')?.value||'');
+  const code=(document.getElementById('recoverSmsCode')?.value||'').trim();
+
+  if(!recoveryState.code || recoveryState.phone!==phone){
+    alert('먼저 현재 휴대폰 번호로 인증번호를 받아주세요');
+    return;
+  }
+  if(code!==recoveryState.code){
+    alert('인증번호가 일치하지 않습니다');
+    return;
+  }
+
+  recoveryState.verified=true;
+  const status=document.getElementById('recoverSmsStatus');
+  if(status) status.innerHTML='✅ 휴대폰 인증이 완료되었습니다.';
+
+  const result=document.getElementById('recoverResult');
+  if(recoveryState.mode==='id'){
+    const u=getUsers().find(x=>x.phone===phone);
+    if(!u){
+      alert('계정을 찾을 수 없습니다.');
+      return;
+    }
+    result.innerHTML=`<div class="recovery-result"><div class="small">가입된 아이디</div><div style="font-size:20px;font-weight:900;margin-top:5px">${esc(u.userId)}</div><button class="btn primary" style="width:100%;margin-top:12px" onclick="showAuth('login')">로그인하기</button></div>`;
+  }else{
+    result.innerHTML=`<div class="recovery-result" style="text-align:left">
+      <div style="font-weight:800;margin-bottom:8px">새 비밀번호 설정</div>
+      <div class="field"><label>새 비밀번호</label><input id="recoverNewPw" type="password" autocomplete="new-password" placeholder="영문+숫자+특수문자, 8~20자"></div>
+      <div class="field"><label>새 비밀번호 확인</label><input id="recoverNewPw2" type="password" autocomplete="new-password" placeholder="비밀번호 다시 입력"></div>
+      <button class="btn primary" style="width:100%" onclick="resetRecoveredPassword()">비밀번호 변경</button>
+    </div>`;
+  }
+}
+
+function resetRecoveredPassword(){
+  if(recoveryState.mode!=='pw' || !recoveryState.verified){
+    alert('휴대폰 인증을 먼저 완료해주세요');
+    return;
+  }
+
+  const pw=document.getElementById('recoverNewPw')?.value||'';
+  const pw2=document.getElementById('recoverNewPw2')?.value||'';
+
+  if(!validPassword(pw)){
+    alert('비밀번호는 8~20자이며 영문자, 숫자, 특수문자를 모두 포함해야 합니다');
+    return;
+  }
+  if(pw!==pw2){
+    alert('비밀번호가 일치하지 않습니다');
+    return;
+  }
+
+  const users=getUsers();
+  const idx=users.findIndex(u=>
+    u.phone===recoveryState.phone &&
+    String(u.userId||'').toLowerCase()===String(recoveryState.userId||'').toLowerCase()
+  );
+
+  if(idx<0){
+    alert('계정을 찾을 수 없습니다.');
+    return;
+  }
+
+  users[idx].pw=pw;
+  users[idx].passwordChangedAt=new Date().toISOString();
+  localStorage.setItem('roadmap_users',JSON.stringify(users));
+
+  alert('비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.');
+  showAuth('login');
+}
+
+function loginUser(){const userId=document.getElementById('loginUserId').value.trim(),pw=document.getElementById('loginPw').value;let u=getUsers().find(x=>x.userId?.toLowerCase()===userId.toLowerCase()&&x.pw===pw);if(!u){alert('아이디 또는 비밀번호를 확인해주세요');return}localStorage.setItem('roadmap_session',u.id);enterApp()}
+function logoutUser(){if(confirm('로그아웃할까요?')){localStorage.removeItem('roadmap_session');closeAll();showAuth('login')}}
+function enterApp(){document.getElementById('authGate').style.display='none';document.getElementById('app').style.display='flex';setTimeout(()=>map.invalidateSize(),50);locate(false)}
+function requireUser(){if(!currentUser()){showAuth('login');return false}return true}
+const TYPES={all:'전체',dump:'블랙',water:'급수',spot:'노지',toilet:'화장실'};
+const ICON={dump:'🚽',water:'💧',spot:'🅿️',toilet:'🚻'};
+let active='all', my={lat:37.1498,lng:127.0772}, markers=[], tempPhotos=[];
+let places=JSON.parse(localStorage.getItem('campermap_places')||'null')||[
+{id:1,type:'dump',name:'세교 캠핑카 블랙존',lat:37.163,lng:127.064,address:'경기도 오산시 세교동 일대',prices:{black:'10,000원',water:'',spot:''},hours:'09:00~20:00',reservation:'전화문의',services:['블랙탱크 비움'],phone:'010-1234-5678',note:'사전 연락 권장 · 대형 캠핑카 가능',maxH:'3500',photos:[],status:'ok'},
+{id:2,type:'water',name:'오산 생활용수 급수',lat:37.145,lng:127.071,address:'경기도 오산시 오산동 일대',prices:{black:'',water:'무료',spot:''},hours:'24시간',reservation:'예약불필요',services:['급수'],phone:'',note:'수도 연결 가능',photos:[],status:'ok'},
+{id:3,type:'spot',name:'강변 노지 포인트',lat:37.138,lng:127.088,address:'경기도 오산시 강변 일대',prices:{black:'',water:'',spot:'무료'},hours:'',reservation:'예약불필요',services:['노지/차박'],phone:'',note:'화장실 200m · 취사 여부 현장 확인',photos:[],status:'ok'},
+{id:4,type:'toilet',name:'공영주차장 화장실',lat:37.157,lng:127.087,address:'경기도 오산시 공영주차장 일대',prices:{black:'',water:'',spot:''},hours:'24시간',reservation:'예약불필요',services:['공중화장실'],note:'장애인 화장실 있음',photos:[],status:'ok'}
+];
+places=places.filter(p=>p.type!=='provider'); localStorage.setItem('campermap_places',JSON.stringify(places));
+const map=L.map('map',{zoomControl:false}).setView([my.lat,my.lng],13); L.control.zoom({position:'bottomleft'}).addTo(map);
+const TILE_URL='https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+L.tileLayer(TILE_URL,{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
+let me=L.circleMarker([my.lat,my.lng],{radius:8,color:'#fff',weight:3,fillColor:'#1976d2',fillOpacity:1}).addTo(map);
+function save(){localStorage.setItem('campermap_places',JSON.stringify(places));}
+function esc(s=''){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function chips(){const e=document.getElementById('chips');e.innerHTML='';Object.entries(TYPES).forEach(([k,v])=>{let b=document.createElement('button');b.className='chip'+(active===k?' on':'');b.textContent=v;b.onclick=()=>{active=k;chips();render()};e.appendChild(b)});}chips();
+
+function serviceHas(p, key){
+  const s=p.services||[];
+  if(key==='water') return s.includes('급수');
+  if(key==='dump') return s.includes('블랙탱크 비움');
+  if(key==='spot') return s.includes('노지/차박');
+  if(key==='toilet') return s.includes('공중화장실');
+  return false;
+}
+function serviceIcons(p){
+  const icons=[];
+  const s=Array.isArray(p.services)?p.services:[];
+  if(s.includes('급수')) icons.push('💧');
+  if(s.includes('블랙탱크 비움')) icons.push('🚽');
+  if(s.includes('노지/차박')) icons.push('🅿️');
+  if(s.includes('공중화장실')) icons.push('🚻');
+  return icons.join(' ');
+}
+function filterIcon(){
+  if(active==='dump') return '🚽';
+  if(active==='water') return '💧';
+  if(active==='spot') return '🅿️';
+  if(active==='toilet') return '🚻';
+  return '';
+}
+function markerIcons(p){
+  return active==='all' ? serviceIcons(p) : filterIcon();
+}
+
+
+function iconsFromServices(services){
+  const s=Array.isArray(services)?services:[];
+  const icons=[];
+  if(s.includes('급수')) icons.push('💧');
+  if(s.includes('블랙탱크 비움')) icons.push('🚽');
+  if(s.includes('노지/차박')) icons.push('🅿️');
+  if(s.includes('공중화장실')) icons.push('🚻');
+  return icons;
+}
+function mapGroups(){
+  const source=active==='all'?places:places.filter(p=>serviceHas(p,active));
+  const byPos=new Map();
+  source.forEach(p=>{
+    const key=`${Number(p.lat).toFixed(5)},${Number(p.lng).toFixed(5)}`;
+    if(!byPos.has(key)) byPos.set(key,{lat:Number(p.lat),lng:Number(p.lng),items:[],services:new Set()});
+    const g=byPos.get(key);
+    g.items.push(p);
+    (Array.isArray(p.services)?p.services:[]).forEach(s=>g.services.add(s));
+  });
+  return [...byPos.values()].map(g=>({...g,services:[...g.services]}));
+}
+function markerHtml(group){
+  const icons = active==='all' ? iconsFromServices(group.services) : [filterIcon()].filter(Boolean);
+  const shown=icons.slice(0,4);
+  const n=Math.max(1,shown.length);
+  return `<div class="service-marker s${n}">${shown.map(i=>`<span class="svc">${i}</span>`).join('')}</div>`;
+}
+function openMarkerGroup(ids){
+  const arr=ids.map(id=>places.find(p=>p.id===id)).filter(Boolean);
+  if(arr.length===1){detail(arr[0].id);return}
+  modal(`<div class="section-title">이 위치의 장소</div>${arr.map(p=>`<div class="saved-row"><div onclick="detail(${p.id})" style="flex:1;cursor:pointer"><b>${serviceIcons(p)} ${esc(p.name)}</b><div class="small">${esc((p.services||[]).join(' · '))}</div></div></div>`).join('')}<div class="btns"><button class="btn primary" onclick="closeAll()">닫기</button></div>`)
+}
+
+
+function cleanKoreanAddress(s){
+  return String(s||'')
+    .replace(/대한민국/g,'')
+    .replace(/Republic of Korea/gi,'')
+    .replace(/South Korea/gi,'')
+    .replace(/\bKorea\b/gi,'')
+    .replace(/\s+,/g,',')
+    .replace(/,\s*,/g,',')
+    .replace(/^,\s*|\s*,\s*$/g,'')
+    .trim();
+}
+
+async function searchMapAddress(){
+  const q=(document.getElementById('mapSearchInput')?.value||'').trim();
+  if(!q){alert('지역명 또는 주소를 입력해주세요.');return;}
+
+  const box=document.getElementById('mapSearchResults');
+  if(box){
+    box.style.display='block';
+    box.innerHTML='<div class="map-search-item">검색 중...</div>';
+  }
+
+  try{
+    const url=`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=kr&accept-language=ko&addressdetails=1&q=${encodeURIComponent(q)}`;
+    const res=await fetch(url,{headers:{'Accept':'application/json'}});
+    if(!res.ok) throw new Error('search failed');
+    const data=await res.json();
+
+    if(!Array.isArray(data) || !data.length){
+      if(box) box.innerHTML='<div class="map-search-item">검색 결과가 없습니다.</div>';
+      return;
+    }
+
+    if(box){
+      box.innerHTML=data.map((x,i)=>{
+        const label=cleanKoreanAddress(x.display_name||'');
+        return `<div class="map-search-item" onclick="selectMapSearchResult(${i})"><b>${esc(label||q)}</b></div>`;
+      }).join('');
+    }
+    window._mapSearchResults=data;
+  }catch(e){
+    console.error(e);
+    if(box) box.innerHTML='<div class="map-search-item">주소 검색에 실패했습니다. 잠시 후 다시 시도해주세요.</div>';
+  }
+}
+
+function selectMapSearchResult(i){
+  const x=(window._mapSearchResults||[])[i];
+  if(!x)return;
+  const lat=Number(x.lat), lng=Number(x.lon);
+  if(!Number.isFinite(lat)||!Number.isFinite(lng))return;
+
+  map.setView([lat,lng],16);
+
+  if(searchMarker) map.removeLayer(searchMarker);
+  searchMarker=L.marker([lat,lng]).addTo(map)
+    .bindPopup(`<b>${esc(cleanKoreanAddress(x.display_name||''))}</b>`)
+    .openPopup();
+
+  const input=document.getElementById('mapSearchInput');
+  if(input) input.value=cleanKoreanAddress(x.display_name||input.value);
+  const box=document.getElementById('mapSearchResults');
+  if(box) box.style.display='none';
+}
+
+document.addEventListener('click',e=>{
+  const results=document.getElementById('mapSearchResults');
+  const search=e.target.closest?.('.map-search');
+  const list=e.target.closest?.('.map-search-results');
+  if(results && !search && !list) results.style.display='none';
+});
+
+function render(){
+  markers.forEach(m=>map.removeLayer(m));
+  markers=[];
+  mapGroups().forEach(group=>{
+    const count=active==='all' ? Math.min(4,Math.max(1,iconsFromServices(group.services).length)) : 1;
+    const size=count===1?[42,42]:count===2?[66,42]:[66,66];
+    const marker=L.marker([group.lat,group.lng],{
+      icon:L.divIcon({
+        className:'service-marker-wrap',
+        html:markerHtml(group),
+        iconSize:size,
+        iconAnchor:[size[0]/2,size[1]/2]
+      })
+    }).addTo(map);
+    marker.on('click',()=>openMarkerGroup(group.items.map(p=>p.id)));
+    markers.push(marker);
+  });
+}render();
+function locate(center=false){if(!navigator.geolocation){document.getElementById('locText').textContent='위치 기능을 지원하지 않는 기기입니다';return}navigator.geolocation.getCurrentPosition(pos=>{my={lat:pos.coords.latitude,lng:pos.coords.longitude};me.setLatLng([my.lat,my.lng]);document.getElementById('locText').textContent=`내 위치 ${my.lat.toFixed(5)}, ${my.lng.toFixed(5)} · 장소등록 시 이 위치 사용`;if(center)map.setView([my.lat,my.lng],15)},()=>document.getElementById('locText').textContent='위치 권한 없음 · 샘플 위치 사용 중',{enableHighAccuracy:true,timeout:8000})}
+function modal(html){document.getElementById('sheet').innerHTML=html;document.getElementById('modal').classList.add('show')}
+function closeAll(){document.getElementById('modal').classList.remove('show')}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeAll()});
+
+const addressCache={};
+async function reverseAddress(lat,lng){
+ const key=`${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
+ if(addressCache[key]) return addressCache[key];
+ try{
+   const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&accept-language=ko&addressdetails=1`,{headers:{'Accept':'application/json'}});
+   if(!r.ok) throw new Error('reverse geocode failed');
+   const j=await r.json(), a=j.address||{};
+
+   // 한국 전용 주소 조합: 시/도 → 시/군/구 → 도로명 → 건물번호
+   const province=a.province||a.state||a.region||'';
+   const city=a.city||a.municipality||a.county||a.town||'';
+   const district=a.city_district||a.borough||'';
+   const road=a.road||a.pedestrian||a.residential||'';
+   const number=a.house_number||'';
+
+   let parts=[];
+   if(province) parts.push(province);
+   if(city && !parts.includes(city)) parts.push(city);
+   if(district && !parts.includes(district) && district!==city) parts.push(district);
+   if(road) parts.push(road);
+   if(number) parts.push(number);
+
+   let addr=parts.join(' ')
+     .replace(/대한민국/g,'')
+     .replace(/Republic of Korea/gi,'')
+     .replace(/South Korea/gi,'')
+     .replace(/Korea/gi,'')
+     .replace(/\s+/g,' ')
+     .trim();
+
+   // 도로명이 없을 때는 표시명에서 대한민국 제거 후 한국식 순서로 정리
+   if(!road || !addr){
+     let fallback=(j.display_name||'')
+       .replace(/대한민국/g,'')
+       .replace(/Republic of Korea/gi,'')
+       .replace(/South Korea/gi,'')
+       .replace(/Korea/gi,'')
+       .split(',')
+       .map(x=>x.trim())
+       .filter(Boolean);
+
+     // Nominatim 표시명은 작은 단위→큰 단위 순서인 경우가 많아 역순 정리
+     fallback=fallback.reverse();
+
+     // 중복 제거
+     const seen=new Set();
+     fallback=fallback.filter(x=>{
+       if(seen.has(x)) return false;
+       seen.add(x); return true;
+     });
+
+     addr=fallback.join(' ').replace(/\s+/g,' ').trim();
+   }
+
+   addressCache[key]=addr||'주소 확인 불가';
+   return addressCache[key];
+ }catch(e){
+   return `위도 ${Number(lat).toFixed(5)}, 경도 ${Number(lng).toFixed(5)}`;
+ }
+}
+
+
+
+function isAdministrator(){
+  const u=currentUser();
+  return !!u && String(u.userId||'').toLowerCase()==='administrator';
+}
+function requireAdministrator(){
+  if(!isAdministrator()){
+    alert('장소 정보 수정은 관리자만 가능합니다.');
+    return false;
+  }
+  return true;
+}
+
+function reviewLabel(s){return s==='ok'?'이용가능':s==='change'?'변경':'이용불가'}
+function reviewIcon(s){return s==='ok'?'✅':s==='change'?'⚠️':'❌'}
+function getReviews(p){return Array.isArray(p.reviews)?p.reviews:[]}
+function reviewHtml(p){
+ const rs=getReviews(p);
+ if(!rs.length)return '<div class="review-list"><b>검증 리뷰</b><div class="small" style="margin-top:8px">아직 등록된 검증 리뷰가 없습니다.</div></div>';
+ return `<div class="review-list"><b>검증 리뷰 ${rs.length}</b>${rs.slice().reverse().map(r=>`<div class="review-item"><div class="review-head"><span class="review-user">${esc(r.userId||'사용자')}</span><span class="review-status">${reviewIcon(r.status)} ${reviewLabel(r.status)}</span></div>${r.text?`<div class="review-text">${esc(r.text)}</div>`:''}<div class="small">${esc(r.date||'')}</div></div>`).join('')}</div>`
+}
+function openVerifyReview(id){
+ let p=places.find(x=>x.id===id);if(!p)return;
+ modal(`<div class="section-title">📝 검증 리뷰</div><div class="small">현재 이용 상태를 선택하고 간단한 리뷰를 남겨주세요.</div><div class="field"><label>이용 상태 <b style="color:#d32f2f">필수</b></label><div class="checks"><label class="radioitem"><input type="radio" name="verifyStatus" value="ok">✅ 이용가능</label><label class="radioitem"><input type="radio" name="verifyStatus" value="change">⚠️ 변경</label><label class="radioitem"><input type="radio" name="verifyStatus" value="bad">❌ 이용불가</label></div></div><div class="field"><label>리뷰글</label><textarea id="verifyText" maxlength="200" placeholder="예: 오늘 이용했습니다. 급수 정상적으로 가능합니다."></textarea><div class="small">최대 200자</div></div><div class="btns equal"><button class="btn ghost" onclick="detail(${id})">취소</button><button class="btn primary" onclick="saveVerifyReview(${id})">등록</button></div>`)
+}
+function saveVerifyReview(id){
+ let p=places.find(x=>x.id===id);if(!p)return;
+ const status=checkedRadio('verifyStatus');if(!status){alert('이용 상태를 선택해주세요');return}
+ const text=document.getElementById('verifyText').value.trim();
+ const u=currentUser();
+ if(!Array.isArray(p.reviews))p.reviews=[];
+ p.reviews.push({id:Date.now(),status,text,userId:u?.userId||'사용자',date:new Date().toLocaleDateString('ko-KR')});
+ p.status=status;save();render();detail(id)
+}
+
+
+function adminServiceRow(p, service, inputId, icon, label){
+  const checked=(p.services||[]).includes(service);
+  const price=(p.prices||{})[service]||'';
+  return `<div class="row">
+    <label class="checkitem" style="flex:0 0 145px">
+      <input type="checkbox" name="adminPlaceService" value="${service}" ${checked?'checked':''}
+        onchange="toggleServicePrice(this,'${inputId}')">${icon} ${label}
+    </label>
+    <input id="${inputId}" ${checked?'':'disabled'} value="${esc(price)}"
+      placeholder="금액 입력" style="flex:1">
+  </div>`;
+}
+function openPlaceEdit(id){
+  if(!requireAdministrator())return;
+  const p=places.find(x=>x.id===id); if(!p)return;
+  modal(`<div class="section-title">🛠️ 장소 정보 수정</div>
+    <div class="warn">관리자 전용 기능입니다.</div>
+    <div class="field"><label>장소명</label><input id="adminName" value="${esc(p.name||'')}"></div>
+
+    <div class="field"><label>서비스 가능 항목</label>
+      <div style="display:grid;gap:8px">
+        ${adminServiceRow(p,'급수','adminPriceWater','💧','급수')}
+        ${adminServiceRow(p,'블랙탱크 비움','adminPriceBlack','🚽','블랙탱크')}
+        ${adminServiceRow(p,'노지/차박','adminPriceSpot','🅿️','노지/차박')}
+        ${adminServiceRow(p,'공중화장실','adminPriceToilet','🚻','공중화장실')}
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field" style="flex:1"><label>운영시간</label>
+        <input id="adminHours" value="${esc(p.hours||'')}">
+      </div>
+      <div class="field" style="flex:1"><label>예약 여부</label>
+        <select id="adminReservation">
+          <option value="">선택 안함</option>
+          <option value="예약불필요" ${p.reservation==='예약불필요'?'selected':''}>예약불필요</option>
+          <option value="예약필수" ${p.reservation==='예약필수'?'selected':''}>예약필수</option>
+          <option value="전화문의" ${p.reservation==='전화문의'?'selected':''}>전화문의</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field" style="flex:1"><label>진입 최대 높이(mm)</label>
+        <input id="adminMaxH" inputmode="numeric" value="${esc(p.maxH||'')}">
+      </div>
+      <div class="field" style="flex:1"><label>문의연락처</label>
+        <input id="adminPhone" inputmode="tel" value="${esc(p.phone||'')}">
+      </div>
+    </div>
+
+    <div class="field"><label>주소</label>
+      <input id="adminAddress" value="${esc(p.address||'')}">
+    </div>
+
+    <div class="field"><label>이용방법 / 주의사항</label>
+      <textarea id="adminNote">${esc(p.note||'')}</textarea>
+    </div>
+
+    <div class="btns equal">
+      <button class="btn ghost" onclick="detail(${id})">취소</button>
+      <button class="btn primary" onclick="savePlaceEdit(${id})">수정 저장</button>
+    </div>`);
+}
+function savePlaceEdit(id){
+  if(!requireAdministrator())return;
+  const p=places.find(x=>x.id===id); if(!p)return;
+
+  const name=document.getElementById('adminName').value.trim();
+  if(!name){alert('장소명을 입력해주세요');return;}
+
+  const services=checkedValues('adminPlaceService');
+  if(!services.length){alert('서비스 가능 항목을 1개 이상 선택해주세요');return;}
+
+  const idMap={
+    '급수':'adminPriceWater',
+    '블랙탱크 비움':'adminPriceBlack',
+    '노지/차박':'adminPriceSpot',
+    '공중화장실':'adminPriceToilet'
+  };
+  const prices={};
+  for(const s of services){
+    const val=(document.getElementById(idMap[s])?.value||'').trim();
+    if(!val){alert(`${s} 금액을 입력해주세요. 무료인 경우 '무료'라고 입력해주세요.`);return;}
+    prices[s]=val;
+  }
+
+  p.name=name;
+  p.services=services;
+  p.prices=prices;
+  p.hours=document.getElementById('adminHours').value.trim();
+  p.reservation=document.getElementById('adminReservation').value;
+  p.maxH=document.getElementById('adminMaxH').value.trim();
+  p.phone=document.getElementById('adminPhone').value.trim();
+  p.address=document.getElementById('adminAddress').value.trim();
+  p.note=document.getElementById('adminNote').value.trim();
+
+  // legacy type is kept only for older compatibility; services remains authoritative.
+  p.type=services.includes('급수')?'water':
+         services.includes('블랙탱크 비움')?'dump':
+         services.includes('노지/차박')?'spot':'toilet';
+
+  p.lastEditedBy=currentUser()?.userId||'administrator';
+  p.lastEditedAt=new Date().toISOString();
+
+  save();
+  render();
+  alert('장소 정보를 수정했습니다.');
+  detail(id);
+}
+
+async function detail(id){let p=places.find(x=>x.id===id);if(!p)return;let prof=(currentUser()?.vehicle||{});let fit='';if(p.maxH&&prof.h)fit=Number(prof.h)<=Number(p.maxH)?'<div class="warn">✅ 내 캠핑카 높이 기준 진입 가능</div>':'<div class="warn">⚠️ 내 캠핑카 높이가 제한보다 높습니다</div>';
+let photos=p.photos?.length?`<div class="photo-grid">${p.photos.slice(0,6).map(x=>`<img src="${x}">`).join('')}</div>`:'';
+let address=p.address; if(!address || /대한민국|Republic of Korea|South Korea|Korea/i.test(address)){address=await reverseAddress(p.lat,p.lng); if(!address.startsWith('위도 ')){p.address=address;save();}}
+let serviceBadges=(p.services||[]).map(s=>`<span class="badge">${esc(s)}</span>`).join('');
+let pr=p.prices||{}; let priceLines=[]; if(pr['블랙탱크 비움'])priceLines.push(`블랙탱크 ${esc(pr['블랙탱크 비움'])}`); if(pr['급수'])priceLines.push(`급수 ${esc(pr['급수'])}`); if(pr['노지/차박'])priceLines.push(`노지/차박 ${esc(pr['노지/차박'])}`); if(pr['공중화장실'])priceLines.push(`공중화장실 ${esc(pr['공중화장실'])}`); if(!priceLines.length){if(pr.black)priceLines.push(`블랙탱크 ${esc(pr.black)}`);if(pr.water)priceLines.push(`급수 ${esc(pr.water)}`);if(pr.spot)priceLines.push(`노지 ${esc(pr.spot)}`);if(p.price)priceLines.push(esc(p.price))}
+modal(`<div class="section-title">${serviceIcons(p)||ICON[p.type]||'📍'} ${esc(p.name)}</div>${photos}<div>${serviceBadges||`<span class="badge">${TYPES[p.type]||'장소'}</span>`}${p.status==='bad'?'<span class="badge">이용불가 제보</span>':''}</div>${priceLines.length?`<div class="price">${priceLines.join('<br>')}</div>`:''}<div class="warn">📍 ${esc(address)}</div>${fit}<p>${esc(p.note||'상세 설명 없음')}</p><div class="small">운영시간 ${esc(p.hours||'')}<br>예약여부 ${esc(p.reservation||'')}<br>${p.maxH?'높이 제한 '+esc(p.maxH)+'mm<br>':''}${p.phone?'문의연락처 '+esc(p.phone):''}${p.ownerName?'<br>등록자 '+esc(p.ownerName):''}</div><div class="btns equal"><button class="btn primary" onclick="openVerifyReview(${id})">📝 검증리뷰</button>${isAdministrator()?`<button class="btn ghost" onclick="openPlaceEdit(${id})">🛠️ 정보 수정</button>`:''}</div>${reviewHtml(p)}<div class="btns equal"><button class="btn ghost" onclick="sharePlace(${id})">공유</button><button class="btn ghost" onclick="toggleSave(${id})">⭐ 저장</button><button class="btn primary" onclick="closeAll()">확인</button></div>`)}
+function status(id,s){let p=places.find(x=>x.id===id);p.status=s;save();detail(id)}
+async function sharePlace(id){let p=places.find(x=>x.id===id);let address=p.address||await reverseAddress(p.lat,p.lng);let text=`${p.name}\n${TYPES[p.type]} · ${p.price}\n주소: ${address}\n위치: ${p.lat}, ${p.lng}`;if(navigator.share){try{await navigator.share({title:p.name,text})}catch(e){}}else{navigator.clipboard?.writeText(text);alert('장소 정보가 복사되었습니다')}}
+function savedIds(){return JSON.parse(localStorage.getItem('campermap_saved')||'[]')}
+function removeSaved(id){let a=savedIds().filter(x=>x!==id);localStorage.setItem('campermap_saved',JSON.stringify(a));showSaved();render()}
+function toggleSave(id){let a=savedIds();a=a.includes(id)?a.filter(x=>x!==id):[...a,id];localStorage.setItem('campermap_saved',JSON.stringify(a));alert(a.includes(id)?'저장했습니다':'저장을 해제했습니다')}
+function goSavedPlace(id){let p=places.find(x=>x.id===id);if(!p)return;closeAll();map.setView([p.lat,p.lng],17);setTimeout(()=>detail(id),250)}
+function showSaved(){let ids=savedIds(),arr=places.filter(p=>ids.includes(p.id));modal(`<div class="section-title">⭐ 저장한 장소</div>${arr.length?arr.map(p=>`<div class="saved-row"><div onclick="goSavedPlace(${p.id})" style="flex:1;cursor:pointer"><b>${serviceIcons(p)||ICON[p.type]||'📍'} ${esc(p.name)}</b><div class="small">${esc(p.address||'주소 미확인')}</div></div><button class="xbtn" aria-label="저장 삭제" onclick="removeSaved(${p.id})">×</button></div>`).join(''):'<p class="small">저장한 장소가 없습니다.</p>'}<div class="btns equal"><button class="btn primary" onclick="closeAll()">닫기</button></div>`)}
+function toggleServicePrice(box,inputId){const el=document.getElementById(inputId);el.disabled=!box.checked;if(!box.checked)el.value=''}
+function form(){tempPhotos=[];modal(`<div class="section-title">＋ 새 장소 등록</div><div class="warn">📍 등록 좌표: ${my.lat.toFixed(5)}, ${my.lng.toFixed(5)} — 등록 전에 '내 위치'를 눌러 정확한 GPS 위치를 확인하세요.</div><div class="field"><label>장소명</label><input id="fName" placeholder="예: OO 캠핑카 편의시설"></div><div class="field"><label>서비스 가능 항목 <b style="color:#d32f2f">복수 선택 가능</b></label><div style="display:grid;gap:8px"><div class="row"><label class="checkitem" style="flex:0 0 145px"><input type="checkbox" name="placeService" value="급수" onchange="toggleServicePrice(this,'priceWater')">💧 급수</label><input id="priceWater" disabled placeholder="금액 입력 (예: 무료 / 5,000원)" style="flex:1"></div><div class="row"><label class="checkitem" style="flex:0 0 145px"><input type="checkbox" name="placeService" value="블랙탱크 비움" onchange="toggleServicePrice(this,'priceBlack')">🚽 블랙탱크</label><input id="priceBlack" disabled placeholder="금액 입력 (예: 10,000원)" style="flex:1"></div><div class="row"><label class="checkitem" style="flex:0 0 145px"><input type="checkbox" name="placeService" value="노지/차박" onchange="toggleServicePrice(this,'priceSpot')">🅿️ 노지/차박</label><input id="priceSpot" disabled placeholder="금액 입력 (예: 무료 / 20,000원)" style="flex:1"></div><div class="row"><label class="checkitem" style="flex:0 0 145px"><input type="checkbox" name="placeService" value="공중화장실" onchange="toggleServicePrice(this,'priceToilet')">🚻 공중화장실</label><input id="priceToilet" disabled placeholder="금액 입력 (예: 무료)" style="flex:1"></div></div></div><div class="row"><div class="field" style="flex:1"><label>운영시간</label><input id="fHours" placeholder="09:00~20:00"></div><div class="field" style="flex:1"><label>예약 여부</label><select id="fReservation"><option value="" selected disabled>선택해주세요</option><option value="예약불필요">예약불필요</option><option value="예약필수">예약필수</option><option value="전화문의">전화문의</option></select></div></div><div class="row"><div class="field" style="flex:1"><label>진입 최대 높이(mm)</label><input id="fH" inputmode="numeric" placeholder="예: 3200"></div><div class="field" style="flex:1"><label>문의연락처</label><input id="fPhone" inputmode="tel" placeholder="선택"></div></div><div class="field"><label>이용방법 / 주의사항</label><textarea id="fNote" placeholder="급수 방법, 오수 처리 위치, 사전 연락, 차량 진입조건 등"></textarea></div><div class="field"><label>장소사진 <b style="color:#d32f2f">필수</b></label><input type="file" accept="image/*" multiple onchange="pickPhotos(event)"><div id="photoPrev" class="photo-grid"></div></div><div class="btns equal"><button class="btn ghost" onclick="closeAll()">취소</button><button class="btn primary" onclick="addPlace()">현재 위치에 등록</button></div>`)}
+function openAdd(){if(requireUser())form()}
+function pickPhotos(e){tempPhotos=[];[...e.target.files].slice(0,3).forEach(f=>{let r=new FileReader();r.onload=()=>{tempPhotos.push(r.result);document.getElementById('photoPrev').innerHTML=tempPhotos.map(x=>`<img src="${x}">`).join('')};r.readAsDataURL(f)})}
+async function addPlace(){
+ let name=document.getElementById('fName').value.trim();if(!name){alert('장소명을 입력해주세요');return}
+ let services=checkedValues('placeService');if(!services.length){alert('서비스 가능 항목을 1개 이상 선택해주세요');return}
+ if(!tempPhotos.length){alert('장소사진을 1장 이상 등록해주세요');return}
+ let reservation=document.getElementById('fReservation').value;if(!reservation){alert('예약 여부를 선택해주세요');return}
+ const idMap={'급수':'priceWater','블랙탱크 비움':'priceBlack','노지/차박':'priceSpot','공중화장실':'priceToilet'};let prices={};
+ for(const s of services){const v=document.getElementById(idMap[s]).value.trim();if(!v){alert(`${s} 항목의 금액을 입력해주세요`);return}prices[s]=v}
+ let type=services.includes('급수')?'water':services.includes('블랙탱크 비움')?'dump':services.includes('노지/차박')?'spot':'toilet';
+ let p={id:Date.now(),type,name,lat:my.lat,lng:my.lng,address:'',prices,hours:document.getElementById('fHours').value.trim(),reservation,services,maxH:document.getElementById('fH').value.trim(),phone:document.getElementById('fPhone').value.trim(),note:document.getElementById('fNote').value.trim(),photos:tempPhotos,status:'ok',ownerId:currentUser()?.id||'',ownerName:currentUser()?.userId||''};
+ places.push(p);try{save()}catch(e){alert('사진 용량이 너무 큽니다. 사진 수나 용량을 줄여주세요.');places=places.filter(x=>x.id!==p.id);return}
+ closeAll();active='all';chips();render();map.setView([p.lat,p.lng],16);p.address=await reverseAddress(p.lat,p.lng);if(!p.address.startsWith('위도 '))save();detail(p.id)}
+function updateCurrentUser(mutator){
+ let users=getUsers(), sid=localStorage.getItem('roadmap_session'), i=users.findIndex(x=>x.id===sid); if(i<0)return null; mutator(users[i]); localStorage.setItem('roadmap_users',JSON.stringify(users)); return users[i];
+}
+function openProfile(){
+ if(!requireUser())return; let u=currentUser(), v=u.vehicle||{status:'',name:'',h:'',tank:''};
+ const tankText=v.tank?`<br>오수/정화조: ${esc(v.tank)}`:'';
+ const vText=v.status==='owned'?`<b>${esc(v.name||'차량명 미입력')}</b><br>높이 ${esc(v.h||'-')}mm${tankText}`:(v.status==='planned'?'구매예정':'차량 상태 미선택');
+ modal(`<div class="section-title">👤 내정보</div><div class="warn"><b>아이디: ${esc(u.userId||'')}</b>${isAdministrator()?'<br><b>🔐 관리자 계정</b>':''}<br>휴대폰: ${esc(u.phone||'-')}</div><div class="btns" style="margin-top:10px"><button class="btn ghost" onclick="requestPersonalEdit()">개인정보 변경</button></div><div class="section-title" style="margin-top:18px">🚐 차량정보</div><div class="warn">${vText}</div><div class="btns" style="margin-top:10px"><button class="btn ghost" onclick="openVehicleEdit()">차량정보 수정</button></div><div class="btns" style="margin-top:20px"><button class="btn ghost" onclick="logoutUser()">로그아웃</button><button class="btn primary" onclick="closeAll()">확인</button></div>`)
+}
+
+function requestPersonalEdit(){
+  const u=currentUser();
+  if(!u){alert('로그인이 필요합니다.');return;}
+  modal(`<div class="section-title">🔐 비밀번호 확인</div>
+    <div class="small" style="margin-bottom:12px">개인정보 보호를 위해 현재 비밀번호를 입력해주세요.</div>
+    <div class="field"><label>현재 비밀번호</label>
+      <input id="personalEditPw" type="password" autocomplete="current-password" placeholder="현재 비밀번호 입력"
+        onkeydown="if(event.key==='Enter')verifyPersonalEditPassword()">
+    </div>
+    <div class="btns equal">
+      <button class="btn ghost" onclick="openProfile()">취소</button>
+      <button class="btn primary" onclick="verifyPersonalEditPassword()">확인</button>
+    </div>`);
+  setTimeout(()=>document.getElementById('personalEditPw')?.focus(),50);
+}
+function verifyPersonalEditPassword(){
+  const u=currentUser();
+  if(!u){alert('로그인이 필요합니다.');return;}
+  const pw=document.getElementById('personalEditPw')?.value||'';
+  if(!pw){alert('비밀번호를 입력해주세요.');return;}
+  const account=getUsers().find(x=>String(x.userId||'').toLowerCase()===String(u.userId||'').toLowerCase());
+  if(!account || account.pw!==pw){
+    alert('비밀번호가 일치하지 않습니다.');
+    const el=document.getElementById('personalEditPw'); if(el){el.value='';el.focus();}
+    return;
+  }
+  openPersonalEdit();
+}
+
+function openPersonalEdit(){
+ let u=currentUser(); smsState={phone:u.phone||'',code:'',verified:true};
+ modal(`<div class="section-title">개인정보 변경</div><div class="field"><label>아이디</label><input value="${esc(u.userId||'')}" disabled></div><div class="field"><label>휴대폰 번호</label><div class="row"><input id="editPhone" inputmode="tel" value="${esc(u.phone||'')}" style="flex:1"><button class="btn ghost" style="flex:0 0 104px" onclick="sendEditSmsCode()">번호변경 인증</button></div><div id="editSmsWrap" style="display:none;margin-top:8px"><div class="row"><input id="editSmsCode" inputmode="numeric" maxlength="6" placeholder="6자리 인증번호" style="flex:1"><button class="btn ghost" style="flex:0 0 104px" onclick="verifyEditSmsCode()">인증 확인</button></div><div id="editSmsStatus" class="small" style="margin-top:6px"></div></div></div><div class="field"><label>새 비밀번호 (변경할 때만 입력)</label><input id="editPw" type="password" placeholder="영문+숫자+특수문자 8~20자"></div><div class="field"><label>새 비밀번호 확인</label><input id="editPw2" type="password" placeholder="비밀번호 다시 입력"></div><div class="btns"><button class="btn ghost" onclick="openProfile()">취소</button><button class="btn primary" onclick="savePersonalEdit()">변경 저장</button></div>`)
+}
+function sendEditSmsCode(){
+ const phone=normalizePhone(document.getElementById('editPhone').value); if(!/^01[016789]\d{7,8}$/.test(phone)){alert('올바른 휴대폰 번호를 입력해주세요');return}
+ smsState={phone,code:String(Math.floor(100000+Math.random()*900000)),verified:false}; document.getElementById('editSmsWrap').style.display='block'; document.getElementById('editSmsStatus').innerHTML=`📨 테스트 인증번호: <b>${smsState.code}</b>`;
+}
+function verifyEditSmsCode(){const phone=normalizePhone(document.getElementById('editPhone').value),code=document.getElementById('editSmsCode').value.trim(); if(phone!==smsState.phone||code!==smsState.code){alert('인증번호가 일치하지 않습니다');return} smsState.verified=true; document.getElementById('editSmsStatus').innerHTML='✅ 인증 완료';}
+function savePersonalEdit(){
+ let u=currentUser(), phone=normalizePhone(document.getElementById('editPhone').value), pw=document.getElementById('editPw').value, pw2=document.getElementById('editPw2').value;
+ if(phone!==u.phone && (!smsState.verified||smsState.phone!==phone)){alert('변경할 휴대폰 번호 인증을 완료해주세요');return}
+ if(pw){if(!validPassword(pw)){alert('새 비밀번호는 영문자, 숫자, 특수문자를 모두 포함한 8~20자로 입력해주세요');return} if(pw!==pw2){alert('새 비밀번호가 일치하지 않습니다');return}}
+ if(getUsers().some(x=>x.id!==u.id&&x.phone===phone)){alert('이미 가입된 휴대폰 번호입니다');return}
+ updateCurrentUser(x=>{x.phone=phone;if(pw)x.pw=pw}); alert('개인정보가 변경되었습니다'); openProfile();
+}
+function vehicleEditFields(){const status=document.getElementById('editVehicleStatus').value,box=document.getElementById('editVehicleOwned');box.style.display=status==='owned'?'block':'none';}
+function tankRadio(v,name){return v.tank===name?'checked':''}
+function openVehicleEdit(){
+ let u=currentUser(),v=u.vehicle||{status:'',name:'',h:'',tank:''};
+ modal(`<div class="section-title">🚐 차량정보 수정</div><div class="field"><label>차량 상태 <b style="color:#d32f2f">필수</b></label><select id="editVehicleStatus" onchange="vehicleEditFields()"><option value="" ${!v.status?'selected':''} disabled>선택해주세요</option><option value="planned" ${v.status==='planned'?'selected':''}>구매예정</option><option value="owned" ${v.status==='owned'?'selected':''}>보유중</option></select></div><div id="editVehicleOwned" style="display:${v.status==='owned'?'block':'none'}"><div class="field"><label>차량 이름/모델</label><input id="editVehicleName" value="${esc(v.name||'')}"></div><div class="field"><label>차량 높이(mm)</label><input id="editVehicleH" inputmode="numeric" value="${esc(v.h||'')}"></div><div class="field"><label>오수/정화조 방식</label><div class="checks"><label class="radioitem"><input type="radio" name="editTank" value="블랙탱크" ${tankRadio(v,'블랙탱크')}>블랙탱크</label><label class="radioitem"><input type="radio" name="editTank" value="그레이탱크" ${tankRadio(v,'그레이탱크')}>그레이탱크</label><label class="radioitem"><input type="radio" name="editTank" value="카트리지" ${tankRadio(v,'카트리지')}>카트리지</label></div></div></div><div class="btns equal"><button class="btn ghost" onclick="openProfile()">취소</button><button class="btn primary" onclick="saveVehicleEdit()">저장</button></div>`)
+}
+function saveVehicleEdit(){const status=document.getElementById('editVehicleStatus').value;if(!status){alert('차량 상태를 선택해주세요');return} let v={status,name:'',h:'',tank:''}; if(status==='owned'){v.name=document.getElementById('editVehicleName').value.trim();v.h=document.getElementById('editVehicleH').value.trim();v.tank=checkedRadio('editTank');if(!v.name){alert('차량 이름/모델을 입력해주세요');return}if(!v.tank){alert('블랙탱크, 그레이탱크, 카트리지 중 1개를 선택해주세요');return}} updateCurrentUser(x=>x.vehicle=v); alert('차량정보를 저장했습니다'); openProfile();}
+
+if(currentUser()) enterApp(); else showAuth('login');
+</script></body></html>
