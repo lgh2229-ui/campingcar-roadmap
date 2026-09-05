@@ -16,6 +16,8 @@ jobs:
           cache: true
       - name: Generate Android platform files
         run: flutter create . --platforms=android --org kr.co.campingcarroadmap --project-name campingcar_roadmap
+      - name: Remove generated default widget test
+        run: rm -f test/widget_test.dart
       - name: Prepare Android permissions and API 36
         run: python tool/prepare_android.py
       - name: Get packages
