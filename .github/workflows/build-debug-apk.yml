@@ -1,0 +1,39 @@
+name: Build Android Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  test-and-build-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform files
+        run: flutter create . --platforms=android --org kr.co.campingcarroadmap --project-name campingcar_roadmap
+      - name: Prepare Android permissions and API 36
+        run: python tool/prepare_android.py
+      - name: Get packages
+        run: flutter pub get
+      - name: Run tests
+        run: flutter test
+      - name: Analyze
+        run: flutter analyze
+      - name: Build debug APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: >-
+          flutter build apk --debug
+          --dart-define=SUPABASE_URL="$SUPABASE_URL"
+          --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: campingcar-roadmap-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
