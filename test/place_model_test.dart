@@ -24,4 +24,36 @@ void main() {
     expect(row['max_height_mm'], 3000);
     expect(row['inquiry_phone'], '01012345678');
   });
+
+  test('height compatibility keeps a 100mm default safety buffer', () {
+    final place = Place(
+      id: 'height-1',
+      name: '높이 제한 장소',
+      latitude: 37.0,
+      longitude: 127.0,
+      address: '테스트 주소',
+      services: const ['노지/차박'],
+      prices: const {},
+      maxHeightMm: 3100,
+    );
+
+    expect(place.isHeightCompatible(3000), isTrue);
+    expect(place.isHeightCompatible(3050), isFalse);
+    expect(place.heightSafetyLabel(3050), contains('진입 주의'));
+  });
+
+  test('unknown height data never hides a place', () {
+    final unrestricted = Place(
+      id: 'height-2',
+      name: '높이 정보 없음',
+      latitude: 37.0,
+      longitude: 127.0,
+      address: '테스트 주소',
+      services: const ['급수'],
+      prices: const {},
+    );
+
+    expect(unrestricted.isHeightCompatible(3300), isTrue);
+    expect(unrestricted.heightSafetyLabel(3300), '높이 제한 정보 없음');
+  });
 }
