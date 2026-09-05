@@ -33,6 +33,28 @@ class Place {
   String ownerId;
   List<String> photoUrls;
 
+  bool get hasHeightRestriction => maxHeightMm != null && maxHeightMm! > 0;
+
+  bool isHeightCompatible(int? vehicleHeightMm, {int clearanceBufferMm = 100}) {
+    if (!hasHeightRestriction || vehicleHeightMm == null || vehicleHeightMm <= 0) {
+      return true;
+    }
+    return vehicleHeightMm + clearanceBufferMm <= maxHeightMm!;
+  }
+
+  String heightSafetyLabel(int? vehicleHeightMm, {int clearanceBufferMm = 100}) {
+    if (!hasHeightRestriction) return '높이 제한 정보 없음';
+    final limit = (maxHeightMm! / 1000).toStringAsFixed(1);
+    if (vehicleHeightMm == null || vehicleHeightMm <= 0) {
+      return '제한높이 ${limit}m · 차량 높이 미등록';
+    }
+    final vehicle = (vehicleHeightMm / 1000).toStringAsFixed(1);
+    if (isHeightCompatible(vehicleHeightMm, clearanceBufferMm: clearanceBufferMm)) {
+      return '통과 가능 예상 · 차량 ${vehicle}m / 제한 ${limit}m';
+    }
+    return '진입 주의 · 차량 ${vehicle}m / 제한 ${limit}m';
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
