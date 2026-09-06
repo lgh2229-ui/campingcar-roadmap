@@ -77,7 +77,15 @@ class AuthRepository {
     await local.saveUsers(users);
   }
 
-  Future<void> beginServerSignup({required String userId, required String password, required String phone}) async {
+  Future<void> beginServerSignup({
+    required String userId,
+    required String password,
+    required String phone,
+    String vehicleStatus = 'planned',
+    String vehicleName = '',
+    int? vehicleHeightMm,
+    String sanitation = '',
+  }) async {
     if (!serverEnabled) return;
     final id = userId.trim();
     if (id.toLowerCase() == 'administrator') {
@@ -87,6 +95,11 @@ class AuthRepository {
       throw Exception('아이디는 영문/숫자/밑줄 4~20자로 입력해주세요.');
     }
     if (!validPassword(password)) throw Exception('비밀번호 규칙을 확인해주세요.');
+    if (vehicleStatus == 'owned') {
+      if (vehicleName.trim().isEmpty) throw Exception('보유 차량의 차량명/모델을 입력해주세요.');
+      if (vehicleHeightMm == null || vehicleHeightMm <= 0) throw Exception('차량 높이를 mm 단위 숫자로 입력해주세요.');
+      if (sanitation.isEmpty) throw Exception('위생설비 종류를 선택해주세요.');
+    }
 
     final res = await client!.auth.signUp(
       email: loginEmail(id),
@@ -101,6 +114,10 @@ class AuthRepository {
       'username': id,
       'phone': normalizePhone(phone),
       'phone_verified': false,
+      'vehicle_status': vehicleStatus,
+      'vehicle_name': vehicleStatus == 'owned' ? vehicleName.trim() : '',
+      'vehicle_height_mm': vehicleStatus == 'owned' ? vehicleHeightMm : null,
+      'sanitation_type': vehicleStatus == 'owned' ? sanitation : '',
     });
 
     // Supabase Auth의 phone-change OTP를 실제 SMS로 발송합니다.
@@ -217,6 +234,7 @@ class AuthRepository {
     }).eq('id', client!.auth.currentUser!.id);
     return (await currentUser())!;
   }
+
   Future<void> deleteAccount() async {
     if (!serverEnabled) {
       final profile = await currentUser();
@@ -239,5 +257,4 @@ class AuthRepository {
     }
     await client!.auth.signOut();
   }
-
 }
