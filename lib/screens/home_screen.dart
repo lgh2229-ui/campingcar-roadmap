@@ -209,14 +209,59 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _cleanAddressPart(dynamic value) {
+    final s = '${value ?? ''}'.trim();
+    if (s == '대한민국' || s == 'Republic of Korea' || s == 'South Korea') return '';
+    return s;
+  }
+
+  String _pickAddressPart(Map<String, dynamic> a, List<String> keys) {
+    for (final key in keys) {
+      final value = _cleanAddressPart(a[key]);
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  String _formatKoreanRoadAddress(Map<String, dynamic> j) {
+    final raw = j['address'];
+    if (raw is! Map) return '';
+    final a = Map<String, dynamic>.from(raw);
+    final province = _pickAddressPart(a, ['state', 'province']);
+    final city = _pickAddressPart(a, ['city', 'municipality', 'county', 'city_district', 'town']);
+    final district = _pickAddressPart(a, ['borough', 'district']);
+    final road = _pickAddressPart(a, ['road', 'pedestrian', 'residential', 'path']);
+    final houseNumber = _pickAddressPart(a, ['house_number']);
+
+    final parts = <String>[];
+    void addUnique(String value) {
+      if (value.isNotEmpty && !parts.contains(value)) parts.add(value);
+    }
+
+    addUnique(province);
+    addUnique(city);
+    if (district.isNotEmpty && district != city && !city.contains(district)) addUnique(district);
+    addUnique(road);
+    addUnique(houseNumber);
+
+    if (road.isNotEmpty && houseNumber.isNotEmpty && parts.length >= 3) {
+      return parts.join(' ');
+    }
+    return '';
+  }
+
   Future<String> _reverseAddress(LatLng p) async {
     try {
-      final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.latitude}&lon=${p.longitude}&accept-language=ko&addressdetails=1');
-      final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.1'});
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.latitude}&lon=${p.longitude}&accept-language=ko&addressdetails=1&zoom=18');
+      final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.7'});
       final j = jsonDecode(r.body) as Map<String, dynamic>;
+      final roadAddress = _formatKoreanRoadAddress(j);
+      if (roadAddress.isNotEmpty) return roadAddress;
+
       var s = '${j['display_name'] ?? ''}';
       s = s.replaceAll('대한민국', '').replaceAll('Republic of Korea', '').replaceAll('South Korea', '').replaceAll(RegExp(r'\bKorea\b', caseSensitive: false), '');
-      return s.replaceAll(RegExp(r'^\s*,\s*|\s*,\s*$'), '').trim();
+      final parts = s.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList().reversed.toList();
+      return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     } catch (_) {
       return '';
     }
@@ -553,7 +598,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
         ),
         TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
-        TextField(controller: address, decoration: const InputDecoration(labelText: '주소')),
+        TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)')),
         const SizedBox(height: 10),
         ...prices.entries.map((e) => Row(children: [
           Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() {
