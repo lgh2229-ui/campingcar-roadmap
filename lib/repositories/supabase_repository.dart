@@ -19,7 +19,24 @@ class SupabaseRepository implements AppDataRepository {
   @override
   Future<List<Place>> places() async {
     final rows = await client.from('places_view').select().order('created_at', ascending: false);
-    return (rows as List).map((e) => Place.fromJson(Map<String, dynamic>.from(e))).toList();
+    final places = (rows as List).map((e) => Place.fromJson(Map<String, dynamic>.from(e))).toList();
+    if (places.isEmpty) return places;
+
+    final photoRows = await client
+        .from('place_photos')
+        .select('place_id, public_url')
+        .inFilter('place_id', places.map((e) => e.id).toList());
+    final byPlace = <String, List<String>>{};
+    for (final row in photoRows as List) {
+      final placeId = '${row['place_id']}';
+      final url = '${row['public_url'] ?? ''}'.trim();
+      if (url.isEmpty) continue;
+      byPlace.putIfAbsent(placeId, () => <String>[]).add(url);
+    }
+    for (final place in places) {
+      place.photoUrls = byPlace[place.id] ?? place.photoUrls;
+    }
+    return places;
   }
 
   @override
@@ -31,7 +48,6 @@ class SupabaseRepository implements AppDataRepository {
 
   @override
   Future<void> updatePlace(Place place) async {
-    // RLS에서 관리자만 UPDATE 허용. 클라이언트 UI 체크만 믿지 않습니다.
     await client.from('places').update(place.toSupabaseJson()).eq('id', place.id);
   }
 
@@ -68,7 +84,32 @@ class SupabaseRepository implements AppDataRepository {
       'status': status,
       'body': body.trim(),
     });
-    // place status는 SQL trigger가 최신 리뷰 상태로 갱신합니다.
+  }
+
+  @override
+  Future<void> updateReview({required String reviewId, required String status, required String body}) async {
+    final updated = await client
+        .from('reviews')
+        .update({'status': status, 'body': body.trim()})
+        .eq('id', reviewId)
+        .eq('author_id', _uid)
+        .select('id');
+    if ((updated as List).isEmpty) {
+      throw Exception('본인이 작성한 리뷰만 수정할 수 있습니다.');
+    }
+  }
+
+  @override
+  Future<void> deleteReview(String reviewId) async {
+    final deleted = await client
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId)
+        .eq('author_id', _uid)
+        .select('id');
+    if ((deleted as List).isEmpty) {
+      throw Exception('본인이 작성한 리뷰만 삭제할 수 있습니다.');
+    }
   }
 
   @override
