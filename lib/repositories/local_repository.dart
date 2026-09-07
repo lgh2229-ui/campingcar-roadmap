@@ -114,7 +114,43 @@ class LocalRepository implements AppDataRepository {
   }
 
   @override
+  Future<void> updateReview({required String reviewId, required String status, required String body}) async {
+    final p = await _prefs;
+    final raw = p.getString(_reviewsKey);
+    if (raw == null) return;
+    final list = List<dynamic>.from(jsonDecode(raw) as List);
+    final uid = await sessionUserId() ?? '';
+    final i = list.indexWhere((e) => '${(e as Map)['id']}' == reviewId && '${e['author_id']}' == uid);
+    if (i < 0) throw Exception('본인이 작성한 리뷰만 수정할 수 있습니다.');
+    final row = Map<String, dynamic>.from(list[i] as Map);
+    row['status'] = status;
+    row['body'] = body.trim();
+    list[i] = row;
+    await p.setString(_reviewsKey, jsonEncode(list));
+  }
+
+  @override
+  Future<void> deleteReview(String reviewId) async {
+    final p = await _prefs;
+    final raw = p.getString(_reviewsKey);
+    if (raw == null) return;
+    final list = List<dynamic>.from(jsonDecode(raw) as List);
+    final uid = await sessionUserId() ?? '';
+    final before = list.length;
+    list.removeWhere((e) => '${(e as Map)['id']}' == reviewId && '${e['author_id']}' == uid);
+    if (before == list.length) throw Exception('본인이 작성한 리뷰만 삭제할 수 있습니다.');
+    await p.setString(_reviewsKey, jsonEncode(list));
+  }
+
+  @override
   Future<List<String>> uploadPlacePhotos(String placeId, List<File> files) async {
-    return files.map((e) => e.path).toList();
+    final urls = files.map((e) => e.path).toList();
+    final list = await places();
+    final i = list.indexWhere((e) => e.id == placeId);
+    if (i >= 0) {
+      list[i].photoUrls = [...list[i].photoUrls, ...urls];
+      await savePlaces(list);
+    }
+    return urls;
   }
 }
