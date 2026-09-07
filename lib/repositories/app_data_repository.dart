@@ -10,5 +10,7 @@ abstract class AppDataRepository {
   Future<void> saveSavedIds(Set<String> ids);
   Future<List<PlaceReview>> reviews(String placeId);
   Future<void> addReview({required String placeId, required String status, required String body});
+  Future<void> updateReview({required String reviewId, required String status, required String body});
+  Future<void> deleteReview(String reviewId);
   Future<List<String>> uploadPlacePhotos(String placeId, List<File> files);
 }
