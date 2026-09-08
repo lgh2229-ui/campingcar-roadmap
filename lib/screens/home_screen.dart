@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
 import '../models/place_review.dart';
+import '../models/review_comment.dart';
 import '../repositories/app_data_repository.dart';
 import '../repositories/auth_repository.dart';
 
@@ -22,6 +23,7 @@ class HomeScreen extends StatefulWidget {
     required this.onUserChanged,
     required this.onLogout,
   });
+
   final AppUser user;
   final AuthRepository auth;
   final AppDataRepository data;
@@ -45,7 +47,6 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = false;
 
   static const serviceFilters = ['전체', '블랙탱크 비움', '급수', '노지/차박', '공중화장실'];
-
   String get _currentAuthorId => widget.user.authId.isEmpty ? widget.user.userId : widget.user.authId;
 
   @override
@@ -61,15 +62,15 @@ class _HomeScreenState extends State<HomeScreen> {
       saved = await widget.data.savedIds();
       if (mounted) setState(() {});
     } catch (e) {
-      _msg('데이터를 불러오지 못했습니다.');
+      _msg('데이터를 불러오지 못했습니다: $e');
     }
   }
 
   Future<void> _locate() async {
     try {
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
       final p = await Geolocator.getCurrentPosition();
       center = LatLng(p.latitude, p.longitude);
       map.move(center, 15);
@@ -82,66 +83,39 @@ class _HomeScreenState extends State<HomeScreen> {
     center = point;
     map.move(point, 17);
     setState(() {});
-    _msg('등록 위치를 선택했습니다. 아래 빨간 핀 위치가 실제 등록 위치입니다.');
+    _msg('등록 위치를 선택했습니다. 빨간 핀 위치로 등록됩니다.');
   }
 
-  List<Place> get visiblePlaces => filter == '전체' ? places : places.where((p) => p.services.contains(filter)).toList();
+  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
+  List<Place> get visiblePlaces {
+    final rows = filter == '전체' ? places : places.where((p) => p.services.contains(filter)).toList();
+    return rows;
+  }
 
   List<List<Place>> get visiblePlaceGroups {
-    const groupDistanceMeters = 15.0;
+    const distance = 15.0;
     final groups = <List<Place>>[];
-    for (final place in visiblePlaces) {
+    for (final p in visiblePlaces) {
       List<Place>? target;
-      for (final group in groups) {
-        final anchor = group.first;
-        final distance = Geolocator.distanceBetween(anchor.latitude, anchor.longitude, place.latitude, place.longitude);
-        if (distance <= groupDistanceMeters) {
-          target = group;
+      for (final g in groups) {
+        if (Geolocator.distanceBetween(g.first.latitude, g.first.longitude, p.latitude, p.longitude) <= distance) {
+          target = g;
           break;
         }
       }
       if (target == null) {
-        groups.add([place]);
+        groups.add([p]);
       } else {
-        target.add(place);
+        target.add(p);
       }
     }
     return groups;
   }
 
-  LatLng _groupPoint(List<Place> group) {
-    final lat = group.fold<double>(0, (sum, p) => sum + p.latitude) / group.length;
-    final lng = group.fold<double>(0, (sum, p) => sum + p.longitude) / group.length;
-    return LatLng(lat, lng);
-  }
-
-  Future<void> _showPlaceGroup(List<Place> group) async {
-    if (group.length == 1) return _showPlace(group.first);
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: ListView.separated(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-          itemCount: group.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (_, i) {
-            final p = group[i];
-            return ListTile(
-              leading: Text(_icons(p).join(), style: const TextStyle(fontSize: 22)),
-              title: Text(p.name),
-              subtitle: Text(p.address, maxLines: 2, overflow: TextOverflow.ellipsis),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                Future.delayed(const Duration(milliseconds: 120), () => _showPlace(p));
-              },
-            );
-          },
-        ),
-      ),
-    );
-  }
+  LatLng _groupPoint(List<Place> group) => LatLng(
+        group.fold<double>(0, (sum, p) => sum + p.latitude) / group.length,
+        group.fold<double>(0, (sum, p) => sum + p.longitude) / group.length,
+      );
 
   List<String> _icons(Place p) {
     final out = <String>[];
@@ -149,47 +123,55 @@ class _HomeScreenState extends State<HomeScreen> {
     if (p.services.contains('블랙탱크 비움')) out.add('🚽');
     if (p.services.contains('노지/차박')) out.add('🅿️');
     if (p.services.contains('공중화장실')) out.add('🚻');
-    if (filter == '전체') return out;
-    return [switch (filter) {
-      '급수' => '💧',
-      '블랙탱크 비움' => '🚽',
-      '노지/차박' => '🅿️',
-      '공중화장실' => '🚻',
-      _ => '📍',
-    }];
+    return out.isEmpty ? ['📍'] : out;
   }
 
-  String _filterLabel(String e) => e == '블랙탱크 비움' ? '블랙' : e == '공중화장실' ? '화장실' : e;
+  String _filterLabel(String value) => value == '블랙탱크 비움' ? '블랙' : value == '공중화장실' ? '화장실' : value;
+  String _approvalLabel(Place p) => switch (p.approvalStatus) {
+        'pending' => '승인 진행중',
+        'rejected' => '승인 반려',
+        _ => '승인 완료',
+      };
+
+  Color _approvalColor(Place p, BuildContext context) => switch (p.approvalStatus) {
+        'pending' => Theme.of(context).colorScheme.tertiaryContainer,
+        'rejected' => Theme.of(context).colorScheme.errorContainer,
+        _ => Theme.of(context).colorScheme.primaryContainer,
+      };
+
+  String _meters(int mm) => (mm / 1000).toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  int? _metersToMm(String value) {
+    final m = double.tryParse(value.trim());
+    return m == null || m <= 0 ? null : (m * 1000).round();
+  }
 
   Future<void> _searchAddress() async {
     final q = search.text.trim();
     if (q.isEmpty) return;
-    final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=kr&accept-language=ko&q=${Uri.encodeQueryComponent(q)}');
     try {
-      final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.4'});
+      final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=kr&accept-language=ko&q=${Uri.encodeQueryComponent(q)}');
+      final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.9'});
       final data = jsonDecode(r.body) as List;
       if (data.isEmpty) return _msg('검색 결과가 없습니다.');
       if (!mounted) return;
-      final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      final picked = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
         showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
+        builder: (ctx) => SafeArea(
           child: ListView.separated(
             shrinkWrap: true,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
             itemCount: data.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
             itemBuilder: (_, i) {
-              final x = Map<String, dynamic>.from(data[i] as Map);
-              var label = '${x['display_name'] ?? ''}'.replaceAll('대한민국', '').replaceAll('Republic of Korea', '').replaceAll('South Korea', '').trim();
-              label = label.replaceAll(RegExp(r'^\s*,\s*|\s*,\s*$'), '');
-              return ListTile(leading: const Icon(Icons.location_on_outlined), title: Text(label), onTap: () => Navigator.pop(sheetContext, x));
+              final row = Map<String, dynamic>.from(data[i] as Map);
+              var label = '${row['display_name'] ?? ''}'.replaceAll('대한민국', '').replaceAll('Republic of Korea', '').trim();
+              return ListTile(title: Text(label), leading: const Icon(Icons.location_on_outlined), onTap: () => Navigator.pop(ctx, row));
             },
           ),
         ),
       );
-      if (selected == null) return;
-      final point = LatLng(double.parse('${selected['lat']}'), double.parse('${selected['lon']}'));
+      if (picked == null) return;
+      final point = LatLng(double.parse('${picked['lat']}'), double.parse('${picked['lon']}'));
       center = point;
       map.move(point, 16);
       if (mounted) setState(() {});
@@ -198,53 +180,41 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _cleanAddressPart(dynamic value) {
-    final s = '${value ?? ''}'.trim();
-    if (s == '대한민국' || s == 'Republic of Korea' || s == 'South Korea') return '';
-    return s;
+  String _cleanPart(dynamic v) {
+    final s = '${v ?? ''}'.trim();
+    return ['대한민국', 'Republic of Korea', 'South Korea'].contains(s) ? '' : s;
   }
 
-  String _pickAddressPart(Map<String, dynamic> a, List<String> keys) {
-    for (final key in keys) {
-      final value = _cleanAddressPart(a[key]);
-      if (value.isNotEmpty) return value;
+  String _pickPart(Map<String, dynamic> a, List<String> keys) {
+    for (final k in keys) {
+      final v = _cleanPart(a[k]);
+      if (v.isNotEmpty) return v;
     }
-    return '';
-  }
-
-  String _formatKoreanRoadAddress(Map<String, dynamic> j) {
-    final raw = j['address'];
-    if (raw is! Map) return '';
-    final a = Map<String, dynamic>.from(raw);
-    final province = _pickAddressPart(a, ['state', 'province']);
-    final city = _pickAddressPart(a, ['city', 'municipality', 'county', 'city_district', 'town']);
-    final district = _pickAddressPart(a, ['borough', 'district']);
-    final road = _pickAddressPart(a, ['road', 'pedestrian', 'residential', 'path']);
-    final houseNumber = _pickAddressPart(a, ['house_number']);
-    final parts = <String>[];
-    void addUnique(String value) {
-      if (value.isNotEmpty && !parts.contains(value)) parts.add(value);
-    }
-    addUnique(province);
-    addUnique(city);
-    if (district.isNotEmpty && district != city && !city.contains(district)) addUnique(district);
-    addUnique(road);
-    addUnique(houseNumber);
-    if (road.isNotEmpty && houseNumber.isNotEmpty && parts.length >= 3) return parts.join(' ');
     return '';
   }
 
   Future<String> _reverseAddress(LatLng p) async {
     try {
       final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.latitude}&lon=${p.longitude}&accept-language=ko&addressdetails=1&zoom=18');
-      final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.7'});
+      final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.9'});
       final j = jsonDecode(r.body) as Map<String, dynamic>;
-      final roadAddress = _formatKoreanRoadAddress(j);
-      if (roadAddress.isNotEmpty) return roadAddress;
-      var s = '${j['display_name'] ?? ''}';
-      s = s.replaceAll('대한민국', '').replaceAll('Republic of Korea', '').replaceAll('South Korea', '').replaceAll(RegExp(r'\bKorea\b', caseSensitive: false), '');
-      final parts = s.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList().reversed.toList();
-      return parts.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+      final raw = j['address'];
+      if (raw is Map) {
+        final a = Map<String, dynamic>.from(raw);
+        final parts = <String>[];
+        for (final v in [
+          _pickPart(a, ['state', 'province']),
+          _pickPart(a, ['city', 'municipality', 'county', 'town']),
+          _pickPart(a, ['borough', 'district']),
+          _pickPart(a, ['road', 'residential', 'pedestrian']),
+          _pickPart(a, ['house_number']),
+        ]) {
+          if (v.isNotEmpty && !parts.contains(v)) parts.add(v);
+        }
+        if (parts.length >= 3) return parts.join(' ');
+      }
+      var s = '${j['display_name'] ?? ''}'.replaceAll('대한민국', '').replaceAll('Republic of Korea', '').replaceAll('South Korea', '');
+      return s.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList().reversed.join(' ');
     } catch (_) {
       return '';
     }
@@ -257,7 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [_mapPage(), _savedPage(), _profilePage()];
+    final pages = [_mapPage(), _savedPage(), _myPlacesPage(), _profilePage()];
     return Scaffold(
       body: SafeArea(child: pages[tab]),
       bottomNavigationBar: NavigationBar(
@@ -266,6 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: '지도'),
           NavigationDestination(icon: Icon(Icons.star_border), selectedIcon: Icon(Icons.star), label: '저장'),
+          NavigationDestination(icon: Icon(Icons.add_location_alt_outlined), selectedIcon: Icon(Icons.add_location_alt), label: '내등록'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),
         ],
       ),
@@ -275,44 +246,39 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _mapPage() => Stack(children: [
         FlutterMap(
           mapController: map,
-          options: MapOptions(initialCenter: center, initialZoom: 14, onLongPress: (_, point) => _selectSpot(point)),
+          options: MapOptions(initialCenter: center, initialZoom: 14, onLongPress: (_, p) => _selectSpot(p)),
           children: [
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'kr.co.campingcarroadmap.app'),
             MarkerLayer(markers: [
               ...visiblePlaceGroups.map((group) {
                 final p = group.first;
-                final icons = _icons(p);
-                final grouped = group.length > 1;
+                final pending = group.any((x) => x.isPending && _isMine(x));
                 return Marker(
                   point: _groupPoint(group),
-                  width: grouped ? 66 : (icons.length > 2 ? 68 : 54),
-                  height: grouped ? 66 : (icons.length > 2 ? 68 : 54),
+                  width: 68,
+                  height: 68,
                   child: GestureDetector(
                     onTap: () => _showPlaceGroup(group),
                     child: Container(
                       padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(color: Colors.white, border: Border.all(width: 2), borderRadius: BorderRadius.circular(10), boxShadow: const [BoxShadow(blurRadius: 5, color: Colors.black26)]),
-                      child: grouped
+                      decoration: BoxDecoration(
+                        color: pending ? Theme.of(context).colorScheme.tertiaryContainer : Colors.white,
+                        border: Border.all(width: 2),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: const [BoxShadow(blurRadius: 5, color: Colors.black26)],
+                      ),
+                      child: group.length > 1
                           ? Stack(alignment: Alignment.center, children: [
                               const Icon(Icons.location_on, size: 34),
-                              Positioned(right: 0, top: 0, child: Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.white, border: Border.all(), borderRadius: BorderRadius.circular(12)), child: Text('${group.length}', style: const TextStyle(fontWeight: FontWeight.bold)))),
+                              Positioned(right: 0, top: 0, child: Text('${group.length}', style: const TextStyle(fontWeight: FontWeight.bold))),
                             ])
-                          : GridView.count(crossAxisCount: icons.length > 1 ? 2 : 1, physics: const NeverScrollableScrollPhysics(), padding: EdgeInsets.zero, children: icons.take(4).map((e) => Center(child: Text(e, style: const TextStyle(fontSize: 18)))).toList()),
+                          : Center(child: Text(_icons(p).take(3).join(), style: const TextStyle(fontSize: 18))),
                     ),
                   ),
                 );
               }),
               if (selectedSpot != null)
-                Marker(
-                  point: selectedSpot!,
-                  width: 104,
-                  height: 78,
-                  alignment: Alignment.topCenter,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black26)]), child: const Text('등록 위치', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-                    const Icon(Icons.location_pin, color: Colors.red, size: 48),
-                  ]),
-                ),
+                Marker(point: selectedSpot!, width: 100, height: 75, alignment: Alignment.topCenter, child: const Column(children: [Text('등록 위치', style: TextStyle(fontWeight: FontWeight.bold)), Icon(Icons.location_pin, color: Colors.red, size: 48)])),
             ]),
           ],
         ),
@@ -322,71 +288,81 @@ class _HomeScreenState extends State<HomeScreen> {
           SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),
         ])),
         if (selectedSpot != null)
-          Positioned(left: 12, right: 12, bottom: 86, child: Card(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), child: Row(children: [const Icon(Icons.location_pin, color: Colors.red), const SizedBox(width: 8), Expanded(child: Text('선택 위치  ${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}', style: const TextStyle(fontSize: 12))), TextButton(onPressed: () => setState(() => selectedSpot = null), child: const Text('취소'))])))),
+          Positioned(left: 12, right: 12, bottom: 86, child: Card(child: ListTile(leading: const Icon(Icons.location_pin, color: Colors.red), title: Text('${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}', style: const TextStyle(fontSize: 12)), trailing: TextButton(onPressed: () => setState(() => selectedSpot = null), child: const Text('취소'))))),
         Positioned(right: 14, bottom: 18, child: Column(children: [
           FloatingActionButton.small(heroTag: 'loc', onPressed: _locate, child: const Icon(Icons.my_location)),
           const SizedBox(height: 10),
           FloatingActionButton.extended(heroTag: 'add', onPressed: () {
-            if (selectedSpot == null) return _msg('지도에서 등록할 정확한 위치를 길게 눌러 빨간 핀을 먼저 찍어주세요.');
+            if (selectedSpot == null) return _msg('지도에서 등록할 위치를 길게 눌러 빨간 핀을 먼저 찍어주세요.');
             _openAddPlace(selectedSpot!);
           }, icon: const Icon(Icons.add_location_alt_outlined), label: const Text('장소등록')),
         ])),
       ]);
 
+  Future<void> _showPlaceGroup(List<Place> group) async {
+    if (group.length == 1) return _showPlace(group.first);
+    await showModalBottomSheet<void>(context: context, showDragHandle: true, builder: (ctx) => SafeArea(child: ListView.separated(
+      shrinkWrap: true,
+      itemCount: group.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final p = group[i];
+        return ListTile(
+          leading: Text(_icons(p).join()),
+          title: Text(p.name),
+          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(p.address), if (!p.isApproved && _isMine(p)) Text(_approvalLabel(p), style: const TextStyle(fontWeight: FontWeight.bold))]),
+          onTap: () { Navigator.pop(ctx); Future.delayed(const Duration(milliseconds: 100), () => _showPlace(p)); },
+        );
+      },
+    )));
+  }
+
   Widget _savedPage() {
-    final allRows = places.where((p) => saved.contains(p.id)).toList();
-    final rows = savedFilter == '전체' ? allRows : allRows.where((p) => p.services.contains(savedFilter)).toList();
+    final all = places.where((p) => p.isApproved && saved.contains(p.id)).toList();
+    final rows = savedFilter == '전체' ? all : all.where((p) => p.services.contains(savedFilter)).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('저장한 장소')),
       body: Column(children: [
-        Padding(padding: const EdgeInsets.fromLTRB(12, 8, 12, 6), child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: savedFilter == e, onSelected: (_) => setState(() => savedFilter = e)))).toList()))),
-        Expanded(
-          child: allRows.isEmpty
-              ? const Center(child: Text('저장한 장소가 없습니다.'))
-              : rows.isEmpty
-                  ? Center(child: Text('${_filterLabel(savedFilter)} 종류로 저장한 장소가 없습니다.'))
-                  : ListView.builder(
-                      itemCount: rows.length,
-                      itemBuilder: (_, i) {
-                        final p = rows[i];
-                        return ListTile(
-                          leading: Text(_iconsForSaved(p).join(), style: const TextStyle(fontSize: 20)),
-                          title: Text(p.name),
-                          subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(p.address), const SizedBox(height: 2), Text(p.services.join(' · '), style: Theme.of(context).textTheme.bodySmall)]),
-                          onTap: () {
-                            setState(() => tab = 0);
-                            Future.delayed(const Duration(milliseconds: 150), () {
-                              map.move(LatLng(p.latitude, p.longitude), 17);
-                              Future.delayed(const Duration(milliseconds: 180), () => _showPlace(p));
-                            });
-                          },
-                          trailing: IconButton(icon: const Icon(Icons.close), onPressed: () async {
-                            saved.remove(p.id);
-                            await widget.data.saveSavedIds(saved);
-                            if (mounted) setState(() {});
-                            _msg('저장에서 해제했습니다.');
-                          }),
-                        );
-                      },
-                    ),
-        ),
+        SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.all(4), child: ChoiceChip(label: Text(_filterLabel(e)), selected: savedFilter == e, onSelected: (_) => setState(() => savedFilter = e)))).toList())),
+        Expanded(child: rows.isEmpty ? const Center(child: Text('저장한 장소가 없습니다.')) : ListView.builder(itemCount: rows.length, itemBuilder: (_, i) {
+          final p = rows[i];
+          return ListTile(
+            leading: Text(_icons(p).join()),
+            title: Text(p.name),
+            subtitle: Text(p.address),
+            onTap: () { setState(() => tab = 0); map.move(LatLng(p.latitude, p.longitude), 17); Future.delayed(const Duration(milliseconds: 150), () => _showPlace(p)); },
+            trailing: IconButton(onPressed: () async { saved.remove(p.id); await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg('저장에서 해제했습니다.'); }, icon: const Icon(Icons.close)),
+          );
+        })),
       ]),
     );
   }
 
-  List<String> _iconsForSaved(Place p) {
-    final out = <String>[];
-    if (p.services.contains('급수')) out.add('💧');
-    if (p.services.contains('블랙탱크 비움')) out.add('🚽');
-    if (p.services.contains('노지/차박')) out.add('🅿️');
-    if (p.services.contains('공중화장실')) out.add('🚻');
-    return out.isEmpty ? ['📍'] : out;
+  Widget _myPlacesPage() {
+    final rows = places.where(_isMine).toList();
+    return Scaffold(
+      appBar: AppBar(title: const Text('내가 등록한 장소')),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: rows.isEmpty
+            ? ListView(children: const [SizedBox(height: 180), Center(child: Text('등록한 장소가 없습니다.'))])
+            : ListView.builder(itemCount: rows.length, itemBuilder: (_, i) {
+                final p = rows[i];
+                return Card(margin: const EdgeInsets.fromLTRB(12, 6, 12, 6), child: ListTile(
+                  leading: CircleAvatar(backgroundColor: _approvalColor(p, context), child: Icon(p.isApproved ? Icons.check : p.isPending ? Icons.hourglass_top : Icons.close)),
+                  title: Text(p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'), '')),
+                  subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(p.address), Text(_approvalLabel(p), style: const TextStyle(fontWeight: FontWeight.bold))]),
+                  onTap: () => _showPlace(p),
+                ));
+              }),
+      ),
+    );
   }
 
   Widget _profilePage() => Scaffold(
         appBar: AppBar(title: const Text('내정보'), actions: [IconButton(onPressed: widget.onLogout, icon: const Icon(Icons.logout))]),
         body: ListView(padding: const EdgeInsets.all(20), children: [
-          Card(child: ListTile(leading: const Icon(Icons.person), title: Text(widget.user.userId), subtitle: Text(widget.user.isAdministrator ? '🔐 관리자 계정' : '${widget.user.phone}${widget.user.phoneVerified ? ' · 인증완료' : ''}'))),
+          Card(child: ListTile(leading: const Icon(Icons.person), title: Text(widget.user.displayName), subtitle: Text('아이디 ${widget.user.userId}\n${widget.user.phone}${widget.user.phoneVerified ? ' · 인증완료' : ''}', maxLines: 2))),
           const SizedBox(height: 12),
           FilledButton.tonal(onPressed: _passwordGate, child: const Text('개인정보 변경')),
           const SizedBox(height: 8),
@@ -399,36 +375,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _passwordGate() async {
     final c = TextEditingController();
-    final entered = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('비밀번호 확인'), content: TextField(controller: c, obscureText: true, autofocus: true, onSubmitted: (_) => Navigator.pop(context, c.text), decoration: const InputDecoration(labelText: '현재 비밀번호')), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(context, c.text), child: const Text('확인'))]));
+    final entered = await showDialog<String>(context: context, builder: (ctx) => AlertDialog(title: const Text('비밀번호 확인'), content: TextField(controller: c, obscureText: true, autofocus: true, onSubmitted: (_) => Navigator.pop(ctx, c.text)), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('확인'))]));
     if (entered == null) return;
     final ok = await widget.auth.reauthenticatePassword(entered);
     if (!ok) return _msg('비밀번호가 일치하지 않습니다.');
     if (!mounted) return;
-    showDialog(context: context, builder: (_) => AlertDialog(title: const Text('개인정보 변경'), content: const Text('휴대폰 번호 변경은 보안을 위해 새 번호 SMS 재인증 절차로 처리합니다. 정식 서버에서는 profiles와 Supabase Auth에 함께 반영됩니다.'), actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('확인'))]));
+    _msg('본인 확인이 완료되었습니다.');
   }
 
   Future<void> _deleteAccount() async {
-    final password = TextEditingController();
-    final confirmed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('회원탈퇴'), content: Column(mainAxisSize: MainAxisSize.min, children: [const Text('탈퇴하면 계정과 등록한 장소·사진·리뷰·즐겨찾기가 삭제되며 복구할 수 없습니다.'), const SizedBox(height: 12), TextField(controller: password, obscureText: true, decoration: const InputDecoration(labelText: '현재 비밀번호'))]), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('탈퇴 진행'))]));
-    if (confirmed != true) return;
-    final ok = await widget.auth.reauthenticatePassword(password.text);
-    if (!ok) return _msg('비밀번호가 일치하지 않습니다.');
-    final finalConfirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('정말 탈퇴할까요?'), content: const Text('이 작업은 되돌릴 수 없습니다.'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('아니오')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('예, 탈퇴합니다'))]));
-    if (finalConfirm != true) return;
-    try {
-      await widget.auth.deleteAccount();
-      if (!mounted) return;
-      await widget.onLogout();
-    } catch (e) {
-      _msg('회원탈퇴에 실패했습니다: $e');
-    }
+    final c = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('회원탈퇴'), content: Column(mainAxisSize: MainAxisSize.min, children: [const Text('계정과 관련 데이터가 삭제되며 복구할 수 없습니다.'), TextField(controller: c, obscureText: true, decoration: const InputDecoration(labelText: '현재 비밀번호'))]), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('탈퇴'))]));
+    if (ok != true) return;
+    if (!await widget.auth.reauthenticatePassword(c.text)) return _msg('비밀번호가 일치하지 않습니다.');
+    try { await widget.auth.deleteAccount(); await widget.onLogout(); } catch (e) { _msg('회원탈퇴에 실패했습니다: $e'); }
   }
 
   Future<void> _vehicleDialog() async {
     String status = widget.user.vehicleStatus.isEmpty ? 'planned' : widget.user.vehicleStatus;
     String sanitation = widget.user.sanitationType;
     final name = TextEditingController(text: widget.user.vehicleName);
-    final height = TextEditingController(text: widget.user.vehicleHeightMm?.toString() ?? '');
+    final height = TextEditingController(text: widget.user.vehicleHeightMm == null ? '' : _meters(widget.user.vehicleHeightMm!));
     await showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
       title: const Text('차량정보'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -436,14 +403,14 @@ class _HomeScreenState extends State<HomeScreen> {
         RadioListTile<String>(value: 'owned', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('보유중')),
         if (status == 'owned') ...[
           TextField(controller: name, decoration: const InputDecoration(labelText: '차량명/모델')),
-          TextField(controller: height, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '차량 높이(mm)')),
-          const SizedBox(height: 10),
+          TextField(controller: height, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '진입 차량 높이', hintText: '예: 3.0', suffixText: 'm')),
           ...['블랙탱크', '그레이탱크', '카트리지'].map((e) => RadioListTile<String>(value: e, groupValue: sanitation, onChanged: (v) => setS(() => sanitation = v!), title: Text(e))),
         ],
       ])),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')), FilledButton(onPressed: () async {
-        if (status == 'owned' && sanitation.isEmpty) return _msg('위생설비를 선택해주세요.');
-        final u = await widget.auth.updateVehicle(status: status, name: name.text.trim(), heightMm: int.tryParse(height.text), sanitation: sanitation);
+        final heightMm = status == 'owned' ? _metersToMm(height.text) : null;
+        if (status == 'owned' && (name.text.trim().isEmpty || heightMm == null || sanitation.isEmpty)) return _msg('차량명, 높이(m), 위생설비를 모두 입력해주세요.');
+        final u = await widget.auth.updateVehicle(status: status, name: status == 'owned' ? name.text.trim() : '', heightMm: heightMm, sanitation: status == 'owned' ? sanitation : '');
         widget.onUserChanged(u);
         if (ctx.mounted) Navigator.pop(ctx);
       }, child: const Text('저장'))],
@@ -456,114 +423,120 @@ class _HomeScreenState extends State<HomeScreen> {
     final maxHeight = TextEditingController();
     final phone = TextEditingController();
     final note = TextEditingController();
-    final prices = <String, TextEditingController>{for (final s in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) s: TextEditingController()};
     final selected = <String>{};
+    final prices = <String, TextEditingController>{for (final s in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) s: TextEditingController()};
     final photos = <XFile>[];
     String reservation = '예약불필요';
     final address = TextEditingController(text: await _reverseAddress(spot));
     if (!mounted) return;
+
     await showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
       title: const Text('새 장소 등록'),
       content: SizedBox(width: 440, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(10)), child: Row(children: [const Icon(Icons.location_pin, color: Colors.red), const SizedBox(width: 8), Expanded(child: Text('지도에서 찍은 위치\n${spot.latitude.toStringAsFixed(6)}, ${spot.longitude.toStringAsFixed(6)}', style: const TextStyle(fontSize: 12)))])),
+        Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(10)), child: Text('등록 위치 ${spot.latitude.toStringAsFixed(6)}, ${spot.longitude.toStringAsFixed(6)}')),
         TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)')),
-        const SizedBox(height: 10),
-        ...prices.entries.map((e) => Row(children: [Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })), Expanded(flex: 2, child: Text(e.key == '블랙탱크 비움' ? '블랙탱크' : e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
+        ...prices.entries.map((e) => Row(children: [Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })), Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
         TextField(controller: hours, decoration: const InputDecoration(labelText: '운영시간')),
-        DropdownButtonFormField<String>(initialValue: reservation, items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setS(() => reservation = v!), decoration: const InputDecoration(labelText: '예약 여부')),
-        TextField(controller: maxHeight, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '진입 최대 높이(mm)')),
+        DropdownButtonFormField<String>(initialValue: reservation, items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => reservation = v ?? reservation, decoration: const InputDecoration(labelText: '예약 여부')),
+        TextField(controller: maxHeight, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '진입 최대 높이', hintText: '예: 3.2', suffixText: 'm')),
         TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '문의연락처')),
         TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: '이용방법 / 주의사항')),
-        const SizedBox(height: 12),
-        Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () async { final picked = await ImagePicker().pickMultiImage(imageQuality: 82, limit: 6); setS(() { photos.clear(); photos.addAll(picked); }); }, icon: const Icon(Icons.photo_library_outlined), label: Text('장소사진 ${photos.isEmpty ? '' : '(${photos.length})'}')))]),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(onPressed: () async { final picked = await ImagePicker().pickMultiImage(imageQuality: 82, limit: 6); setS(() { photos.clear(); photos.addAll(picked); }); }, icon: const Icon(Icons.photo_library_outlined), label: Text('장소사진 ${photos.isEmpty ? '' : '(${photos.length})'}')),
         const Text('장소사진은 최소 1장 필요합니다.', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 8),
+        const Text('등록 후 관리자 승인 전까지 일반 사용자 지도에는 공개되지 않습니다.', style: TextStyle(fontWeight: FontWeight.bold)),
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')), FilledButton(onPressed: loading ? null : () async {
         if (name.text.trim().isEmpty || selected.isEmpty) return _msg('장소명과 서비스 항목을 입력해주세요.');
-        for (final s in selected) { if (prices[s]!.text.trim().isEmpty) return _msg('$s 금액을 입력해주세요. 무료인 경우 무료라고 입력해주세요.'); }
+        for (final s in selected) { if (prices[s]!.text.trim().isEmpty) return _msg('$s 금액을 입력해주세요. 무료면 "무료"라고 입력해주세요.'); }
         if (photos.isEmpty) return _msg('장소사진을 1장 이상 등록해주세요.');
         setState(() => loading = true);
         try {
-          final p = Place(id: const Uuid().v4(), name: name.text.trim(), latitude: spot.latitude, longitude: spot.longitude, address: address.text.trim(), services: selected.toList(), prices: {for (final s in selected) s: prices[s]!.text.trim()}, hours: hours.text.trim(), reservation: reservation, maxHeightMm: int.tryParse(maxHeight.text), phone: phone.text.trim(), note: note.text.trim(), ownerId: _currentAuthorId);
+          final p = Place(
+            id: const Uuid().v4(),
+            name: name.text.trim(),
+            latitude: spot.latitude,
+            longitude: spot.longitude,
+            address: address.text.trim(),
+            services: selected.toList(),
+            prices: {for (final s in selected) s: prices[s]!.text.trim()},
+            hours: hours.text.trim(),
+            reservation: reservation,
+            maxHeightMm: maxHeight.text.trim().isEmpty ? null : _metersToMm(maxHeight.text),
+            phone: phone.text.trim(),
+            note: note.text.trim(),
+            ownerId: _currentAuthorId,
+            approvalStatus: 'pending',
+          );
           await widget.data.addPlace(p);
           p.photoUrls = await widget.data.uploadPlacePhotos(p.id, photos.map((e) => File(e.path)).toList());
-          places.insert(0, p);
           selectedSpot = null;
           if (ctx.mounted) Navigator.pop(ctx);
-          if (mounted) setState(() {});
-          _msg('장소와 사진이 등록되었습니다.');
+          await _load();
+          if (mounted) setState(() => tab = 2);
+          _msg('장소가 접수되었습니다. 관리자 승인 진행중입니다.');
         } catch (e) {
           _msg('장소 등록에 실패했습니다: $e');
         } finally {
           if (mounted) setState(() => loading = false);
         }
-      }, child: const Text('등록'))],
+      }, child: const Text('등록 요청'))],
     )));
   }
 
   Widget _placePhoto(String value) {
     if (value.startsWith('http://') || value.startsWith('https://')) {
-      return Image.network(value, width: 210, height: 150, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 210, child: Center(child: Icon(Icons.broken_image_outlined, size: 42))));
+      return Image.network(value, width: 210, height: 150, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 210, child: Center(child: Icon(Icons.broken_image_outlined))));
     }
-    return Image.file(File(value), width: 210, height: 150, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 210, child: Center(child: Icon(Icons.broken_image_outlined, size: 42))));
+    return Image.file(File(value), width: 210, height: 150, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 210, child: Center(child: Icon(Icons.broken_image_outlined))));
   }
 
   Future<void> _showPlace(Place p) async {
-    final reviews = await widget.data.reviews(p.id);
+    final reviews = p.isApproved ? await widget.data.reviews(p.id) : <PlaceReview>[];
     if (!mounted) return;
     await showModalBottomSheet(context: context, showDragHandle: true, isScrollControlled: true, builder: (ctx) => DraggableScrollableSheet(
       expand: false,
-      initialChildSize: .68,
+      initialChildSize: .72,
       minChildSize: .42,
-      maxChildSize: .92,
+      maxChildSize: .94,
       builder: (_, scroll) => ListView(controller: scroll, padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), children: [
-        Text(p.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
+        Row(children: [Expanded(child: Text(p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'), ''), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), if (!p.isApproved && _isMine(p)) Chip(label: Text(_approvalLabel(p)), backgroundColor: _approvalColor(p, context))]),
+        const SizedBox(height: 6),
         Text(p.services.join(' · ')),
         if (p.address.isNotEmpty) Text(p.address),
         if (p.photoUrls.isNotEmpty) ...[
           const SizedBox(height: 12),
           SizedBox(height: 150, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: p.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) => ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i])))),
-        ] else ...[
-          const SizedBox(height: 10),
-          const Text('등록된 장소 사진이 없습니다.', style: TextStyle(fontSize: 12)),
         ],
         const SizedBox(height: 12),
         if (p.hours.isNotEmpty) Text('운영시간: ${p.hours}'),
         if (p.reservation.isNotEmpty) Text('예약: ${p.reservation}'),
         if (p.phone.isNotEmpty) Text('문의연락처: ${p.phone}'),
-        if (p.maxHeightMm != null) Text('진입 최대 높이: ${p.maxHeightMm}mm'),
+        if (p.maxHeightMm != null) Text('진입 최대 높이: ${_meters(p.maxHeightMm!)}m'),
         if (p.maxHeightMm != null && widget.user.vehicleHeightMm != null) _heightCompatibility(p),
         if (p.note.isNotEmpty) Text('이용방법/주의사항: ${p.note}'),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: FilledButton.tonalIcon(onPressed: () async {
-            final wasSaved = saved.contains(p.id);
-            if (wasSaved) { saved.remove(p.id); } else { saved.add(p.id); }
-            try {
-              await widget.data.saveSavedIds(saved);
-              if (mounted) setState(() {});
-              if (ctx.mounted) Navigator.pop(ctx);
-              _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.');
-              Future.delayed(const Duration(milliseconds: 120), () { if (mounted) _showPlace(p); });
-            } catch (e) {
-              if (wasSaved) { saved.add(p.id); } else { saved.remove(p.id); }
-              if (mounted) setState(() {});
-              _msg('저장 처리에 실패했습니다: $e');
-            }
-          }, icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장'))),
-          const SizedBox(width: 8),
-          Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),
-        ]),
-        if (widget.user.isAdministrator) ...[
-          const SizedBox(height: 8),
-          FilledButton.icon(onPressed: () { Navigator.pop(ctx); _adminEditPlace(p); }, icon: const Icon(Icons.admin_panel_settings_outlined), label: const Text('정보 수정 · 관리자 전용')),
+        if (!p.isApproved && _isMine(p)) ...[
+          const SizedBox(height: 16),
+          Card(color: _approvalColor(p, context), child: Padding(padding: const EdgeInsets.all(14), child: Text(p.isPending ? '관리자가 등록 내용을 확인 중입니다. 승인되면 전체 사용자 지도에 공개됩니다.' : '등록이 반려되었습니다. 관리자 검토 결과를 확인해 주세요.'))),
         ],
-        const Divider(height: 28),
-        const Text('검증 리뷰', style: TextStyle(fontWeight: FontWeight.bold)),
-        if (reviews.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('아직 검증 리뷰가 없습니다.')),
-        ...reviews.map((r) => _reviewTile(p, r)),
+        if (p.isApproved) ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: FilledButton.tonalIcon(onPressed: () async {
+              final wasSaved = saved.contains(p.id);
+              if (wasSaved) { saved.remove(p.id); } else { saved.add(p.id); }
+              try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }
+            }, icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장'))),
+            const SizedBox(width: 8),
+            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),
+          ]),
+          const Divider(height: 28),
+          const Text('검증 리뷰', style: TextStyle(fontWeight: FontWeight.bold)),
+          if (reviews.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('아직 검증 리뷰가 없습니다.')),
+          ...reviews.map((r) => _reviewTile(p, r)),
+        ],
       ]),
     ));
   }
@@ -573,30 +546,69 @@ class _HomeScreenState extends State<HomeScreen> {
     final limit = p.maxHeightMm!;
     final margin = limit - vehicle;
     final (icon, label) = margin < 0 ? ('⛔', '진입불가') : margin < 100 ? ('⚠️', '진입주의') : ('✅', '진입가능');
-    return Padding(padding: const EdgeInsets.only(top: 4), child: Text('$icon 내 차량 ${vehicle}mm · $label (여유 ${margin}mm)'));
+    return Padding(padding: const EdgeInsets.only(top: 4), child: Text('$icon 내 차량 ${_meters(vehicle)}m · $label (여유 ${(margin / 1000).toStringAsFixed(2)}m)'));
   }
 
   Widget _reviewTile(Place p, PlaceReview r) {
     final label = switch (r.status) { 'ok' => '이용가능', 'change' => '변경', 'bad' => '이용불가', _ => r.status };
-    final mine = r.authorId == _currentAuthorId || (widget.user.authId.isEmpty && r.authorId == widget.user.userId);
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Text(switch (r.status) { 'ok' => '✅', 'change' => '⚠️', 'bad' => '⛔', _ => '📝' }),
-      title: Text('$label · ${r.authorName}${mine ? ' · 내 리뷰' : ''}'),
-      subtitle: Text(r.body.isEmpty ? '내용 없음' : r.body),
-      trailing: mine ? PopupMenuButton<String>(
-        onSelected: (value) async {
-          Navigator.pop(context);
-          await Future.delayed(const Duration(milliseconds: 100));
-          if (value == 'edit') {
-            await _editReview(p, r);
-          } else if (value == 'delete') {
-            await _deleteReview(p, r);
-          }
-        },
-        itemBuilder: (_) => const [PopupMenuItem(value: 'edit', child: Text('수정')), PopupMenuItem(value: 'delete', child: Text('삭제'))],
-      ) : null,
+    final mine = r.authorId == _currentAuthorId;
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Text(switch (r.status) { 'ok' => '✅', 'change' => '⚠️', 'bad' => '⛔', _ => '📝' }),
+            const SizedBox(width: 8),
+            Expanded(child: Text('$label · ${r.authorName}${mine ? ' · 내 리뷰' : ''}', style: const TextStyle(fontWeight: FontWeight.bold))),
+            if (mine) PopupMenuButton<String>(onSelected: (v) async { if (v == 'edit') await _editReview(p, r); if (v == 'delete') await _deleteReview(p, r); }, itemBuilder: (_) => const [PopupMenuItem(value: 'edit', child: Text('수정')), PopupMenuItem(value: 'delete', child: Text('삭제'))]),
+          ]),
+          if (r.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(r.body)),
+          Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _openReviewComments(r), icon: const Icon(Icons.chat_bubble_outline, size: 18), label: const Text('댓글'))),
+        ]),
+      ),
     );
+  }
+
+  Future<void> _openReviewComments(PlaceReview review) async {
+    List<ReviewComment> comments = [];
+    try { comments = await widget.data.reviewComments(review.id); } catch (e) { return _msg('댓글을 불러오지 못했습니다: $e'); }
+    if (!mounted) return;
+    final c = TextEditingController();
+    await showModalBottomSheet(context: context, isScrollControlled: true, showDragHandle: true, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+      child: SizedBox(height: MediaQuery.of(ctx).size.height * .62, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const Text('리뷰 댓글', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Expanded(child: comments.isEmpty ? const Center(child: Text('아직 댓글이 없습니다.')) : ListView.builder(itemCount: comments.length, itemBuilder: (_, i) { final x = comments[i]; return ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.reply), title: Text(x.authorName), subtitle: Text(x.body)); })),
+        Row(children: [
+          Expanded(child: TextField(controller: c, maxLength: 300, maxLines: 2, decoration: const InputDecoration(labelText: '댓글 입력', border: OutlineInputBorder()))),
+          const SizedBox(width: 8),
+          FilledButton(onPressed: () async {
+            if (c.text.trim().isEmpty) return;
+            try { await widget.data.addReviewComment(reviewId: review.id, body: c.text); c.clear(); comments = await widget.data.reviewComments(review.id); setS(() {}); } catch (e) { _msg('댓글 등록에 실패했습니다: $e'); }
+          }, child: const Text('등록')),
+        ]),
+      ])),
+    ))));
+  }
+
+  Future<void> _openReview(Place p) async {
+    String status = 'ok';
+    final body = TextEditingController();
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
+      title: const Text('검증리뷰'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        RadioListTile<String>(value: 'ok', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('이용가능')),
+        RadioListTile<String>(value: 'change', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('변경')),
+        RadioListTile<String>(value: 'bad', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('이용불가')),
+        TextField(controller: body, maxLength: 200, maxLines: 3, decoration: const InputDecoration(labelText: '리뷰 내용')),
+        if (status != 'ok') const Text('변경/이용불가 리뷰는 관리자 검증리뷰 확인 목록에도 자동 등록됩니다.', style: TextStyle(fontSize: 12)),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('등록'))],
+    )));
+    if (ok != true) return;
+    try { await widget.data.addReview(placeId: p.id, status: status, body: body.text); _msg('검증리뷰가 등록되었습니다.'); await _load(); if (mounted) _showPlace(p); } catch (e) { _msg('리뷰 등록에 실패했습니다: $e'); }
   }
 
   Future<void> _editReview(Place p, PlaceReview r) async {
@@ -613,100 +625,12 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('수정 저장'))],
     )));
     if (ok != true) return;
-    try {
-      await widget.data.updateReview(reviewId: r.id, status: status, body: body.text);
-      _msg('리뷰를 수정했습니다.');
-      await _load();
-      if (mounted) _showPlace(p);
-    } catch (e) {
-      _msg('리뷰 수정에 실패했습니다: $e');
-    }
+    try { await widget.data.updateReview(reviewId: r.id, status: status, body: body.text); _msg('리뷰를 수정했습니다.'); await _load(); } catch (e) { _msg('리뷰 수정에 실패했습니다: $e'); }
   }
 
   Future<void> _deleteReview(Place p, PlaceReview r) async {
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('리뷰 삭제'),
-      content: const Text('이 리뷰를 삭제할까요?'),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('삭제'))],
-    ));
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('리뷰 삭제'), content: const Text('이 리뷰를 삭제할까요?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('삭제'))]));
     if (ok != true) return;
-    try {
-      await widget.data.deleteReview(r.id);
-      _msg('리뷰를 삭제했습니다.');
-      await _load();
-      if (mounted) _showPlace(p);
-    } catch (e) {
-      _msg('리뷰 삭제에 실패했습니다: $e');
-    }
-  }
-
-  Future<void> _openReview(Place p) async {
-    String status = 'ok';
-    final body = TextEditingController();
-    await showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
-      title: const Text('검증리뷰'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        RadioListTile<String>(value: 'ok', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('이용가능')),
-        RadioListTile<String>(value: 'change', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('변경')),
-        RadioListTile<String>(value: 'bad', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('이용불가')),
-        TextField(controller: body, maxLength: 200, maxLines: 3, decoration: const InputDecoration(labelText: '짧은 리뷰')),
-      ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')), FilledButton(onPressed: () async {
-        await widget.data.addReview(placeId: p.id, status: status, body: body.text);
-        if (ctx.mounted) Navigator.pop(ctx);
-        _msg('검증리뷰가 등록되었습니다.');
-        await _load();
-        if (mounted) _showPlace(p);
-      }, child: const Text('등록'))],
-    )));
-  }
-
-  Future<void> _adminEditPlace(Place p) async {
-    if (!widget.user.isAdministrator) return _msg('관리자만 수정할 수 있습니다.');
-    final name = TextEditingController(text: p.name);
-    final address = TextEditingController(text: p.address);
-    final hours = TextEditingController(text: p.hours);
-    final maxHeight = TextEditingController(text: p.maxHeightMm?.toString() ?? '');
-    final phone = TextEditingController(text: p.phone);
-    final note = TextEditingController(text: p.note);
-    final serviceNames = ['급수', '블랙탱크 비움', '노지/차박', '공중화장실'];
-    final selected = p.services.toSet();
-    final prices = <String, TextEditingController>{for (final service in serviceNames) service: TextEditingController(text: p.prices[service] ?? '')};
-    String reservation = p.reservation.isEmpty ? '예약불필요' : p.reservation;
-    await showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
-      title: const Text('장소 정보 수정'),
-      content: SizedBox(width: 440, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
-        TextField(controller: address, decoration: const InputDecoration(labelText: '주소')),
-        const SizedBox(height: 10),
-        ...serviceNames.map((service) => Row(children: [Checkbox(value: selected.contains(service), onChanged: (v) => setS(() { if (v == true) { selected.add(service); } else { selected.remove(service); prices[service]!.clear(); } })), Expanded(flex: 2, child: Text(service == '블랙탱크 비움' ? '블랙탱크' : service)), Expanded(flex: 3, child: TextField(controller: prices[service], enabled: selected.contains(service), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
-        TextField(controller: hours, decoration: const InputDecoration(labelText: '운영시간')),
-        DropdownButtonFormField<String>(initialValue: ['예약불필요', '예약필수', '전화문의'].contains(reservation) ? reservation : '예약불필요', items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setS(() => reservation = v!), decoration: const InputDecoration(labelText: '예약 여부')),
-        TextField(controller: maxHeight, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '진입 최대 높이(mm)')),
-        TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '문의연락처')),
-        TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: '이용방법 / 주의사항')),
-      ]))),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')), FilledButton(onPressed: () async {
-        if (name.text.trim().isEmpty || selected.isEmpty) return _msg('장소명과 서비스 항목을 입력해주세요.');
-        for (final service in selected) { if (prices[service]!.text.trim().isEmpty) return _msg('$service 금액을 입력해주세요. 무료인 경우 무료라고 입력해주세요.'); }
-        p.name = name.text.trim();
-        p.address = address.text.trim();
-        p.services = selected.toList();
-        p.prices = {for (final service in selected) service: prices[service]!.text.trim()};
-        p.hours = hours.text.trim();
-        p.reservation = reservation;
-        p.maxHeightMm = int.tryParse(maxHeight.text);
-        p.phone = phone.text.trim();
-        p.note = note.text.trim();
-        try {
-          await widget.data.updatePlace(p);
-          if (ctx.mounted) Navigator.pop(ctx);
-          if (mounted) setState(() {});
-          _msg('장소 정보를 수정했습니다.');
-        } catch (_) {
-          _msg('관리자 권한이 없거나 수정에 실패했습니다.');
-        }
-      }, child: const Text('수정 저장'))],
-    )));
+    try { await widget.data.deleteReview(r.id); _msg('리뷰를 삭제했습니다.'); await _load(); } catch (e) { _msg('리뷰 삭제에 실패했습니다: $e'); }
   }
 }
