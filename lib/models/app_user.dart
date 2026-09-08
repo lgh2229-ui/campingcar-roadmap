@@ -3,6 +3,7 @@ class AppUser {
     required this.userId,
     this.password = '',
     required this.phone,
+    this.nickname = '',
     this.authId = '',
     this.role = 'user',
     this.phoneVerified = false,
@@ -15,6 +16,7 @@ class AppUser {
   final String userId;
   String password;
   String phone;
+  String nickname;
   String authId;
   String role;
   bool phoneVerified;
@@ -24,11 +26,13 @@ class AppUser {
   String sanitationType;
 
   bool get isAdministrator => role == 'admin' && userId.toLowerCase() == 'administrator';
+  String get displayName => nickname.trim().isEmpty ? userId : nickname.trim();
 
   Map<String, dynamic> toJson() => {
         'userId': userId,
         'password': password,
         'phone': phone,
+        'nickname': nickname,
         'authId': authId,
         'role': role,
         'phoneVerified': phoneVerified,
@@ -42,6 +46,7 @@ class AppUser {
         userId: '${j['userId'] ?? j['username'] ?? ''}',
         password: '${j['password'] ?? ''}',
         phone: '${j['phone'] ?? ''}',
+        nickname: '${j['nickname'] ?? ''}',
         authId: '${j['authId'] ?? j['id'] ?? ''}',
         role: '${j['role'] ?? 'user'}',
         phoneVerified: j['phoneVerified'] == true || j['phone_verified'] == true,
