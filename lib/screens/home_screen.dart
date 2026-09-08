@@ -590,7 +590,7 @@ class _HomeScreenState extends State<HomeScreen> {
           }, child: const Text('등록')),
         ]),
       ])),
-    ))));
+    )));
   }
 
   Future<void> _openReview(Place p) async {
