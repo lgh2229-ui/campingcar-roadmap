@@ -25,7 +25,15 @@ class AuthRepository {
       for (final x in users) { if (x.userId.toLowerCase() == userId.toLowerCase() && x.password == password) { u = x; break; } }
       if (u != null) await local.setSession(u.userId);
     } else {
-      try { await client!.auth.signInWithPassword(email: loginEmail(userId), password: password); u = await currentUser(); } on AuthException { return null; }
+      try {
+        final res = await client!.functions.invoke('login-by-username', body: {'username': userId.trim(), 'password': password});
+        final data = res.data;
+        if (data is! Map || data['ok'] != true || '${data['refresh_token'] ?? ''}'.isEmpty) return null;
+        await client!.auth.setSession('${data['refresh_token']}');
+        u = await currentUser();
+      } catch (_) {
+        return null;
+      }
     }
     if (u == null) return null;
     if (administratorMode && !u.isAdministrator) { await logout(); return null; }
@@ -55,14 +63,34 @@ class AuthRepository {
       if (vehicleHeightMm == null || vehicleHeightMm <= 0) throw Exception('차량 높이를 입력해주세요.');
       if (sanitation.isEmpty) throw Exception('위생설비 종류를 선택해주세요.');
     }
-    final res = await client!.auth.signUp(email: loginEmail(id), password: password, data: {'username': id, 'nickname': nickname.trim()});
-    final authUser = res.user; if (authUser == null) throw Exception('회원 계정을 만들지 못했습니다.');
-    await client!.from('profiles').upsert({'id': authUser.id, 'username': id, 'nickname': nickname.trim(), 'phone': normalizePhone(phone), 'phone_verified': false, 'vehicle_status': vehicleStatus, 'vehicle_name': vehicleStatus == 'owned' ? vehicleName.trim() : '', 'vehicle_height_mm': vehicleStatus == 'owned' ? vehicleHeightMm : null, 'sanitation_type': vehicleStatus == 'owned' ? sanitation : ''});
-    await client!.auth.updateUser(UserAttributes(phone: toE164(phone)));
+
+    final res = await client!.auth.signUp(
+      phone: toE164(phone),
+      password: password,
+      data: {
+        'username': id,
+        'nickname': nickname.trim(),
+        'vehicle_status': vehicleStatus,
+        'vehicle_name': vehicleStatus == 'owned' ? vehicleName.trim() : '',
+        'vehicle_height_mm': vehicleStatus == 'owned' ? vehicleHeightMm : null,
+        'sanitation_type': vehicleStatus == 'owned' ? sanitation : '',
+      },
+    );
+    if (res.user == null) throw Exception('회원 계정을 만들지 못했습니다.');
   }
 
-  Future<void> resendServerSignupOtp(String phone) async { if (serverEnabled) await client!.auth.updateUser(UserAttributes(phone: toE164(phone))); }
-  Future<void> verifyServerSignupPhone(String phone, String token) async { if (!serverEnabled) return; final response = await client!.auth.verifyOTP(type: OtpType.phoneChange, phone: toE164(phone), token: token.trim()); final uid = response.user?.id ?? client!.auth.currentUser?.id; if (uid == null) throw Exception('휴대폰 인증 세션을 확인할 수 없습니다.'); await client!.from('profiles').update({'phone_verified': true, 'phone': normalizePhone(phone)}).eq('id', uid); }
+  Future<void> resendServerSignupOtp(String phone) async {
+    if (!serverEnabled) return;
+    await client!.auth.signInWithOtp(phone: toE164(phone), shouldCreateUser: false);
+  }
+
+  Future<void> verifyServerSignupPhone(String phone, String token) async {
+    if (!serverEnabled) return;
+    final response = await client!.auth.verifyOTP(type: OtpType.sms, phone: toE164(phone), token: token.trim());
+    final uid = response.user?.id ?? client!.auth.currentUser?.id;
+    if (uid == null) throw Exception('휴대폰 인증 세션을 확인할 수 없습니다.');
+    await client!.from('profiles').update({'phone_verified': true, 'phone': normalizePhone(phone)}).eq('id', uid);
+  }
 
   Future<AppUser?> currentUser() async {
     if (!serverEnabled) { final id = await local.sessionUserId(); if (id == null) return null; final users = await local.users(); for (final u in users) { if (u.userId == id) return u; } return null; }
@@ -75,7 +103,15 @@ class AuthRepository {
   Future<void> verifyRecoveryOtp(String phone, String token) async { if (serverEnabled) await client!.auth.verifyOTP(type: OtpType.sms, phone: toE164(phone), token: token.trim()); }
   Future<String?> findIdByPhone(String phone) async { if (!serverEnabled) { final normalized = normalizePhone(phone); for (final u in await local.users()) { if (normalizePhone(u.phone) == normalized) return u.userId; } return null; } final u = await currentUser(); if (u == null || normalizePhone(u.phone) != normalizePhone(phone)) return null; return u.userId; }
   Future<bool> resetPassword(String userId, String phone, String newPassword) async { if (!serverEnabled) { final users = await local.users(); for (final u in users) { if (u.userId.toLowerCase() == userId.toLowerCase() && normalizePhone(u.phone) == normalizePhone(phone)) { u.password = newPassword; await local.saveUsers(users); return true; } } return false; } final profile = await currentUser(); if (profile == null || profile.userId.toLowerCase() != userId.toLowerCase() || normalizePhone(profile.phone) != normalizePhone(phone)) return false; await client!.auth.updateUser(UserAttributes(password: newPassword)); return true; }
-  Future<bool> reauthenticatePassword(String password) async { final profile = await currentUser(); if (profile == null) return false; if (!serverEnabled) return profile.password == password; try { await client!.auth.signInWithPassword(email: loginEmail(profile.userId), password: password); return true; } on AuthException { return false; } }
+  Future<bool> reauthenticatePassword(String password) async {
+    final profile = await currentUser(); if (profile == null) return false;
+    if (!serverEnabled) return profile.password == password;
+    try {
+      final res = await client!.functions.invoke('login-by-username', body: {'username': profile.userId, 'password': password});
+      final data = res.data;
+      return data is Map && data['ok'] == true;
+    } catch (_) { return false; }
+  }
 
   Future<AppUser> updateVehicle({required String status, required String name, required int? heightMm, required String sanitation}) async {
     final profile = await currentUser(); if (profile == null) throw Exception('로그인이 필요합니다.');
