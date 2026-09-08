@@ -1,6 +1,7 @@
 name: Hotfix home syntax
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
 
@@ -8,28 +9,140 @@ permissions:
   contents: write
 
 jobs:
-  fix:
+  fix-and-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fix extra closing parenthesis
+      - name: Replace review comments method
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('lib/screens/home_screen.dart')
           s = p.read_text()
-          old = "    ))));\n  }\n\n  Future<void> _openReview(Place p) async {"
-          new = "    )));\n  }\n\n  Future<void> _openReview(Place p) async {"
-          if old not in s:
-              print('Hotfix already applied or target not found.')
-          else:
-              p.write_text(s.replace(old, new, 1))
+          start = s.index('  Future<void> _openReviewComments(PlaceReview review) async {')
+          end = s.index('  Future<void> _openReview(Place p) async {', start)
+          method = '''  Future<void> _openReviewComments(PlaceReview review) async {
+    List<ReviewComment> comments = [];
+    try {
+      comments = await widget.data.reviewComments(review.id);
+    } catch (e) {
+      _msg('댓글을 불러오지 못했습니다: $e');
+      return;
+    }
+    if (!mounted) return;
+    final controller = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('리뷰 댓글'),
+              content: SizedBox(
+                width: 420,
+                height: 420,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: comments.isEmpty
+                          ? const Center(child: Text('아직 댓글이 없습니다.'))
+                          : ListView.builder(
+                              itemCount: comments.length,
+                              itemBuilder: (_, i) {
+                                final x = comments[i];
+                                return ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(Icons.reply),
+                                  title: Text(x.authorName),
+                                  subtitle: Text(x.body),
+                                );
+                              },
+                            ),
+                    ),
+                    TextField(
+                      controller: controller,
+                      maxLength: 300,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: '댓글 입력',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('닫기'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final body = controller.text.trim();
+                    if (body.isEmpty) return;
+                    try {
+                      await widget.data.addReviewComment(reviewId: review.id, body: body);
+                      controller.clear();
+                      comments = await widget.data.reviewComments(review.id);
+                      setDialogState(() {});
+                    } catch (e) {
+                      _msg('댓글 등록에 실패했습니다: $e');
+                    }
+                  },
+                  child: const Text('등록'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+'''
+          p.write_text(s[:start] + method + s[end:])
           PY
-      - name: Commit hotfix if needed
+      - name: Commit source fix
         run: |
-          if git diff --quiet; then exit 0; fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add lib/screens/home_screen.dart
-          git commit -m "Fix review comments sheet syntax"
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m "Fix review comments dialog syntax"
+            git push
+          fi
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Android platform files
+        run: flutter create . --platforms=android --org kr.co.campingcarroadmap --project-name campingcar_roadmap
+      - name: Remove generated default widget test
+        run: rm -f test/widget_test.dart
+      - name: Prepare Android permissions and API 36
+        run: python tool/prepare_android.py
+      - name: Restore persistent debug signing key
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p "$HOME/.android"
+          echo "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+      - name: Get packages
+        run: flutter pub get
+      - name: Run tests
+        run: flutter test
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Build debug APK
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: >-
+          flutter build apk --debug
+          --dart-define=SUPABASE_URL="$SUPABASE_URL"
+          --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: campingcar-roadmap-v1.9.0-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
