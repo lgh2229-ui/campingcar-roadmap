@@ -6,6 +6,7 @@ import 'repositories/app_data_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/local_repository.dart';
 import 'repositories/supabase_repository.dart';
+import 'screens/admin_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/recovery_screen.dart';
@@ -48,6 +49,11 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
     if (mounted) setState(() => ready = true);
   }
 
+  Future<void> _logout() async {
+    await auth.logout();
+    if (mounted) setState(() => user = null);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -63,16 +69,15 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : user == null
               ? LoginScreen(auth: auth, onLoggedIn: (u) => setState(() => user = u))
-              : HomeScreen(
-                  user: user!,
-                  auth: auth,
-                  data: data,
-                  onUserChanged: (u) => setState(() => user = u),
-                  onLogout: () async {
-                    await auth.logout();
-                    if (mounted) setState(() => user = null);
-                  },
-                ),
+              : user!.isAdministrator
+                  ? AdminScreen(user: user!, auth: auth, data: data, onLogout: _logout)
+                  : HomeScreen(
+                      user: user!,
+                      auth: auth,
+                      data: data,
+                      onUserChanged: (u) => setState(() => user = u),
+                      onLogout: _logout,
+                    ),
     );
   }
 }
