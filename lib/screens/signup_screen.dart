@@ -11,6 +11,7 @@ class SignupScreen extends StatefulWidget {
 
 class _SignupScreenState extends State<SignupScreen> {
   final id = TextEditingController();
+  final nickname = TextEditingController();
   final phone = TextEditingController();
   final sms = TextEditingController();
   final pw = TextEditingController();
@@ -24,14 +25,21 @@ class _SignupScreenState extends State<SignupScreen> {
   bool verified = false;
   bool busy = false;
 
+  int? _heightMm() {
+    final meters = double.tryParse(vehicleHeight.text.trim());
+    if (meters == null || meters <= 0) return null;
+    return (meters * 1000).round();
+  }
+
   Future<void> _send() async {
     if (!RegExp(r'^[A-Za-z0-9_]{4,20}$').hasMatch(id.text.trim())) return _msg('아이디는 영문/숫자/밑줄 4~20자로 입력해주세요.');
+    if (nickname.text.trim().isEmpty || nickname.text.trim().length > 20) return _msg('닉네임은 필수이며 1~20자로 입력해주세요.');
     if (!widget.auth.validPassword(pw.text)) return _msg('비밀번호는 영문+숫자+특수문자 포함 8~20자입니다.');
     if (pw.text != pwConfirm.text) return _msg('비밀번호와 비밀번호 확인이 일치하지 않습니다.');
     if (widget.auth.normalizePhone(phone.text).length < 10) return _msg('휴대폰 번호를 확인해주세요.');
     if (vehicleStatus == 'owned') {
       if (vehicleName.text.trim().isEmpty) return _msg('보유 차량의 차량명/모델을 입력해주세요.');
-      if (int.tryParse(vehicleHeight.text.trim()) == null) return _msg('차량 높이를 mm 단위 숫자로 입력해주세요.');
+      if (_heightMm() == null) return _msg('차량 높이를 미터(m) 단위로 입력해주세요. 예: 3.0');
       if (sanitation.isEmpty) return _msg('위생설비 종류를 선택해주세요.');
     }
     setState(() => busy = true);
@@ -42,9 +50,10 @@ class _SignupScreenState extends State<SignupScreen> {
             userId: id.text.trim(),
             password: pw.text,
             phone: phone.text,
+            nickname: nickname.text.trim(),
             vehicleStatus: vehicleStatus,
             vehicleName: vehicleStatus == 'owned' ? vehicleName.text.trim() : '',
-            vehicleHeightMm: vehicleStatus == 'owned' ? int.tryParse(vehicleHeight.text.trim()) : null,
+            vehicleHeightMm: vehicleStatus == 'owned' ? _heightMm() : null,
             sanitation: vehicleStatus == 'owned' ? sanitation : '',
           );
         } else {
@@ -76,10 +85,11 @@ class _SignupScreenState extends State<SignupScreen> {
             userId: id.text.trim(),
             password: pw.text,
             phone: phone.text.trim(),
+            nickname: nickname.text.trim(),
             phoneVerified: true,
             vehicleStatus: vehicleStatus,
             vehicleName: vehicleStatus == 'owned' ? vehicleName.text.trim() : '',
-            vehicleHeightMm: vehicleStatus == 'owned' ? int.tryParse(vehicleHeight.text.trim()) : null,
+            vehicleHeightMm: vehicleStatus == 'owned' ? _heightMm() : null,
             sanitationType: vehicleStatus == 'owned' ? sanitation : '',
           ));
         }
@@ -102,39 +112,22 @@ class _SignupScreenState extends State<SignupScreen> {
     body: ListView(padding: const EdgeInsets.all(20), children: [
       TextField(controller: id, enabled: !started, decoration: const InputDecoration(labelText: '아이디', border: OutlineInputBorder())),
       const SizedBox(height: 12),
+      TextField(controller: nickname, enabled: !started, maxLength: 20, decoration: const InputDecoration(labelText: '닉네임 (필수)', border: OutlineInputBorder())),
+      const SizedBox(height: 12),
       TextField(controller: pw, enabled: !started, obscureText: true, decoration: const InputDecoration(labelText: '비밀번호', hintText: '영문+숫자+특수문자 8~20자', border: OutlineInputBorder())),
       const SizedBox(height: 12),
       TextField(controller: pwConfirm, enabled: !started, obscureText: true, decoration: const InputDecoration(labelText: '비밀번호 확인', border: OutlineInputBorder())),
       const SizedBox(height: 18),
       const Text('차량정보', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      const SizedBox(height: 4),
-      RadioListTile<String>(
-        value: 'planned',
-        groupValue: vehicleStatus,
-        onChanged: started ? null : (v) => setState(() => vehicleStatus = v!),
-        title: const Text('구매예정'),
-        contentPadding: EdgeInsets.zero,
-      ),
-      RadioListTile<String>(
-        value: 'owned',
-        groupValue: vehicleStatus,
-        onChanged: started ? null : (v) => setState(() => vehicleStatus = v!),
-        title: const Text('보유중'),
-        contentPadding: EdgeInsets.zero,
-      ),
+      RadioListTile<String>(value: 'planned', groupValue: vehicleStatus, onChanged: started ? null : (v) => setState(() => vehicleStatus = v!), title: const Text('구매예정'), contentPadding: EdgeInsets.zero),
+      RadioListTile<String>(value: 'owned', groupValue: vehicleStatus, onChanged: started ? null : (v) => setState(() => vehicleStatus = v!), title: const Text('보유중'), contentPadding: EdgeInsets.zero),
       if (vehicleStatus == 'owned') ...[
         TextField(controller: vehicleName, enabled: !started, decoration: const InputDecoration(labelText: '차량명/모델', border: OutlineInputBorder())),
         const SizedBox(height: 12),
-        TextField(controller: vehicleHeight, enabled: !started, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '차량 높이(mm)', hintText: '예: 3000', border: OutlineInputBorder())),
+        TextField(controller: vehicleHeight, enabled: !started, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '진입 차량 높이(m)', hintText: '예: 3.0', suffixText: 'm', border: OutlineInputBorder())),
         const SizedBox(height: 8),
         const Text('위생설비'),
-        ...['블랙탱크', '그레이탱크', '카트리지'].map((e) => RadioListTile<String>(
-          value: e,
-          groupValue: sanitation,
-          onChanged: started ? null : (v) => setState(() => sanitation = v!),
-          title: Text(e),
-          contentPadding: EdgeInsets.zero,
-        )),
+        ...['블랙탱크', '그레이탱크', '카트리지'].map((e) => RadioListTile<String>(value: e, groupValue: sanitation, onChanged: started ? null : (v) => setState(() => sanitation = v!), title: Text(e), contentPadding: EdgeInsets.zero)),
       ],
       const SizedBox(height: 12),
       Row(children: [
