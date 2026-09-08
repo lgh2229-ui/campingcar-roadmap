@@ -1,10 +1,10 @@
 name: campingcar_roadmap
-description: 캠핑카족 로드맵 - 한국 캠핑카 이용자를 위한 급수/블랙탱크/노지/화장실 지도 앱
+description: 캠핑카족 로드맵 Flutter MVP
 publish_to: 'none'
-version: 1.8.0+9
+version: 1.9.0+10
 
 environment:
-  sdk: '>=3.6.0 <4.0.0'
+  sdk: '>=3.4.0 <4.0.0'
 
 dependencies:
   flutter:
