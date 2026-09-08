@@ -6,7 +6,7 @@ import 'repositories/app_data_repository.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/local_repository.dart';
 import 'repositories/supabase_repository.dart';
-import 'screens/admin_screen.dart';
+import 'screens/admin_home_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/recovery_screen.dart';
@@ -70,7 +70,13 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
           : user == null
               ? LoginScreen(auth: auth, onLoggedIn: (u) => setState(() => user = u))
               : user!.isAdministrator
-                  ? AdminScreen(user: user!, auth: auth, data: data, onLogout: _logout)
+                  ? AdminHomeScreen(
+                      user: user!,
+                      auth: auth,
+                      data: data,
+                      onUserChanged: (u) => setState(() => user = u),
+                      onLogout: _logout,
+                    )
                   : HomeScreen(
                       user: user!,
                       auth: auth,
