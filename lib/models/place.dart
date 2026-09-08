@@ -15,6 +15,7 @@ class Place {
     this.status = 'ok',
     this.ownerId = '',
     this.photoUrls = const [],
+    this.approvalStatus = 'pending',
   });
 
   final String id;
@@ -32,26 +33,23 @@ class Place {
   String status;
   String ownerId;
   List<String> photoUrls;
+  String approvalStatus;
 
   bool get hasHeightRestriction => maxHeightMm != null && maxHeightMm! > 0;
+  bool get isApproved => approvalStatus == 'approved';
+  bool get isPending => approvalStatus == 'pending';
 
   bool isHeightCompatible(int? vehicleHeightMm, {int clearanceBufferMm = 100}) {
-    if (!hasHeightRestriction || vehicleHeightMm == null || vehicleHeightMm <= 0) {
-      return true;
-    }
+    if (!hasHeightRestriction || vehicleHeightMm == null || vehicleHeightMm <= 0) return true;
     return vehicleHeightMm + clearanceBufferMm <= maxHeightMm!;
   }
 
   String heightSafetyLabel(int? vehicleHeightMm, {int clearanceBufferMm = 100}) {
     if (!hasHeightRestriction) return '높이 제한 정보 없음';
     final limit = (maxHeightMm! / 1000).toStringAsFixed(1);
-    if (vehicleHeightMm == null || vehicleHeightMm <= 0) {
-      return '제한높이 ${limit}m · 차량 높이 미등록';
-    }
+    if (vehicleHeightMm == null || vehicleHeightMm <= 0) return '제한높이 ${limit}m · 차량 높이 미등록';
     final vehicle = (vehicleHeightMm / 1000).toStringAsFixed(1);
-    if (isHeightCompatible(vehicleHeightMm, clearanceBufferMm: clearanceBufferMm)) {
-      return '통과 가능 예상 · 차량 ${vehicle}m / 제한 ${limit}m';
-    }
+    if (isHeightCompatible(vehicleHeightMm, clearanceBufferMm: clearanceBufferMm)) return '통과 가능 예상 · 차량 ${vehicle}m / 제한 ${limit}m';
     return '진입 주의 · 차량 ${vehicle}m / 제한 ${limit}m';
   }
 
@@ -71,6 +69,7 @@ class Place {
         'status': status,
         'ownerId': ownerId,
         'photoUrls': photoUrls,
+        'approvalStatus': approvalStatus,
       };
 
   Map<String, dynamic> toSupabaseJson() => {
@@ -105,5 +104,6 @@ class Place {
         status: '${j['status'] ?? 'ok'}',
         ownerId: '${j['ownerId'] ?? j['owner_id'] ?? ''}',
         photoUrls: List<String>.from(j['photoUrls'] ?? j['photo_urls'] ?? const []),
+        approvalStatus: '${j['approvalStatus'] ?? j['approval_status'] ?? 'pending'}',
       );
 }
