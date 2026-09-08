@@ -80,5 +80,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.9.2-debug-apk
+          name: campingcar-roadmap-v1.9.3-migration-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
