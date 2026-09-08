@@ -8,6 +8,8 @@ s = s.replace('android:label="campingcar_roadmap"', 'android:label="캠핑카족
 p.write_text(s, encoding='utf-8')
 
 # Google Play 2026 target requirement: ensure API 36 where Flutter template allows it.
+# Also use a permanent applicationId that can be installed beside legacy randomly-signed builds.
+# Keep the generated namespace unchanged so MainActivity continues to resolve normally.
 for gradle_name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
     gp = Path(gradle_name)
     if not gp.exists():
@@ -17,4 +19,7 @@ for gradle_name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
     g = g.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
     g = g.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 36')
     g = g.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 36')
+    g = g.replace('applicationId = "kr.co.campingcarroadmap.campingcar_roadmap"', 'applicationId = "kr.co.campingcarroadmap.app"')
+    g = g.replace("applicationId 'kr.co.campingcarroadmap.campingcar_roadmap'", "applicationId 'kr.co.campingcarroadmap.app'")
+    g = g.replace('applicationId "kr.co.campingcarroadmap.campingcar_roadmap"', 'applicationId "kr.co.campingcarroadmap.app"')
     gp.write_text(g, encoding='utf-8')
