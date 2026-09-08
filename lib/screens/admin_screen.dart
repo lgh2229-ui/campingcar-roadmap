@@ -136,7 +136,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 if (p.maxHeightMm != null) Text('진입 최대 높이 ${(p.maxHeightMm! / 1000).toStringAsFixed(2)}m'),
                 const SizedBox(height: 8),
                 Row(children: [Expanded(child: OutlinedButton.icon(onPressed: () => _editPlace(p), icon: const Icon(Icons.edit), label: const Text('수정'))), const SizedBox(width: 6), Expanded(child: FilledButton.icon(onPressed: () => _approve(p), icon: const Icon(Icons.check), label: const Text('승인'))), const SizedBox(width: 6), Expanded(child: TextButton(onPressed: () => _reject(p), child: const Text('반려')))]),
-              ]))),
+              ])))),
               const SizedBox(height: 24),
               Text('검증리뷰 확인 사항 ${tasks.length}건', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
