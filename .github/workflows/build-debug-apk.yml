@@ -1,102 +1,36 @@
 name: Build Android Debug APK
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   test-and-build-debug:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Patch review comments syntax
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('lib/screens/home_screen.dart')
-          s = p.read_text()
-          start = s.index('  Future<void> _openReviewComments(PlaceReview review) async {')
-          end = s.index('  Future<void> _openReview(Place p) async {', start)
-          method = '''  Future<void> _openReviewComments(PlaceReview review) async {
-    List<ReviewComment> comments = [];
-    try {
-      comments = await widget.data.reviewComments(review.id);
-    } catch (e) {
-      _msg('댓글을 불러오지 못했습니다: $e');
-      return;
-    }
-    if (!mounted) return;
-    final controller = TextEditingController();
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('리뷰 댓글'),
-          content: SizedBox(
-            width: 420,
-            height: 420,
-            child: Column(children: [
-              Expanded(
-                child: comments.isEmpty
-                    ? const Center(child: Text('아직 댓글이 없습니다.'))
-                    : ListView.builder(
-                        itemCount: comments.length,
-                        itemBuilder: (_, i) {
-                          final x = comments[i];
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: const Icon(Icons.reply),
-                            title: Text(x.authorName),
-                            subtitle: Text(x.body),
-                          );
-                        },
-                      ),
-              ),
-              TextField(
-                controller: controller,
-                maxLength: 300,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: '댓글 입력', border: OutlineInputBorder()),
-              ),
-            ]),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('닫기')),
-            FilledButton(
-              onPressed: () async {
-                final body = controller.text.trim();
-                if (body.isEmpty) return;
-                try {
-                  await widget.data.addReviewComment(reviewId: review.id, body: body);
-                  controller.clear();
-                  comments = await widget.data.reviewComments(review.id);
-                  setDialogState(() {});
-                } catch (e) {
-                  _msg('댓글 등록에 실패했습니다: $e');
-                }
-              },
-              child: const Text('등록'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+      - name: Run actions/checkout@v4
+        uses: actions/checkout@v4
 
-'''
-          p.write_text(s[:start] + method + s[end:])
-          PY
-      - uses: subosito/flutter-action@v2
+      - name: Patch review comments method
+        run: python tool/fix_home_review_comments.py
+
+      - name: Run subosito/flutter-action@v2
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
       - name: Generate Android platform files
         run: flutter create . --platforms=android --org kr.co.campingcarroadmap --project-name campingcar_roadmap
+
       - name: Remove generated default widget test
         run: rm -f test/widget_test.dart
+
       - name: Prepare Android permissions and API 36
         run: python tool/prepare_android.py
+
       - name: Restore persistent debug signing key
         env:
           ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
@@ -109,20 +43,25 @@ jobs:
             echo "ANDROID_DEBUG_KEYSTORE_BASE64 secret is not configured."
             exit 1
           fi
+
       - name: Get packages
         run: flutter pub get
+
       - name: Run tests
         run: flutter test
+
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
       - name: Build debug APK
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-        run: >-
+        run: >
           flutter build apk --debug
           --dart-define=SUPABASE_URL="$SUPABASE_URL"
           --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
