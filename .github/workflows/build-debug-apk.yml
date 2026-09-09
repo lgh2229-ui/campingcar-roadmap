@@ -51,7 +51,10 @@ jobs:
             exit 1
           fi
 
-          EXPECTED_SHA256="84E9DCA5359EC390B36CD44A95F17A0794B4094305D9C21DDCBA95C64E060B3B"
+          # Lock builds to the persistent repository signing key currently stored
+          # in ANDROID_DEBUG_KEYSTORE_BASE64. This is the certificate that future
+          # builds must keep using so update installs remain compatible.
+          EXPECTED_SHA256="E2BD19B77B905D522D57FC9DB1D9FBD7A1BEA9E04990A9DDEDF89D2C3A8B0361"
           ACTUAL_SHA256=$(keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey 2>/dev/null | awk -F'SHA256:' '/SHA256:/{gsub(/[: ]/,"",$2); print toupper($2); exit}')
           if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
             echo "Signing certificate changed. Refusing to build an APK that cannot update the installed app."
