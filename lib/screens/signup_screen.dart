@@ -74,9 +74,20 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _verify() async {
     if (!started) return _msg('인증번호를 먼저 받아주세요.');
+    setState(() => busy = true);
     try {
       if (widget.auth.serverEnabled) {
-        await widget.auth.verifyServerSignupPhone(phone.text, sms.text);
+        await widget.auth.verifyServerSignupPhone(
+          phone: phone.text,
+          token: sms.text,
+          userId: id.text.trim(),
+          password: pw.text,
+          nickname: nickname.text.trim(),
+          vehicleStatus: vehicleStatus,
+          vehicleName: vehicleStatus == 'owned' ? vehicleName.text.trim() : '',
+          vehicleHeightMm: vehicleStatus == 'owned' ? _heightMm() : null,
+          sanitation: vehicleStatus == 'owned' ? sanitation : '',
+        );
         verified = true;
       } else {
         verified = widget.auth.verifySms(phone.text, sms.text);
@@ -96,11 +107,12 @@ class _SignupScreenState extends State<SignupScreen> {
       }
       if (!verified) return _msg('인증번호가 일치하지 않습니다.');
       if (!mounted) return;
-      setState(() {});
       _msg('휴대폰 인증과 회원가입이 완료되었습니다.');
       Navigator.pop(context);
     } catch (e) {
       _msg(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
@@ -140,7 +152,7 @@ class _SignupScreenState extends State<SignupScreen> {
       Row(children: [
         Expanded(child: TextField(controller: sms, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '인증번호', border: OutlineInputBorder()))),
         const SizedBox(width: 8),
-        OutlinedButton(onPressed: _verify, child: const Text('확인')),
+        OutlinedButton(onPressed: busy ? null : _verify, child: const Text('확인')),
       ]),
       if (widget.auth.serverEnabled) const Padding(padding: EdgeInsets.only(top: 12), child: Text('실제 SMS 인증 모드', style: TextStyle(fontSize: 12))),
     ]),
