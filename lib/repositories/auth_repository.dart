@@ -31,9 +31,7 @@ class AuthRepository {
         if (data is! Map || data['ok'] != true || '${data['refresh_token'] ?? ''}'.isEmpty) return null;
         await client!.auth.setSession('${data['refresh_token']}');
         u = await currentUser();
-      } catch (_) {
-        return null;
-      }
+      } catch (_) { return null; }
     }
     if (u == null) return null;
     if (administratorMode && !u.isAdministrator) { await logout(); return null; }
@@ -44,11 +42,26 @@ class AuthRepository {
   Future<void> logout() async { if (serverEnabled) { await client!.auth.signOut(); } else { await local.setSession(null); } }
 
   Future<void> signup(AppUser user) async {
-    if (serverEnabled) throw UnsupportedError('서버 모드에서는 beginServerSignup/verifyServerSignupPhone을 사용합니다.');
+    if (serverEnabled) throw UnsupportedError('서버 모드에서는 SMS 인증 회원가입을 사용합니다.');
     final users = await local.users();
     if (users.any((u) => u.userId.toLowerCase() == user.userId.toLowerCase())) throw Exception('이미 사용 중인 아이디입니다.');
     if (user.nickname.trim().isEmpty) throw Exception('닉네임은 필수입니다.');
     users.add(user); await local.saveUsers(users);
+  }
+
+  String _smsError(Object? code) {
+    switch ('$code') {
+      case 'too_many_requests': return '인증번호는 1분 후 다시 요청할 수 있습니다.';
+      case 'sms_send_failed': return '문자 발송에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      case 'sms_not_configured': return '문자 발송 설정을 확인해주세요.';
+      case 'invalid_phone': return '휴대폰 번호를 확인해주세요.';
+      case 'invalid_otp': return '인증번호가 일치하지 않습니다.';
+      case 'otp_expired': return '인증번호 유효시간이 지났습니다. 다시 받아주세요.';
+      case 'too_many_attempts': return '인증번호 입력 횟수를 초과했습니다. 새 인증번호를 받아주세요.';
+      case 'username_taken': return '이미 사용 중인 아이디입니다.';
+      case 'phone_taken': return '이미 가입된 휴대폰 번호입니다.';
+      default: return '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+    }
   }
 
   Future<void> beginServerSignup({required String userId, required String password, required String phone, required String nickname, String vehicleStatus = 'planned', String vehicleName = '', int? vehicleHeightMm, String sanitation = ''}) async {
@@ -63,33 +76,37 @@ class AuthRepository {
       if (vehicleHeightMm == null || vehicleHeightMm <= 0) throw Exception('차량 높이를 입력해주세요.');
       if (sanitation.isEmpty) throw Exception('위생설비 종류를 선택해주세요.');
     }
-
-    final res = await client!.auth.signUp(
-      phone: toE164(phone),
-      password: password,
-      data: {
-        'username': id,
-        'nickname': nickname.trim(),
-        'vehicle_status': vehicleStatus,
-        'vehicle_name': vehicleStatus == 'owned' ? vehicleName.trim() : '',
-        'vehicle_height_mm': vehicleStatus == 'owned' ? vehicleHeightMm : null,
-        'sanitation_type': vehicleStatus == 'owned' ? sanitation : '',
-      },
-    );
-    if (res.user == null) throw Exception('회원 계정을 만들지 못했습니다.');
+    await resendServerSignupOtp(phone);
   }
 
   Future<void> resendServerSignupOtp(String phone) async {
     if (!serverEnabled) return;
-    await client!.auth.signInWithOtp(phone: toE164(phone), shouldCreateUser: false);
+    try {
+      final res = await client!.functions.invoke('send-signup-otp', body: {'phone': normalizePhone(phone)});
+      final data = res.data;
+      if (data is! Map || data['ok'] != true) throw Exception(_smsError(data is Map ? data['error'] : null));
+    } on Exception catch (e) {
+      final s = e.toString();
+      if (s.startsWith('Exception: ')) rethrow;
+      throw Exception('문자 발송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
   }
 
-  Future<void> verifyServerSignupPhone(String phone, String token) async {
+  Future<void> verifyServerSignupPhone({required String phone, required String token, required String userId, required String password, required String nickname, required String vehicleStatus, required String vehicleName, required int? vehicleHeightMm, required String sanitation}) async {
     if (!serverEnabled) return;
-    final response = await client!.auth.verifyOTP(type: OtpType.sms, phone: toE164(phone), token: token.trim());
-    final uid = response.user?.id ?? client!.auth.currentUser?.id;
-    if (uid == null) throw Exception('휴대폰 인증 세션을 확인할 수 없습니다.');
-    await client!.from('profiles').update({'phone_verified': true, 'phone': normalizePhone(phone)}).eq('id', uid);
+    try {
+      final res = await client!.functions.invoke('complete-signup', body: {
+        'phone': normalizePhone(phone), 'token': token.trim(), 'userId': userId.trim(), 'password': password,
+        'nickname': nickname.trim(), 'vehicleStatus': vehicleStatus, 'vehicleName': vehicleName,
+        'vehicleHeightMm': vehicleHeightMm, 'sanitation': sanitation,
+      });
+      final data = res.data;
+      if (data is! Map || data['ok'] != true) throw Exception(_smsError(data is Map ? data['error'] : null));
+    } on Exception catch (e) {
+      final s = e.toString();
+      if (s.startsWith('Exception: ')) rethrow;
+      throw Exception('회원가입 처리에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
   }
 
   Future<AppUser?> currentUser() async {
@@ -106,11 +123,7 @@ class AuthRepository {
   Future<bool> reauthenticatePassword(String password) async {
     final profile = await currentUser(); if (profile == null) return false;
     if (!serverEnabled) return profile.password == password;
-    try {
-      final res = await client!.functions.invoke('login-by-username', body: {'username': profile.userId, 'password': password});
-      final data = res.data;
-      return data is Map && data['ok'] == true;
-    } catch (_) { return false; }
+    try { final res = await client!.functions.invoke('login-by-username', body: {'username': profile.userId, 'password': password}); final data = res.data; return data is Map && data['ok'] == true; } catch (_) { return false; }
   }
 
   Future<AppUser> updateVehicle({required String status, required String name, required int? heightMm, required String sanitation}) async {
