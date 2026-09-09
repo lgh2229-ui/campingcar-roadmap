@@ -1,7 +1,7 @@
 name: campingcar_roadmap
 description: 캠핑카족 로드맵 Flutter MVP
 publish_to: 'none'
-version: 1.9.5+15
+version: 1.9.6+16
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
