@@ -22,4 +22,17 @@ for gradle_name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
     g = g.replace('applicationId = "kr.co.campingcarroadmap.campingcar_roadmap"', 'applicationId = "kr.co.campingcarroadmap.app"')
     g = g.replace("applicationId 'kr.co.campingcarroadmap.campingcar_roadmap'", "applicationId 'kr.co.campingcarroadmap.app'")
     g = g.replace('applicationId "kr.co.campingcarroadmap.campingcar_roadmap"', 'applicationId "kr.co.campingcarroadmap.app"')
+
+    # flutter create generates a project-local debug keystore on recent templates.
+    # Force debug builds to use the persistent ~/.android/debug.keystore restored by CI.
+    if gradle_name.endswith('.kts'):
+        marker = '    buildTypes {\n'
+        if marker in g and 'storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")' not in g:
+            signing = '''    signingConfigs {\n        getByName("debug") {\n            storeFile = file(System.getProperty("user.home") + "/.android/debug.keystore")\n            storePassword = "android"\n            keyAlias = "androiddebugkey"\n            keyPassword = "android"\n        }\n    }\n\n'''
+            g = g.replace(marker, signing + marker, 1)
+    else:
+        marker = '    buildTypes {\n'
+        if marker in g and "storeFile file(System.getProperty('user.home') + '/.android/debug.keystore')" not in g:
+            signing = '''    signingConfigs {\n        debug {\n            storeFile file(System.getProperty('user.home') + '/.android/debug.keystore')\n            storePassword 'android'\n            keyAlias 'androiddebugkey'\n            keyPassword 'android'\n        }\n    }\n\n'''
+            g = g.replace(marker, signing + marker, 1)
     gp.write_text(g, encoding='utf-8')
