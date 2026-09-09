@@ -19,6 +19,9 @@ jobs:
       - name: Patch place registration screen
         run: python tool/fix_place_registration.py
 
+      - name: Patch personal info edit flow
+        run: python tool/fix_profile_edit.py
+
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
         with:
@@ -122,5 +125,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.9.7-debug-apk
+          name: campingcar-roadmap-v1.9.8-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
