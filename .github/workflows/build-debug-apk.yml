@@ -22,6 +22,9 @@ jobs:
       - name: Patch personal info edit flow
         run: python tool/fix_profile_edit.py
 
+      - name: Patch map visibility, favorite UI, and admin safe area
+        run: python tool/fix_map_visibility_save_safearea.py
+
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
         with:
@@ -125,5 +128,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.9.8-debug-apk
+          name: campingcar-roadmap-v1.9.9-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
