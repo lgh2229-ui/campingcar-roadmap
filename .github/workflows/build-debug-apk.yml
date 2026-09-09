@@ -31,6 +31,14 @@ jobs:
       - name: Prepare Android permissions and API 36
         run: python tool/prepare_android.py
 
+      - name: Verify permanent application ID
+        run: |
+          if ! grep -q 'applicationId = "kr.co.campingcarroadmap.app"' android/app/build.gradle.kts; then
+            echo "Unexpected Android applicationId. Refusing to build an incompatible APK."
+            exit 1
+          fi
+          echo "Android applicationId is locked to kr.co.campingcarroadmap.app"
+
       - name: Restore persistent debug signing key
         env:
           ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
@@ -38,11 +46,20 @@ jobs:
           mkdir -p "$HOME/.android"
           if [ -n "$ANDROID_DEBUG_KEYSTORE_BASE64" ]; then
             echo "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
-            echo "Using persistent repository debug signing key."
           else
             echo "ANDROID_DEBUG_KEYSTORE_BASE64 secret is not configured."
             exit 1
           fi
+
+          EXPECTED_SHA256="84E9DCA5359EC390B36CD44A95F17A0794B4094305D9C21DDCBA95C64E060B3B"
+          ACTUAL_SHA256=$(keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey 2>/dev/null | awk -F'SHA256:' '/SHA256:/{gsub(/[: ]/,"",$2); print toupper($2); exit}')
+          if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+            echo "Signing certificate changed. Refusing to build an APK that cannot update the installed app."
+            echo "Expected: $EXPECTED_SHA256"
+            echo "Actual:   $ACTUAL_SHA256"
+            exit 1
+          fi
+          echo "Signing certificate fingerprint verified."
 
       - name: Get packages
         run: flutter pub get
@@ -80,5 +97,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.9.3-migration-debug-apk
+          name: campingcar-roadmap-v1.9.5-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
