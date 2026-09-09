@@ -16,6 +16,9 @@ jobs:
       - name: Patch review comments method
         run: python tool/fix_home_review_comments.py
 
+      - name: Patch place registration screen
+        run: python tool/fix_place_registration.py
+
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
         with:
@@ -119,5 +122,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.9.6-debug-apk
+          name: campingcar-roadmap-v1.9.7-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
