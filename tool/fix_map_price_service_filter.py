@@ -1,11 +1,12 @@
 from pathlib import Path
 
+# Map filters: keep independent service selections instead of resetting the previous one.
 p = Path('lib/screens/home_screen.dart')
 s = p.read_text(encoding='utf-8')
 
 s = s.replace(
 "  String filter = '전체';\n  String savedFilter = '전체';",
-"  String filter = '전체';\n  String priceFilter = '전체';\n  String savedFilter = '전체';"
+"  String globalPriceFilter = '전체';\n  final Map<String, String> servicePriceFilters = {};\n  String savedFilter = '전체';"
 )
 
 old = """  List<Place> get visiblePlaces {
@@ -19,30 +20,37 @@ new = """  bool _isUnknownPrice(String value) {
     return v.isEmpty || v.contains('확인 필요') || v.contains('정보 없음') || v.contains('금액정보 없음');
   }
 
-  bool _serviceMatchesPrice(Place p, String service) {
-    final value = '${p.prices[service] ?? ''}'.trim();
+  bool _priceMatches(Place p, String service, String priceFilter) {
     if (priceFilter == '전체') return true;
+    final value = '${p.prices[service] ?? ''}'.trim();
     if (_isUnknownPrice(value)) return false;
     final isFree = value.contains('무료');
     return priceFilter == '무료' ? isFree : !isFree;
   }
 
+  bool _matchesGlobalPrice(Place p) {
+    if (globalPriceFilter == '전체') return true;
+    for (final service in p.services) {
+      if (_priceMatches(p, service, globalPriceFilter)) return true;
+    }
+    return false;
+  }
+
+  bool _matchesSelectedServices(Place p) {
+    if (servicePriceFilters.isEmpty) return true;
+    for (final entry in servicePriceFilters.entries) {
+      if (p.services.contains(entry.key) && _priceMatches(p, entry.key, entry.value)) return true;
+    }
+    return false;
+  }
+
   List<Place> get visiblePlaces {
     final approved = places.where((p) => p.isApproved).toList();
-    return approved.where((p) {
-      if (filter != '전체') {
-        if (!p.services.contains(filter)) return false;
-        return _serviceMatchesPrice(p, filter);
-      }
-      if (priceFilter == '전체') return true;
-      for (final service in p.services) {
-        if (_serviceMatchesPrice(p, service)) return true;
-      }
-      return false;
-    }).toList();
+    return approved.where((p) => _matchesGlobalPrice(p) && _matchesSelectedServices(p)).toList();
   }
 
   Future<void> _openMapFilterMenu(String service) async {
+    final current = service == '전체' ? globalPriceFilter : servicePriceFilters[service];
     final selected = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -60,9 +68,21 @@ new = """  bool _isUnknownPrice(String value) {
             ...['전체', '유료', '무료'].map((price) => ListTile(
                   leading: Icon(price == '전체' ? Icons.apps : price == '유료' ? Icons.payments_outlined : Icons.money_off_outlined),
                   title: Text(price),
-                  trailing: filter == service && priceFilter == price ? const Icon(Icons.check) : null,
+                  trailing: current == price ? const Icon(Icons.check) : null,
                   onTap: () => Navigator.pop(ctx, price),
                 )),
+            if (service != '전체' && servicePriceFilters.containsKey(service))
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () => Navigator.pop(ctx, '__clear__'),
+                    icon: const Icon(Icons.remove_circle_outline),
+                    label: const Text('이 항목 필터 해제'),
+                  ),
+                ),
+              ),
             const SizedBox(height: 8),
           ],
         ),
@@ -70,14 +90,20 @@ new = """  bool _isUnknownPrice(String value) {
     );
     if (selected == null || !mounted) return;
     setState(() {
-      filter = service;
-      priceFilter = selected;
+      if (service == '전체') {
+        globalPriceFilter = selected;
+      } else if (selected == '__clear__') {
+        servicePriceFilters.remove(service);
+      } else {
+        servicePriceFilters[service] = selected;
+      }
     });
   }
 
   Widget _mapFilterButton(String service) {
-    final active = filter == service;
-    final sub = active && priceFilter != '전체' ? ' · $priceFilter' : '';
+    final active = service == '전체' ? globalPriceFilter != '전체' : servicePriceFilters.containsKey(service);
+    final price = service == '전체' ? globalPriceFilter : servicePriceFilters[service];
+    final sub = price != null && price != '전체' ? ' · $price' : '';
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: FilterChip(
@@ -102,4 +128,15 @@ if old_ui not in s:
 s = s.replace(old_ui, new_ui, 1)
 
 p.write_text(s, encoding='utf-8')
-print('patched map service filters with all/paid/free submenus')
+print('patched map service filters with independent multi-select paid/free submenus')
+
+# Admin approval-list button: move it below the map search/filter strip so it no longer covers filter chips.
+p = Path('lib/screens/admin_home_screen.dart')
+s = p.read_text(encoding='utf-8')
+old_admin_top = "        top: MediaQuery.of(context).padding.top + 12,"
+new_admin_top = "        top: MediaQuery.of(context).padding.top + 118,"
+if old_admin_top not in s:
+    raise SystemExit('admin approval button position pattern not found')
+s = s.replace(old_admin_top, new_admin_top, 1)
+p.write_text(s, encoding='utf-8')
+print('moved admin approval-list button below map filters')
