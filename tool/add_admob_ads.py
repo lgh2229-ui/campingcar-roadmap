@@ -4,7 +4,10 @@ from pathlib import Path
 p = Path('pubspec.yaml')
 s = p.read_text(encoding='utf-8')
 if 'google_mobile_ads:' not in s:
-    s = s.replace('  uuid: ^4.5.1\n', '  uuid: ^4.5.1\n  google_mobile_ads: ^6.0.0\n')
+    s = s.replace('  uuid: ^4.5.1\n', '  uuid: ^4.5.1\n  google_mobile_ads: ^9.1.0\n')
+else:
+    import re
+    s = re.sub(r'  google_mobile_ads: .*\n', '  google_mobile_ads: ^9.1.0\n', s)
 p.write_text(s, encoding='utf-8')
 
 # main: initialize Mobile Ads SDK
@@ -33,7 +36,6 @@ new = '''      bottomNavigationBar: Column(
         selectedIndex: tab,'''
 if old in s and 'const _AdMobBanner(),' not in s:
     s = s.replace(old, new, 1)
-    # close NavigationBar + Column. Anchor is stable in base and generated screen.
     anchor = '''        ],
       ),
     );
@@ -52,7 +54,6 @@ if old in s and 'const _AdMobBanner(),' not in s:
         raise SystemExit('bottom navigation close anchor not found')
     s = s.replace(anchor, replacement, 1)
 
-# Add reusable ad widgets. Native widget is prepared for inline list placement; banner is live in debug with test ID.
 if 'class _AdMobBanner extends StatefulWidget' not in s:
     s += r'''
 
@@ -93,7 +94,6 @@ class _AdMobBannerState extends State<_AdMobBanner> {
 }
 
 class AdMobIds {
-  // Production IDs retained here for release wiring. Debug builds above intentionally use Google test units.
   static const appId = 'ca-app-pub-4393751265116181~3875944017';
   static const banner = 'ca-app-pub-4393751265116181/5011107880';
   static const native = 'ca-app-pub-4393751265116181/5268565087';
