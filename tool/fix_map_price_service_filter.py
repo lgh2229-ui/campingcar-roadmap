@@ -1,6 +1,6 @@
 from pathlib import Path
 
-# Map filters: keep independent service selections instead of resetting the previous one.
+# Map filters: keep independent service selections and require ALL selected service conditions to match.
 p = Path('lib/screens/home_screen.dart')
 s = p.read_text(encoding='utf-8')
 
@@ -39,9 +39,10 @@ new = """  bool _isUnknownPrice(String value) {
   bool _matchesSelectedServices(Place p) {
     if (servicePriceFilters.isEmpty) return true;
     for (final entry in servicePriceFilters.entries) {
-      if (p.services.contains(entry.key) && _priceMatches(p, entry.key, entry.value)) return true;
+      if (!p.services.contains(entry.key)) return false;
+      if (!_priceMatches(p, entry.key, entry.value)) return false;
     }
-    return false;
+    return true;
   }
 
   List<Place> get visiblePlaces {
@@ -128,7 +129,7 @@ if old_ui not in s:
 s = s.replace(old_ui, new_ui, 1)
 
 p.write_text(s, encoding='utf-8')
-print('patched map service filters with independent multi-select paid/free submenus')
+print('patched map service filters with AND multi-select paid/free submenus')
 
 # Admin approval-list button: move it below the map search/filter strip so it no longer covers filter chips.
 p = Path('lib/screens/admin_home_screen.dart')
