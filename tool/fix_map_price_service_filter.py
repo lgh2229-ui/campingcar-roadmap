@@ -93,7 +93,7 @@ new = """  bool _isUnknownPrice(String value) {
     setState(() {
       if (service == '전체') {
         globalPriceFilter = selected;
-      } else if (selected == '__clear__') {
+      } else if (selected == '__clear__' || selected == '전체') {
         servicePriceFilters.remove(service);
       } else {
         servicePriceFilters[service] = selected;
@@ -129,7 +129,7 @@ if old_ui not in s:
 s = s.replace(old_ui, new_ui, 1)
 
 p.write_text(s, encoding='utf-8')
-print('patched map service filters with AND multi-select paid/free submenus')
+print('patched map service filters with AND multi-select paid/free submenus; service 전체 clears that service filter')
 
 # Admin approval-list button: move it below the map search/filter strip so it no longer covers filter chips.
 p = Path('lib/screens/admin_home_screen.dart')
