@@ -43,6 +43,9 @@ jobs:
       - name: Add AND multi-select filters with correct reset behavior and move admin button
         run: python tool/fix_map_price_service_filter.py
 
+      - name: Show all service icons on map markers
+        run: python tool/fix_map_marker_all_service_icons.py
+
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
         with:
@@ -146,5 +149,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.10.10-debug-apk
+          name: campingcar-roadmap-v1.10.11-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
