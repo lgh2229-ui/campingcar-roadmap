@@ -31,6 +31,9 @@ jobs:
       - name: Patch reports and admin-only place editing
         run: python tool/add_reports_and_admin_edit.py
 
+      - name: Patch favorite detail-sheet state
+        run: python tool/fix_favorite_sheet_state.py
+
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
         with:
@@ -134,5 +137,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.10.1-debug-apk
+          name: campingcar-roadmap-v1.10.2-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
