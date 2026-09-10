@@ -25,34 +25,24 @@ s = p.read_text(encoding='utf-8')
 if "package:google_mobile_ads/google_mobile_ads.dart" not in s:
     s = s.replace("import 'package:geolocator/geolocator.dart';", "import 'package:geolocator/geolocator.dart';\nimport 'package:google_mobile_ads/google_mobile_ads.dart';")
 
-# Put a safe banner above the bottom navigation on every main tab. This includes map and saved list.
-old = '''      bottomNavigationBar: NavigationBar(
-        selectedIndex: tab,'''
-new = '''      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const _AdMobBanner(),
-          NavigationBar(
-        selectedIndex: tab,'''
+# Put a safe banner above the bottom navigation on every main tab.
+old = '''      bottomNavigationBar: NavigationBar(\n        selectedIndex: tab,'''
+new = '''      bottomNavigationBar: Column(\n        mainAxisSize: MainAxisSize.min,\n        children: [\n          const _AdMobBanner(),\n          NavigationBar(\n        selectedIndex: tab,'''
 if old in s and 'const _AdMobBanner(),' not in s:
     s = s.replace(old, new, 1)
-    anchor = '''        ],
-      ),
-    );
-  }
-
-  Widget _mapPage()'''
-    replacement = '''        ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _mapPage()'''
+    anchor = '''        ],\n      ),\n    );\n  }\n\n  Widget _mapPage()'''
+    replacement = '''        ],\n          ),\n        ],\n      ),\n    );\n  }\n\n  Widget _mapPage()'''
     if anchor not in s:
         raise SystemExit('bottom navigation close anchor not found')
     s = s.replace(anchor, replacement, 1)
+
+# Insert a small native ad after every 7 saved places.
+old_saved = '''        Expanded(child: rows.isEmpty ? const Center(child: Text('저장한 장소가 없습니다.')) : ListView.builder(itemCount: rows.length, itemBuilder: (_, i) {\n          final p = rows[i];'''
+new_saved = '''        Expanded(child: rows.isEmpty ? const Center(child: Text('저장한 장소가 없습니다.')) : ListView.builder(\n          itemCount: rows.length + (rows.length ~/ 7),\n          itemBuilder: (_, i) {\n          if ((i + 1) % 8 == 0) return const _NativeAdCard();\n          final placeIndex = i - (i ~/ 8);\n          final p = rows[placeIndex];'''
+if old_saved in s:
+    s = s.replace(old_saved, new_saved, 1)
+elif 'return const _NativeAdCard();' not in s:
+    raise SystemExit('saved list anchor not found')
 
 if 'class _AdMobBanner extends StatefulWidget' not in s:
     s += r'''
@@ -92,6 +82,66 @@ class _AdMobBannerState extends State<_AdMobBanner> {
     ));
   }
 }
+'''
+
+if 'class _NativeAdCard extends StatefulWidget' not in s:
+    s += r'''
+
+class _NativeAdCard extends StatefulWidget {
+  const _NativeAdCard();
+  @override
+  State<_NativeAdCard> createState() => _NativeAdCardState();
+}
+
+class _NativeAdCardState extends State<_NativeAdCard> {
+  NativeAd? _ad;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final ad = NativeAd(
+      adUnitId: AdMobIds.testNative,
+      request: const AdRequest(),
+      nativeTemplateStyle: NativeTemplateStyle(
+        templateType: TemplateType.small,
+        cornerRadius: 10,
+      ),
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          if (mounted) setState(() => _loaded = true);
+        },
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+        },
+      ),
+    );
+    _ad = ad;
+    ad.load();
+  }
+
+  @override
+  void dispose() {
+    _ad?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded || _ad == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 90, maxHeight: 130),
+        child: AdWidget(ad: _ad!),
+      ),
+    );
+  }
+}
+'''
+
+if 'class AdMobIds' not in s:
+    s += r'''
 
 class AdMobIds {
   static const appId = 'ca-app-pub-4393751265116181~3875944017';
