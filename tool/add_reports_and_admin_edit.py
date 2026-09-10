@@ -25,7 +25,12 @@ p = Path('lib/repositories/local_repository.dart')
 s = p.read_text()
 if "_reportsKey" not in s:
     s = s.replace("  static const _tasksKey = 'roadmap_admin_review_tasks_flutter';\n", "  static const _tasksKey = 'roadmap_admin_review_tasks_flutter';\n  static const _reportsKey = 'roadmap_place_reports_flutter';\n", 1)
-old_task = """    if (status == 'change' || status == 'bad') {\n      final tasks = p.getString(_tasksKey) == null ? <dynamic>[] : List<dynamic>.from(jsonDecode(p.getString(_tasksKey)!) as List);\n      tasks.add({'id': 'task_$id', 'review_id': id, 'place_id': placeId, 'reason': status == 'bad' ? '이용불가 리뷰' : '변경 리뷰', 'handled': false, 'created_at': DateTime.now().toIso8601String()});\n      await p.setString(_tasksKey, jsonEncode(tasks));\n    }\n"""
+old_task = """    if (status == 'change' || status == 'bad') {
+      final tasks = p.getString(_tasksKey) == null ? <dynamic>[] : List<dynamic>.from(jsonDecode(p.getString(_tasksKey)!) as List);
+      tasks.add({'id': 'task_$id', 'review_id': id, 'place_id': placeId, 'reason': status == 'bad' ? '이용불가 리뷰' : '변경 리뷰', 'handled': false, 'created_at': DateTime.now().toIso8601String()});
+      await p.setString(_tasksKey, jsonEncode(tasks));
+    }
+"""
 s = s.replace(old_task, "", 1)
 needle = "  @override\n  Future<void> addReviewComment({required String reviewId, required String body}) async {\n    final p = await _prefs; final list = p.getString(_commentsKey) == null ? <dynamic>[] : List<dynamic>.from(jsonDecode(p.getString(_commentsKey)!) as List);\n    final uid = await sessionUserId() ?? ''; final me = (await users()).where((u) => u.userId == uid).firstOrNull;\n    list.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'review_id': reviewId, 'author_id': uid, 'author_name': me?.displayName ?? uid, 'body': body.trim(), 'created_at': DateTime.now().toIso8601String()});\n    await p.setString(_commentsKey, jsonEncode(list));\n  }\n"
 insert = needle + "\n  @override\n  Future<void> addPlaceReport({required String placeId, required String reportType, required String body}) async {\n    final p = await _prefs;\n    final list = p.getString(_reportsKey) == null ? <dynamic>[] : List<dynamic>.from(jsonDecode(p.getString(_reportsKey)!) as List);\n    list.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'place_id': placeId, 'report_type': reportType, 'body': body.trim(), 'handled': false, 'created_at': DateTime.now().toIso8601String()});\n    await p.setString(_reportsKey, jsonEncode(list));\n  }\n\n  @override\n  Future<List<Map<String, dynamic>>> pendingPlaceReports() async {\n    final p = await _prefs; final raw = p.getString(_reportsKey); if (raw == null) return [];\n    final allPlaces = await _allPlaces();\n    return (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e as Map)).where((e) => e['handled'] != true).map((e) {\n      final place = allPlaces.where((x) => x.id == '${e['place_id']}').firstOrNull;\n      if (place != null) e['place'] = place.toJson();\n      return e;\n    }).toList();\n  }\n\n  @override\n  Future<void> completePlaceReport(String reportId) async {\n    final p = await _prefs; final raw = p.getString(_reportsKey); if (raw == null) return;\n    final list = List<dynamic>.from(jsonDecode(raw) as List); final i = list.indexWhere((e) => '${(e as Map)['id']}' == reportId);\n    if (i >= 0) { final row = Map<String, dynamic>.from(list[i] as Map); row['handled'] = true; list[i] = row; await p.setString(_reportsKey, jsonEncode(list)); }\n  }\n"
@@ -37,20 +42,43 @@ p.write_text(s)
 # Home screen: report button, report dialog, admin-only direct edit button.
 p = Path('lib/screens/home_screen.dart')
 s = p.read_text()
-old_buttons = """          Row(children: [\n            Expanded(child: FilledButton.tonalIcon(onPressed: () async {\n              final wasSaved = saved.contains(p.id);\n              if (wasSaved) { saved.remove(p.id); } else { saved.add(p.id); }\n              try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }\n            }, icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장'))),\n            const SizedBox(width: 8),\n            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),\n          ]),\n"""
-new_buttons = """          Row(children: [\n            Expanded(child: FilledButton.tonalIcon(onPressed: () async {\n              final wasSaved = saved.contains(p.id);\n              if (wasSaved) { saved.remove(p.id); } else { saved.add(p.id); }\n              try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }\n            }, icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장'))),\n            const SizedBox(width: 8),\n            Expanded(child: FilledButton.tonalIcon(onPressed: () { Navigator.pop(ctx); _openPlaceReport(p); }, icon: const Icon(Icons.report_outlined), label: const Text('신고'))),\n          ]),\n          const SizedBox(height: 8),\n          Row(children: [\n            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),\n            if (widget.user.isAdministrator) ...[\n              const SizedBox(width: 8),\n              Expanded(child: FilledButton.icon(onPressed: () { Navigator.pop(ctx); _openAdminEditPlace(p); }, icon: const Icon(Icons.edit), label: const Text('수정변경'))),\n            ],\n          ]),\n"""
+old_buttons = """          Row(children: [
+            Expanded(child: FilledButton.tonalIcon(onPressed: () async {
+              final wasSaved = saved.contains(p.id);
+              if (wasSaved) { saved.remove(p.id); } else { saved.add(p.id); }
+              try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }
+            }, icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장'))),
+            const SizedBox(width: 8),
+            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),
+          ]),
+"""
+new_buttons = """          Row(children: [
+            Expanded(child: FilledButton.tonalIcon(onPressed: () async {
+              final wasSaved = saved.contains(p.id);
+              if (wasSaved) { saved.remove(p.id); } else { saved.add(p.id); }
+              try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }
+            }, icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장'))),
+            const SizedBox(width: 8),
+            Expanded(child: FilledButton.tonalIcon(onPressed: () { Navigator.pop(ctx); _openPlaceReport(p); }, icon: const Icon(Icons.report_outlined), label: const Text('신고'))),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),
+            if (widget.user.isAdministrator) ...[
+              const SizedBox(width: 8),
+              Expanded(child: FilledButton.icon(onPressed: () { Navigator.pop(ctx); _openAdminEditPlace(p); }, icon: const Icon(Icons.edit), label: const Text('수정변경'))),
+            ],
+          ]),
+"""
 if old_buttons in s:
     s = s.replace(old_buttons, new_buttons, 1)
 else:
-    # Handles the optimistic favorite patch applied by an earlier build step.
     marker = "            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),\n          ]),\n"
     repl = "            Expanded(child: FilledButton.tonalIcon(onPressed: () { Navigator.pop(ctx); _openPlaceReport(p); }, icon: const Icon(Icons.report_outlined), label: const Text('신고'))),\n          ]),\n          const SizedBox(height: 8),\n          Row(children: [\n            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),\n            if (widget.user.isAdministrator) ...[const SizedBox(width: 8), Expanded(child: FilledButton.icon(onPressed: () { Navigator.pop(ctx); _openAdminEditPlace(p); }, icon: const Icon(Icons.edit), label: const Text('수정변경')))],\n          ]),\n"
     if marker not in s: raise SystemExit('home approved buttons insertion point not found')
     s = s.replace(marker, repl, 1)
 
-# Remove wording that review change/bad enters admin queue.
 s = s.replace("        if (status != 'ok') const Text('변경/이용불가 리뷰는 관리자 검증리뷰 확인 목록에도 자동 등록됩니다.', style: TextStyle(fontSize: 12)),\n", "")
-
 append_marker = "  Future<void> _openReview(Place p) async {\n"
 methods = r'''  Future<void> _openPlaceReport(Place p) async {
     String reportType = 'change';
@@ -79,7 +107,18 @@ methods = r'''  Future<void> _openPlaceReport(Place p) async {
     final note = TextEditingController(text: p.note);
     final selected = p.services.toSet();
     final prices = <String, TextEditingController>{for (final x in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) x: TextEditingController(text: p.prices[x] ?? '')};
-    String reservation = p.reservation.isEmpty ? '예약불필요' : p.reservation;
+    const reservationOptions = ['예약불필요', '예약필수', '전화문의'];
+    final rawReservation = p.reservation.trim();
+    String reservation;
+    if (rawReservation.isEmpty || rawReservation == '예약 없음' || rawReservation == '예약없음' || rawReservation == '없음' || rawReservation == '불필요') {
+      reservation = '예약불필요';
+    } else if (rawReservation.contains('온라인') || rawReservation.contains('예약') && !rawReservation.contains('불필요')) {
+      reservation = '예약필수';
+    } else if (rawReservation.contains('전화') || rawReservation.contains('문의')) {
+      reservation = '전화문의';
+    } else {
+      reservation = '전화문의';
+    }
     final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
       title: const Text('관리자 장소 수정변경'),
       content: SizedBox(width: 440, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -87,7 +126,7 @@ methods = r'''  Future<void> _openPlaceReport(Place p) async {
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소')),
         ...prices.entries.map((e) => Row(children: [Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })), Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
         TextField(controller: hours, decoration: const InputDecoration(labelText: '운영시간')),
-        DropdownButtonFormField<String>(initialValue: reservation, items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => reservation = v ?? reservation, decoration: const InputDecoration(labelText: '예약 여부')),
+        DropdownButtonFormField<String>(initialValue: reservation, items: reservationOptions.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => reservation = v ?? reservation, decoration: const InputDecoration(labelText: '예약 여부')),
         TextField(controller: maxHeight, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '진입 최대 높이', suffixText: 'm')),
         TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '문의연락처')),
         TextField(controller: note, maxLines: 4, decoration: const InputDecoration(labelText: '이용방법 / 주의사항')),
@@ -134,12 +173,34 @@ if "Future<void> _openReports()" not in s:
     if insert_point not in s: raise SystemExit('admin method insertion point not found')
     s = s.replace(insert_point, report_method + insert_point, 1)
 
-old_pos = """      Positioned(\n        top: MediaQuery.of(context).padding.top + 12,\n        right: 12,\n        child: SafeArea(\n          child: FloatingActionButton.extended(\n            heroTag: 'adminApprovalList',\n            onPressed: busy ? null : _openPending,\n            icon: busy\n                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))\n                : const Icon(Icons.admin_panel_settings),\n            label: const Text('승인목록'),\n          ),\n        ),\n      ),\n"""
-new_pos = """      Positioned(\n        top: MediaQuery.of(context).padding.top + 12,\n        right: 12,\n        child: SafeArea(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [\n          FloatingActionButton.extended(heroTag: 'adminApprovalList', onPressed: busy ? null : _openPending, icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.admin_panel_settings), label: const Text('승인목록')),\n          const SizedBox(height: 8),\n          FloatingActionButton.extended(heroTag: 'adminReportList', onPressed: busy ? null : _openReports, icon: const Icon(Icons.report_outlined), label: const Text('신고목록')),\n        ])),\n      ),\n"""
+old_pos = """      Positioned(
+        top: MediaQuery.of(context).padding.top + 12,
+        right: 12,
+        child: SafeArea(
+          child: FloatingActionButton.extended(
+            heroTag: 'adminApprovalList',
+            onPressed: busy ? null : _openPending,
+            icon: busy
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.admin_panel_settings),
+            label: const Text('승인목록'),
+          ),
+        ),
+      ),
+"""
+new_pos = """      Positioned(
+        top: MediaQuery.of(context).padding.top + 12,
+        right: 12,
+        child: SafeArea(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          FloatingActionButton.extended(heroTag: 'adminApprovalList', onPressed: busy ? null : _openPending, icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.admin_panel_settings), label: const Text('승인목록')),
+          const SizedBox(height: 8),
+          FloatingActionButton.extended(heroTag: 'adminReportList', onPressed: busy ? null : _openReports, icon: const Icon(Icons.report_outlined), label: const Text('신고목록')),
+        ])),
+      ),
+"""
 if old_pos in s: s = s.replace(old_pos, new_pos, 1)
 elif "adminReportList" not in s: raise SystemExit('admin FAB insertion point not found')
 
-# Add report detail screen before AdminPlaceReviewScreen.
 class_marker = "class AdminPlaceReviewScreen extends StatefulWidget {\n"
 report_class = r'''class AdminPlaceReportScreen extends StatefulWidget {
   const AdminPlaceReportScreen({super.key, required this.report, required this.place, required this.data});
