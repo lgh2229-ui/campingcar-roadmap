@@ -34,6 +34,9 @@ jobs:
       - name: Patch favorite detail-sheet state
         run: python tool/fix_favorite_sheet_state.py
 
+      - name: Show service availability and prices
+        run: python tool/show_service_prices.py
+
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
         with:
@@ -137,5 +140,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.10.2-debug-apk
+          name: campingcar-roadmap-v1.10.3-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
