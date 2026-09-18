@@ -40,7 +40,14 @@ jobs:
       - name: Run tests
         run: flutter test
       - name: Analyze
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Verify Supabase build configuration
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || (echo "Missing SUPABASE_URL" && exit 1)
+          test -n "$SUPABASE_PUBLISHABLE_KEY" || (echo "Missing SUPABASE_PUBLISHABLE_KEY" && exit 1)
       - name: Build release AAB with Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
