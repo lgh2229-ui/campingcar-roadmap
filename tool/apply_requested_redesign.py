@@ -9,8 +9,19 @@ if "import 'vehicle_market_screen.dart';" not in s:
 
 s = s.replace("  static const serviceFilters = ['전체', '블랙탱크 비움', '급수', '노지/차박', '공중화장실'];", "  static const campingFilters = ['노지/차박', '공중화장실', '급수', '블랙탱크 비움', '전기', '캠핑장'];\n  static const businessFilters = ['제작', '매매', 'A/S', '부품·용품'];\n  static const serviceFilters = ['전체', ...campingFilters, ...businessFilters];")
 
-# Replace the legacy single-selection map state.
-s = s.replace("  String filter = '전체';\n", "  final Set<String> selectedMapFilters = {};\n")
+# Legacy filter patch may already have replaced `filter` with its own multi-select
+# fields. Ensure the redesign state exists independently of that implementation.
+if '  final Set<String> selectedMapFilters = {};' not in s:
+    state_anchor = '  int navIndex = 0;\n'
+    if state_anchor in s:
+        s = s.replace(state_anchor, state_anchor + '  final Set<String> selectedMapFilters = {};\n', 1)
+    else:
+        class_anchor = 'class _HomeScreenState extends State<HomeScreen> {'
+        if class_anchor not in s:
+            raise SystemExit('home state class anchor not found')
+        s = s.replace(class_anchor, class_anchor + '\n  final Set<String> selectedMapFilters = {};', 1)
+# Remove the old scalar filter only if it still exists.
+s = s.replace("  String filter = '전체';\n", '')
 
 start = s.find('  bool _isMine(Place p)')
 end = s.find('  List<List<Place>> get visiblePlaceGroups', start)
@@ -58,7 +69,6 @@ new_logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
 '''
 s = s[:start] + new_logic + s[end:]
 
-# Current main source uses a ChoiceChip row, while patched build sources may use a helper row.
 old_choice = """          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),"""
 old_helper = """          SingleChildScrollView(\n            scrollDirection: Axis.horizontal,\n            child: Row(children: serviceFilters.map(_mapFilterButton).toList()),\n          ),"""
 new_ui = """          Align(
@@ -73,7 +83,7 @@ if old_choice in s:
     s = s.replace(old_choice, new_ui, 1)
 elif old_helper in s:
     s = s.replace(old_helper, new_ui, 1)
-else:
+elif "onPressed: _showMapFilterDialog" not in s:
     raise SystemExit('map filter UI block not found')
 
 icon_start = s.find('  List<String> _icons(Place p) {')
@@ -102,7 +112,6 @@ s = s.replace("    final pages = [_mapPage(), _savedPage(), _myPlacesPage(), _pr
 if "label: '중고마켓'" not in s:
     s = s.replace("          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),", "          NavigationDestination(icon: Icon(Icons.directions_car_outlined), selectedIcon: Icon(Icons.directions_car), label: '중고마켓'),\n          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),")
 
-# Current registration screen builds the map in one line; older patched variants used a multiline literal.
 current_prices = "    final prices = <String, TextEditingController>{for (final s in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) s: TextEditingController()};"
 new_prices = "    final prices = <String, TextEditingController>{for (final service in [...campingFilters, ...businessFilters]) service: TextEditingController()};"
 if current_prices in s:
