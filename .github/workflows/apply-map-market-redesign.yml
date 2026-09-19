@@ -1,0 +1,117 @@
+name: Apply map filter and market redesign
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/apply-map-market-redesign.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch home screen
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('lib/screens/home_screen.dart')
+          s = p.read_text()
+
+          s = s.replace("import '../repositories/auth_repository.dart';", "import '../repositories/auth_repository.dart';\nimport 'vehicle_market_screen.dart';")
+          s = s.replace("  String filter = '전체';", "  final Set<String> filters = {};")
+          s = s.replace("  static const serviceFilters = ['전체', '블랙탱크 비움', '급수', '노지/차박', '공중화장실'];", "  static const campingFilters = ['노지/차박', '공중화장실', '급수', '블랙탱크 비움', '전기', '캠핑장'];\n  static const businessFilters = ['제작', '매매', 'A/S', '부품·용품'];\n  static const serviceFilters = ['전체', ...campingFilters, ...businessFilters];")
+          s = s.replace("    final rows = filter == '전체' ? places : places.where((p) => p.services.contains(filter)).toList();", "    final rows = filters.isEmpty ? places : places.where((p) => p.services.any(filters.contains)).toList();")
+
+          old_icons = """    if (p.services.contains('급수')) out.add('💧');
+    if (p.services.contains('블랙탱크 비움')) out.add('🚽');
+    if (p.services.contains('노지/차박')) out.add('🅿️');
+    if (p.services.contains('공중화장실')) out.add('🚻');"""
+          new_icons = """    if (p.services.contains('노지/차박')) out.add('🏕️');
+    if (p.services.contains('공중화장실')) out.add('🚻');
+    if (p.services.contains('급수')) out.add('💧');
+    if (p.services.contains('블랙탱크 비움')) out.add('🚽');
+    if (p.services.contains('전기')) out.add('⚡');
+    if (p.services.contains('캠핑장')) out.add('⛺');
+    if (p.services.contains('제작')) out.add('🏭');
+    if (p.services.contains('매매')) out.add('🚐');
+    if (p.services.contains('A/S')) out.add('🔧');
+    if (p.services.contains('부품·용품')) out.add('🧰');"""
+          s = s.replace(old_icons, new_icons)
+
+          s = s.replace("    final pages = [_mapPage(), _savedPage(), _myPlacesPage(), _profilePage()];", "    final pages = [_mapPage(), _savedPage(), _myPlacesPage(), const VehicleMarketScreen(), _profilePage()];")
+          s = s.replace("          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),", "          NavigationDestination(icon: Icon(Icons.directions_car_outlined), selectedIcon: Icon(Icons.directions_car), label: '중고마켓'),\n          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),")
+
+          old_chips = "SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList()))"
+          new_button = "Align(alignment: Alignment.centerLeft, child: FilledButton.tonalIcon(onPressed: _showFilterDialog, icon: const Icon(Icons.tune), label: Text(filters.isEmpty ? '필터 · 전체' : '필터 ${filters.length}')))"
+          if old_chips not in s:
+              raise SystemExit('map filter chip block not found')
+          s = s.replace(old_chips, new_button)
+
+          old_marker = "Center(child: Text(_icons(p).take(3).join(), style: const TextStyle(fontSize: 18)))"
+          new_marker = "Center(child: Wrap(alignment: WrapAlignment.center, spacing: 0, runSpacing: 0, children: _icons(p).map((e) => Text(e, style: TextStyle(fontSize: _icons(p).length <= 4 ? 17 : 12))).toList()))"
+          if old_marker not in s:
+              raise SystemExit('marker icon block not found')
+          s = s.replace(old_marker, new_marker)
+
+          old_prices = "final prices = <String, TextEditingController>{for (final s in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) s: TextEditingController()};"
+          new_prices = "final prices = <String, TextEditingController>{for (final s in [...campingFilters, ...businessFilters]) s: TextEditingController()};"
+          if old_prices not in s:
+              raise SystemExit('registration services block not found')
+          s = s.replace(old_prices, new_prices)
+
+          marker = "  Widget _mapPage() => Stack(children: ["
+          dialog = r'''  Future<void> _showFilterDialog() async {
+    final draft = Set<String>.from(filters);
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('지도 필터'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: draft.isEmpty,
+                  title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)),
+                  onChanged: (_) => setS(draft.clear),
+                ),
+                const Divider(),
+                const Text('캠핑·편의', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 6, runSpacing: 4, children: campingFilters.map((e) => FilterChip(label: Text(_filterLabel(e)), selected: draft.contains(e), onSelected: (v) => setS(() => v ? draft.add(e) : draft.remove(e)))).toList()),
+                const SizedBox(height: 18),
+                const Text('캠핑카 서비스', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Wrap(spacing: 6, runSpacing: 4, children: businessFilters.map((e) => FilterChip(label: Text(e), selected: draft.contains(e), onSelected: (v) => setS(() => v ? draft.add(e) : draft.remove(e)))).toList()),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => setS(draft.clear), child: const Text('초기화')),
+            FilledButton(onPressed: () { setState(() { filters..clear()..addAll(draft); }); Navigator.pop(ctx); }, child: const Text('적용')),
+          ],
+        ),
+      ),
+    );
+  }
+
+'''
+          if marker not in s:
+              raise SystemExit('map page marker not found')
+          s = s.replace(marker, dialog + marker, 1)
+
+          p.write_text(s)
+          PY
+      - name: Commit redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/home_screen.dart lib/screens/vehicle_market_screen.dart
+          git diff --cached --quiet && exit 0
+          git commit -m "Redesign map filters and add vehicle market navigation"
+          git push
