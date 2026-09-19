@@ -9,13 +9,15 @@ if "import 'vehicle_market_screen.dart';" not in s:
 
 s = s.replace("  static const serviceFilters = ['전체', '블랙탱크 비움', '급수', '노지/차박', '공중화장실'];", "  static const campingFilters = ['노지/차박', '공중화장실', '급수', '블랙탱크 비움', '전기', '캠핑장'];\n  static const businessFilters = ['제작', '매매', 'A/S', '부품·용품'];\n  static const serviceFilters = ['전체', ...campingFilters, ...businessFilters];")
 
-s = s.replace("  String globalPriceFilter = '전체';\n  final Map<String, String> servicePriceFilters = {};", "  final Set<String> selectedMapFilters = {};")
+# Replace the legacy single-selection map state.
+s = s.replace("  String filter = '전체';\n", "  final Set<String> selectedMapFilters = {};\n")
 
-start = s.find('  bool _isUnknownPrice(String value) {')
+start = s.find('  bool _isMine(Place p)')
 end = s.find('  List<List<Place>> get visiblePlaceGroups', start)
 if start < 0 or end < 0:
     raise SystemExit('map filter logic anchors not found')
-new_logic = r'''  List<Place> get visiblePlaces {
+new_logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
+  List<Place> get visiblePlaces {
     final approved = places.where((p) => p.isApproved).toList();
     if (selectedMapFilters.isEmpty) return approved;
     return approved.where((p) => p.services.any(selectedMapFilters.contains)).toList();
@@ -32,26 +34,15 @@ new_logic = r'''  List<Place> get visiblePlaces {
             width: 420,
             child: SingleChildScrollView(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: draft.isEmpty,
-                  title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)),
-                  onChanged: (_) => setLocal(() => draft.clear()),
-                ),
+                CheckboxListTile(contentPadding: EdgeInsets.zero, value: draft.isEmpty, title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)), onChanged: (_) => setLocal(() => draft.clear())),
                 const Divider(),
                 const Text('캠핑·편의', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: campingFilters.map((e) => FilterChip(
-                  label: Text(_filterLabel(e)), selected: draft.contains(e),
-                  onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }),
-                )).toList()),
+                Wrap(spacing: 6, runSpacing: 6, children: campingFilters.map((e) => FilterChip(label: Text(_filterLabel(e)), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
                 const SizedBox(height: 18),
                 const Text('캠핑카 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: businessFilters.map((e) => FilterChip(
-                  label: Text(e), selected: draft.contains(e),
-                  onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }),
-                )).toList()),
+                Wrap(spacing: 6, runSpacing: 6, children: businessFilters.map((e) => FilterChip(label: Text(e), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
               ]),
             ),
           ),
@@ -67,10 +58,9 @@ new_logic = r'''  List<Place> get visiblePlaces {
 '''
 s = s[:start] + new_logic + s[end:]
 
-old_ui = """          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: serviceFilters.map(_mapFilterButton).toList()),
-          ),"""
+# Current main source uses a ChoiceChip row, while patched build sources may use a helper row.
+old_choice = """          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),"""
+old_helper = """          SingleChildScrollView(\n            scrollDirection: Axis.horizontal,\n            child: Row(children: serviceFilters.map(_mapFilterButton).toList()),\n          ),"""
 new_ui = """          Align(
             alignment: Alignment.centerLeft,
             child: FilledButton.tonalIcon(
@@ -79,9 +69,12 @@ new_ui = """          Align(
               label: Text(selectedMapFilters.isEmpty ? '필터 · 전체' : '필터 ${selectedMapFilters.length}'),
             ),
           ),"""
-if old_ui not in s:
-    raise SystemExit('patched map filter UI block not found')
-s = s.replace(old_ui, new_ui, 1)
+if old_choice in s:
+    s = s.replace(old_choice, new_ui, 1)
+elif old_helper in s:
+    s = s.replace(old_helper, new_ui, 1)
+else:
+    raise SystemExit('map filter UI block not found')
 
 icon_start = s.find('  List<String> _icons(Place p) {')
 icon_end = s.find('  String _filterLabel', icon_start)
@@ -109,18 +102,16 @@ s = s.replace("    final pages = [_mapPage(), _savedPage(), _myPlacesPage(), _pr
 if "label: '중고마켓'" not in s:
     s = s.replace("          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),", "          NavigationDestination(icon: Icon(Icons.directions_car_outlined), selectedIcon: Icon(Icons.directions_car), label: '중고마켓'),\n          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),")
 
-old_prices = """    final prices = <String, TextEditingController>{
-      '블랙탱크 비움': TextEditingController(),
-      '급수': TextEditingController(),
-      '노지/차박': TextEditingController(),
-      '공중화장실': TextEditingController(),
-    };"""
-new_prices = """    final prices = <String, TextEditingController>{
-      for (final service in [...campingFilters, ...businessFilters]) service: TextEditingController(),
-    };"""
-if old_prices not in s:
-    raise SystemExit('registration service list not found')
-s = s.replace(old_prices, new_prices, 1)
+# Current registration screen builds the map in one line; older patched variants used a multiline literal.
+current_prices = "    final prices = <String, TextEditingController>{for (final s in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) s: TextEditingController()};"
+new_prices = "    final prices = <String, TextEditingController>{for (final service in [...campingFilters, ...businessFilters]) service: TextEditingController()};"
+if current_prices in s:
+    s = s.replace(current_prices, new_prices, 1)
+else:
+    pattern = re.compile(r"    final prices = <String, TextEditingController>\{.*?\};", re.S)
+    if not pattern.search(s):
+        raise SystemExit('registration service list not found')
+    s = pattern.sub(new_prices, s, count=1)
 
 p.write_text(s, encoding='utf-8')
 print('verified requested redesign patch: popup filter, expanded services, all icons, vehicle market navigation')
