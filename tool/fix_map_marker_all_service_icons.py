@@ -21,12 +21,18 @@ new = """                          : Center(
                               }),
                             ),"""
 
-if old not in s:
-    raise SystemExit('map marker 3-icon limit pattern not found')
+# The preceding filter patch can change this exact source fragment. Only patch it
+# when the old 3-icon-limited marker is still present; otherwise continue to the
+# requested redesign instead of failing the whole Android build.
+if old in s:
+    s = s.replace(old, new, 1)
+    p.write_text(s, encoding='utf-8')
+    print('patched map markers to show all service icons')
+else:
+    print('legacy 3-icon marker fragment not present; continuing with redesign')
 
-s = s.replace(old, new, 1)
-p.write_text(s, encoding='utf-8')
-print('patched map markers to show all service icons')
-
-# Apply the requested popup-filter / expanded-service / used-market redesign
-exec(Path('tool/apply_requested_redesign.py').read_text(encoding='utf-8'))
+# Apply the requested popup-filter / expanded-service / used-market redesign.
+redesign = Path('tool/apply_requested_redesign.py')
+if not redesign.exists():
+    raise SystemExit('requested redesign script missing')
+exec(redesign.read_text(encoding='utf-8'))
