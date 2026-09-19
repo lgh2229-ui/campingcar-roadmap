@@ -15,7 +15,7 @@ new = """                          : Center(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(icons.take(2).join(), style: const TextStyle(fontSize: 17, height: 1)),
-                                    Text(icons.skip(2).join(), style: const TextStyle(fontSize: 17, height: 1)),
+                                    Text(icons.skip(2).join(), style: const TextStyle(fontSize: 14, height: 1)),
                                   ],
                                 );
                               }),
@@ -26,4 +26,7 @@ if old not in s:
 
 s = s.replace(old, new, 1)
 p.write_text(s, encoding='utf-8')
-print('patched map markers to show all service icons in a 2x2-friendly layout')
+print('patched map markers to show all service icons')
+
+# Apply the requested popup-filter / expanded-service / used-market redesign
+exec(Path('tool/apply_requested_redesign.py').read_text(encoding='utf-8'))
