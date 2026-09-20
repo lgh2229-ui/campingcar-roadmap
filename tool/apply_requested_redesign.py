@@ -39,21 +39,17 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
           content: SizedBox(
             width: 420,
             child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CheckboxListTile(contentPadding: EdgeInsets.zero, value: draft.isEmpty, title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)), onChanged: (_) => setLocal(() => draft.clear())),
-                  const Divider(),
-                  const Text('캠핑·편의', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 6, runSpacing: 6, children: campingFilters.map((e) => FilterChip(label: Text(_filterLabel(e)), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
-                  const SizedBox(height: 18),
-                  const Text('캠핑카 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Wrap(spacing: 6, runSpacing: 6, children: businessFilters.map((e) => FilterChip(label: Text(e), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
-                ],
-              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                CheckboxListTile(contentPadding: EdgeInsets.zero, value: draft.isEmpty, title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)), onChanged: (_) => setLocal(() => draft.clear())),
+                const Divider(),
+                const Text('캠핑·편의', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, runSpacing: 6, children: campingFilters.map((e) => FilterChip(label: Text(_filterLabel(e)), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
+                const SizedBox(height: 18),
+                const Text('캠핑카 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, runSpacing: 6, children: businessFilters.map((e) => FilterChip(label: Text(e), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
+              ]),
             ),
           ),
           actions: [
@@ -80,8 +76,10 @@ s = s[:start] + logic + s[end:]
 old_choice = "          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),"
 old_helper = "          SingleChildScrollView(\n            scrollDirection: Axis.horizontal,\n            child: Row(children: serviceFilters.map(_mapFilterButton).toList()),\n          ),"
 new_filter = "          Align(alignment: Alignment.centerLeft, child: FilledButton.tonalIcon(onPressed: _showMapFilterDialog, icon: const Icon(Icons.tune), label: Text(selectedMapFilters.isEmpty ? '필터 · 전체' : '필터 ${selectedMapFilters.length}'))),"
-if old_choice in s: s = s.replace(old_choice, new_filter, 1)
-elif old_helper in s: s = s.replace(old_helper, new_filter, 1)
+if old_choice in s:
+    s = s.replace(old_choice, new_filter, 1)
+elif old_helper in s:
+    s = s.replace(old_helper, new_filter, 1)
 
 icon_start = s.find('  List<String> _icons(Place p) {')
 icon_end = s.find('  String _filterLabel', icon_start)
@@ -101,100 +99,34 @@ if icon_start >= 0 and icon_end >= 0:
 
 '''
     s = s[:icon_start] + icon_code + s[icon_end:]
+
 s = s.replace("    final pages = [_mapPage(), _savedPage(), _myPlacesPage(), _profilePage()];", "    final pages = [_mapPage(), _savedPage(), _myPlacesPage(), const VehicleMarketScreen(), _profilePage()];")
 if "label: '중고마켓'" not in s:
     s = s.replace("          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),", "          NavigationDestination(icon: Icon(Icons.directions_car_outlined), selectedIcon: Icon(Icons.directions_car), label: '중고마켓'),\n          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: '내정보'),")
+
 if '_serviceAvailability(p),' not in s:
-    for anchor in ["        const Text('이용가능 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),", "        const Text('이용안내', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),"]:
+    anchors = [
+        "        const Text('이용가능 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),",
+        "        const Text('이용안내', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),",
+    ]
+    inserted = False
+    for anchor in anchors:
         if anchor in s:
-            s = s.replace(anchor, "        _serviceAvailability(p),\n" + anchor, 1); break
-    else: raise SystemExit('usage information anchor missing')
+            s = s.replace(anchor, "        _serviceAvailability(p),\n" + anchor, 1)
+            inserted = True
+            break
+    if not inserted:
+        raise SystemExit('usage information anchor missing')
+
 s = s.replace("const Text('이용가능 서비스'", "const Text('이용안내'")
 s = s.replace("Text('이용가능 서비스'", "Text('이용안내'")
 s = s.replace("if (p.address.isNotEmpty) Text(p.address),", "if (p.address.isNotEmpty) Text('주소 : ${p.address}'),")
 s = s.replace("        if (p.phone.isNotEmpty) Text('문의연락처: ${p.phone}'),", "        if (p.phone.isNotEmpty) Text('문의연락처: ${p.phone}'),\n        if (p.phone.isNotEmpty && p.note.isNotEmpty) const SizedBox(height: 12),")
+
 new_prices = "    final prices = <String, TextEditingController>{for (final service in [...campingFilters, ...businessFilters]) service: TextEditingController()};"
 pat = re.compile(r"    final prices = <String, TextEditingController>\{.*?\};", re.S)
-if pat.search(s): s = pat.sub(new_prices, s, count=1)
-p.write_text(s, encoding='utf-8')
+if pat.search(s):
+    s = pat.sub(new_prices, s, count=1)
 
-# Repair the vehicle-market build method deterministically. The previous minified
-# version had an unmatched list bracket, which stopped flutter analyze.
-vp = Path('lib/screens/vehicle_market_screen.dart')
-vs = vp.read_text(encoding='utf-8')
-marker = ' @override Widget build(BuildContext context)'
-pos = vs.find(marker)
-if pos < 0:
-    raise SystemExit('vehicle market build marker missing')
-clean_build = r''' @override
- Widget build(BuildContext context) {
-   final rows = _filtered;
-   return Scaffold(
-     appBar: AppBar(title: const Text('차량중고마켓')),
-     body: Column(
-       children: [
-         Padding(
-           padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-           child: Row(children: [
-             Expanded(child: SearchBar(controller: _search, hintText: '캠핑카, 모델명 검색', leading: const Icon(Icons.search), onChanged: (v) => setState(() => _query = v.trim()))),
-             const SizedBox(width: 8),
-             IconButton.filledTonal(onPressed: _filters, icon: const Icon(Icons.tune), tooltip: '필터'),
-           ]),
-         ),
-         Expanded(
-           child: _loading
-               ? const Center(child: CircularProgressIndicator())
-               : rows.isEmpty
-                   ? const Center(child: Text('조건에 맞는 중고 캠핑카가 없습니다.'))
-                   : RefreshIndicator(
-                       onRefresh: _load,
-                       child: ListView.builder(
-                         itemCount: rows.length,
-                         itemBuilder: (context, i) {
-                           final x = rows[i];
-                           return Card(
-                             margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-                             child: ListTile(
-                               leading: const CircleAvatar(child: Icon(Icons.directions_car)),
-                               title: Text('${x['title']}'),
-                               subtitle: Text('${x['manufacturer']} ${x['model']} · ${x['model_year'] ?? '연식미상'}\n${x['region']} · ${x['mileage_km'] ?? '-'}km'),
-                               trailing: Text(_money(x['price_krw']), style: const TextStyle(fontWeight: FontWeight.bold)),
-                               onTap: () => showModalBottomSheet<void>(
-                                 context: context,
-                                 isScrollControlled: true,
-                                 showDragHandle: true,
-                                 builder: (ctx) => SafeArea(
-                                   child: SingleChildScrollView(
-                                     padding: const EdgeInsets.all(20),
-                                     child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                                       Text('${x['title']}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                                       const SizedBox(height: 8),
-                                       Text('${x['manufacturer']} ${x['model']} · ${x['model_year'] ?? '연식미상'}'),
-                                       Text('주행거리: ${x['mileage_km'] ?? '-'}km'),
-                                       Text('판매지역: ${x['region']}'),
-                                       Text('판매가격: ${_money(x['price_krw'])}'),
-                                       const SizedBox(height: 10),
-                                       Text(_spec(x)),
-                                       const SizedBox(height: 10),
-                                       Text('연락처: ${x['phone']}'),
-                                       if ('${x['description'] ?? ''}'.trim().isNotEmpty)
-                                         Padding(padding: const EdgeInsets.only(top: 10), child: Text('${x['description']}')),
-                                     ]),
-                                   ),
-                                 ),
-                               ),
-                             ),
-                           );
-                         },
-                       ),
-                     ),
-         ),
-       ],
-     ),
-     floatingActionButton: FloatingActionButton.extended(onPressed: _register, icon: const Icon(Icons.add), label: const Text('차량 등록')),
-   );
- }
-}'''
-vs = vs[:pos] + clean_build + '\n'
-vp.write_text(vs, encoding='utf-8')
-print('requested redesign and vehicle market syntax repair applied cleanly')
+p.write_text(s, encoding='utf-8')
+print('requested redesign applied cleanly; vehicle market repair handled by prior build step')
