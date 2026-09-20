@@ -88,10 +88,15 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
         Row(children: [Expanded(child: _num(year, '연식', '년')), const SizedBox(width: 8), Expanded(child: _num(mileage, '주행거리', 'km'))]), const SizedBox(height: 8),
         _num(price, '판매가격', '원'), const SizedBox(height: 8), TextField(controller: region, decoration: const InputDecoration(labelText: '판매지역 *', border: OutlineInputBorder())), const SizedBox(height: 8), TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '연락처 *', border: OutlineInputBorder())),
         const Divider(height: 28), const Text('전기 · 설비', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-        option('배터리',hasBattery,(v)=>hasBattery=v,battery,'Ah'), option('태양광',hasSolar,(v)=>hasSolar=v,solar,'W'), option('인버터',hasInverter,(v)=>hasInverter=v,inverter,'W'), option('주행충전기',hasAlternator,(v)=>hasAlternator=v,alternator,'A'), option('청수',hasFresh,(v)=>hasFresh=v,fresh,'L'), option('오수',hasGrey,(v)=>hasGrey=v,grey,'L'),
+        option('배터리',hasBattery,(v)=>hasBattery=v,battery,'Ah'),
+        option('태양광',hasSolar,(v)=>hasSolar=v,solar,'W'),
+        option('인버터',hasInverter,(v)=>hasInverter=v,inverter,'W'),
+        option('주행충전기',hasAlternator,(v)=>hasAlternator=v,alternator,'A'),
+        SwitchListTile(contentPadding: EdgeInsets.zero, title: Text('한전충전 ${shore ? '있음' : '없음'}'), value: shore, onChanged:(v)=>ss(()=>shore=v)),
+        option('청수',hasFresh,(v)=>hasFresh=v,fresh,'L'),
+        option('오수',hasGrey,(v)=>hasGrey=v,grey,'L'),
         DropdownButtonFormField<String>(initialValue: toilet, decoration: const InputDecoration(labelText: '화장실 타입', border: OutlineInputBorder()), items: const [DropdownMenuItem(value:'none',child:Text('없음')),DropdownMenuItem(value:'cassette',child:Text('카트리지')),DropdownMenuItem(value:'black',child:Text('블랙'))], onChanged:(v)=>ss(()=>toilet=v??'none')),
         if(toilet!='none') Padding(padding: const EdgeInsets.only(top:8), child:_num(toiletCap,'화장실 용량','L')),
-        SwitchListTile(contentPadding: EdgeInsets.zero, title: Text('한전충전 ${shore ? '있음' : '없음'}'), value: shore, onChanged:(v)=>ss(()=>shore=v)),
         TextField(controller:desc,maxLines:5,decoration:const InputDecoration(labelText:'기타 옵션 / 차량 설명',border:OutlineInputBorder())), const SizedBox(height:14),
         FilledButton.icon(onPressed:(){ if(title.text.trim().isEmpty||model.text.trim().isEmpty||region.text.trim().isEmpty||phone.text.trim().isEmpty){ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content:Text('필수 항목을 입력해주세요.')));return;} Navigator.pop(ctx,true);},icon:const Icon(Icons.check),label:const Text('매물 등록')),
       ])));
@@ -103,7 +108,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
     } catch(e) { if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('등록 실패: $e'))); }
   }
 
-  String _spec(Map<String,dynamic>x){final a=<String>[];if(x['battery_ah']!=null)a.add('배터리 ${x['battery_ah']}Ah');if(x['solar_w']!=null)a.add('태양광 ${x['solar_w']}W');if(x['inverter_w']!=null)a.add('인버터 ${x['inverter_w']}W');if(x['alternator_charger_a']!=null)a.add('주행충전 ${x['alternator_charger_a']}A');if(x['fresh_water_l']!=null)a.add('청수 ${x['fresh_water_l']}L');if(x['grey_water_l']!=null)a.add('오수 ${x['grey_water_l']}L');final t='${x['toilet_type']}';a.add('화장실 ${t=='cassette'?'카트리지':t=='black'?'블랙':'없음'}${x['toilet_capacity_l']!=null?' ${x['toilet_capacity_l']}L':''}');a.add('한전충전 ${x['shore_power']==true?'있음':'없음'}');return a.join(' · ');}
+  String _spec(Map<String,dynamic>x){final a=<String>[];if(x['battery_ah']!=null)a.add('배터리 ${x['battery_ah']}Ah');if(x['solar_w']!=null)a.add('태양광 ${x['solar_w']}W');if(x['inverter_w']!=null)a.add('인버터 ${x['inverter_w']}W');if(x['alternator_charger_a']!=null)a.add('주행충전 ${x['alternator_charger_a']}A');a.add('한전충전 ${x['shore_power']==true?'있음':'없음'}');if(x['fresh_water_l']!=null)a.add('청수 ${x['fresh_water_l']}L');if(x['grey_water_l']!=null)a.add('오수 ${x['grey_water_l']}L');final t='${x['toilet_type']}';a.add('화장실 ${t=='cassette'?'카트리지':t=='black'?'블랙':'없음'}${x['toilet_capacity_l']!=null?' ${x['toilet_capacity_l']}L':''}');return a.join(' · ');}
 
   @override
   Widget build(BuildContext context) {
