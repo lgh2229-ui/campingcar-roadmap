@@ -39,6 +39,8 @@ jobs:
         run: python tool/apply_requested_redesign.py
       - name: Add AdMob test ads and production ID configuration
         run: python tool/add_admob_ads.py
+      - name: Apply market, feedback, and admin support features
+        run: python tool/apply_market_support_features.py
 
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
@@ -93,5 +95,5 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-v1.10.13-debug-apk
+          name: campingcar-roadmap-market-v2-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
