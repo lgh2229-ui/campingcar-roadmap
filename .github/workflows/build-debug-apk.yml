@@ -35,6 +35,8 @@ jobs:
         run: python tool/fix_map_price_service_filter.py
       - name: Show all service icons on map markers
         run: python tool/fix_map_marker_all_service_icons.py
+      - name: Apply requested redesign and service details
+        run: python tool/apply_requested_redesign.py
       - name: Add AdMob test ads and production ID configuration
         run: python tool/add_admob_ads.py
 
