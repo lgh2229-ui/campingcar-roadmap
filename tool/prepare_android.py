@@ -1,10 +1,29 @@
 from pathlib import Path
 p = Path('android/app/src/main/AndroidManifest.xml')
 s = p.read_text(encoding='utf-8')
-perms = '''    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n'''
-if 'android.permission.ACCESS_FINE_LOCATION' not in s:
-    s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' + perms)
+
+# Release builds need explicit network access. Android 13+ advertising ID
+# permission is also required because this app keeps Google Mobile Ads enabled.
+required_permissions = [
+    'android.permission.INTERNET',
+    'android.permission.ACCESS_NETWORK_STATE',
+    'android.permission.ACCESS_FINE_LOCATION',
+    'android.permission.ACCESS_COARSE_LOCATION',
+    'android.permission.CAMERA',
+    'android.permission.READ_MEDIA_IMAGES',
+    'com.google.android.gms.permission.AD_ID',
+]
+manifest_tag = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+if manifest_tag in s:
+    lines = []
+    for permission in required_permissions:
+        if permission not in s:
+            lines.append(f'    <uses-permission android:name="{permission}" />')
+    if lines:
+        s = s.replace(manifest_tag, manifest_tag + '\n' + '\n'.join(lines), 1)
+
 s = s.replace('android:label="campingcar_roadmap"', 'android:label="캠핑카족 로드맵"')
+
 # Google Mobile Ads requires the AdMob app ID as Android manifest metadata.
 if 'com.google.android.gms.ads.APPLICATION_ID' not in s:
     marker = '<application'
@@ -16,8 +35,8 @@ if 'com.google.android.gms.ads.APPLICATION_ID' not in s:
 p.write_text(s, encoding='utf-8')
 
 # Google Play 2026 target requirement: ensure API 36 where Flutter template allows it.
-# Also use a permanent applicationId that can be installed beside legacy randomly-signed builds.
-# Keep the generated namespace unchanged so MainActivity continues to resolve normally.
+# Also use a permanent applicationId. Keep generated namespace unchanged so
+# MainActivity continues to resolve normally.
 for gradle_name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
     gp = Path(gradle_name)
     if not gp.exists():
