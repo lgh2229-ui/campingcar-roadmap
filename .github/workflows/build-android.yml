@@ -39,6 +39,8 @@ jobs:
         run: python tool/fix_release_startup_and_location.py
       - name: Preserve selected photos and add edit cancel
         run: python tool/fix_photo_append_and_edit_cancel.py
+      - name: Apply metadata, photo controls, and admin improvements
+        run: python tool/apply_metadata_photo_admin_improvements.py
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
