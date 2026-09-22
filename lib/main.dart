@@ -14,11 +14,24 @@ import 'screens/signup_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // The first Flutter frame must never depend on a network/service startup.
+  // If Supabase initialization fails for any reason, start with the local
+  // repository instead of terminating before runApp().
   SupabaseClient? client;
   if (AppConfig.serverEnabled) {
-    await Supabase.initialize(url: AppConfig.supabaseUrl, publishableKey: AppConfig.supabaseKey);
-    client = Supabase.instance.client;
+    try {
+      await Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        publishableKey: AppConfig.supabaseKey,
+      );
+      client = Supabase.instance.client;
+    } catch (error, stackTrace) {
+      debugPrint('Supabase startup failed; continuing locally: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
+
   runApp(CampingCarRoadmapApp(client: client));
 }
 
@@ -45,8 +58,15 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   }
 
   Future<void> _restore() async {
-    user = await auth.currentUser();
-    if (mounted) setState(() => ready = true);
+    try {
+      user = await auth.currentUser();
+    } catch (error, stackTrace) {
+      debugPrint('Session restore failed; showing login: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      user = null;
+    } finally {
+      if (mounted) setState(() => ready = true);
+    }
   }
 
   Future<void> _logout() async {
