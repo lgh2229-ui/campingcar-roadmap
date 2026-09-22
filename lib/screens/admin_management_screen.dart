@@ -9,6 +9,7 @@ class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixi
  String _nickname(Map<String,dynamic>x)=>'${x['nickname']??x['display_name']??''}'.trim();
  String _memberTitle(Map<String,dynamic>x){final a=_userId(x),b=_nickname(x);return a.isNotEmpty&&b.isNotEmpty?'$a · $b':a.isNotEmpty?a:b.isNotEmpty?b:'회원정보 없음';}
  String _name(dynamic id){for(final m in members){if('${m['id']}'=='$id')return _nickname(m).isEmpty?_userId(m):_nickname(m);}return'닉네임 없음';}
+ String _nameById(dynamic id)=>_name(id);
  String _dt(dynamic v){final d=DateTime.tryParse('$v')?.toLocal();return d==null?'-':d.toString().substring(0,16);}
  List<Map<String,dynamic>> get _filteredMembers{final q=memberQuery.trim().toLowerCase();if(q.isEmpty)return members;return members.where((x)=>'${_userId(x)} ${_nickname(x)}'.toLowerCase().contains(q)).toList();}
  void msg(String s)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));
