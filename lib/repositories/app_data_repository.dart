@@ -19,7 +19,7 @@ abstract class AppDataRepository {
   Future<void> deleteReview(String reviewId);
   Future<List<ReviewComment>> reviewComments(String reviewId);
   Future<void> addReviewComment({required String reviewId, required String body});
-  Future<List<AdminReviewTask>> adminReviewTasks();
+  Future<List<AdminReviewTask>> adminReviewTasks({bool includeHandled = false});
   Future<void> completeAdminReviewTask(String taskId);
   Future<List<String>> uploadPlacePhotos(String placeId, List<File> files);
 }
