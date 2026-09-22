@@ -3,10 +3,11 @@ from pathlib import Path
 p = Path('lib/screens/home_screen.dart')
 s = p.read_text(encoding='utf-8')
 
-old = """        Text(p.services.join(' · ')),
-        if (p.address.isNotEmpty) Text(p.address),
-"""
-new = """        const SizedBox(height: 8),
+# The previous workflow step turns the address Text into an InkWell for
+# TMAP/KakaoMap. Anchor only on the service line so this patch works both
+# before and after that transformation.
+anchor = "        Text(p.services.join(' · ')),\n"
+service_ui = """        const SizedBox(height: 8),
         const Text('이용가능 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
         ...[
@@ -26,15 +27,12 @@ new = """        const SizedBox(height: 8),
             ]),
           );
         }),
-        const SizedBox(height: 8),
-        if (p.address.isNotEmpty) Text(p.address),
 """
 
-# Idempotent: if a previous run already added the service UI, succeed.
 if "const Text('이용가능 서비스'" in s:
     print('service availability/price display already present')
-elif old in s:
-    p.write_text(s.replace(old, new, 1), encoding='utf-8')
+elif anchor in s:
+    p.write_text(s.replace(anchor, service_ui, 1), encoding='utf-8')
     print('patched service availability/price display')
 else:
-    raise SystemExit('current place detail anchor not found')
+    raise SystemExit('service line anchor not found')
