@@ -1,16 +1,13 @@
 from pathlib import Path
 
-# Do not block the first Flutter frame on Mobile Ads initialization.
+# Mobile Ads is currently disabled for release stability.
+# Do not add or initialize MobileAds here. This script only removes any stale
+# initialization left by an older patch before applying the location fix.
 p = Path('lib/main.dart')
 s = p.read_text(encoding='utf-8')
 s = s.replace('  await MobileAds.instance.initialize();\n', '')
-old = '  runApp(CampingCarRoadmapApp(client: client));\n'
-new = '''  runApp(CampingCarRoadmapApp(client: client));
-  // Ads are optional. Never prevent app startup if the SDK is slow/fails.
-  MobileAds.instance.initialize().catchError((_) {});
-'''
-if old in s and 'Ads are optional.' not in s:
-    s = s.replace(old, new, 1)
+s = s.replace('  MobileAds.instance.initialize().catchError((_) {});\n', '')
+s = s.replace('  // Ads are optional. Never prevent app startup if the SDK is slow/fails.\n', '')
 p.write_text(s, encoding='utf-8')
 
 # Persist and render the exact GPS point when My Location is pressed.
