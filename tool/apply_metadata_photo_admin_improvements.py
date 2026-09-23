@@ -1,13 +1,7 @@
 from pathlib import Path
 
-# Place-photo UI is owned by fix_photo_append_and_edit_cancel.py.
-# This later step must preserve it and make any legacy out-of-scope setS callback compile-safe.
 p=Path('lib/screens/home_screen.dart')
 s=p.read_text(encoding='utf-8')
-
-# Some older patch steps can inject a setS callback outside StatefulBuilder.
-# Add a state-level fallback. Inside StatefulBuilder the local setS parameter shadows
-# this method, so add-place photo add/delete still refreshes the dialog immediately.
 class_anchor='class _HomeScreenState extends State<HomeScreen> {'
 fallback='\n  void setS(VoidCallback fn) { if (mounted) setState(fn); }\n'
 if class_anchor not in s: raise SystemExit('HomeScreen state class not found')
@@ -27,11 +21,10 @@ start=s.find('  Future<void> _openAddPlace(')
 end=s.find('  Widget _placePhoto(', start)
 if start < 0 or end < 0: raise SystemExit('add-place function boundaries not found')
 add=s[start:end]
-required=['pickMultiImage(imageQuality: 82)','photos.addAll(additions)','ValueKey(photo.path)','HitTestBehavior.opaque','photos.removeWhere((x) => x.path == photo.path)']
+required=['pickMultiImage(imageQuality: 82)','photos.addAll(additions)','ValueKey(photo.path)','Image.file(File(photo.path)','photos.removeAt(i)']
 missing=[x for x in required if x not in add]
-if 'photos.clear()' in add or missing:
+if 'photos.clear()' in add or 'pickImage(source:' in add or missing:
     raise SystemExit('VALIDATION FAILED: place photo UI: '+','.join(missing))
-# Compile guard: every generated setS can now resolve, while the dialog-local callback shadows it.
 if 'void setS(VoidCallback fn)' not in s: raise SystemExit('VALIDATION FAILED: setS fallback missing')
 p.write_text(s,encoding='utf-8')
 
@@ -42,4 +35,4 @@ new="OutlinedButton.icon(onPressed:()async{final oldCount=List<String>.from(x?['
 if old in s:s=s.replace(old,new,1)
 s=s.replace("const SizedBox(height:12),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))","const SizedBox(height:12),if(isEdit)OutlinedButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('수정 취소')),if(isEdit)const SizedBox(height:8),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))")
 p.write_text(s,encoding='utf-8')
-print('validated photo UI and compile-safe setS resolution')
+print('validated multi-photo append/preview/delete and compile-safe setS')
