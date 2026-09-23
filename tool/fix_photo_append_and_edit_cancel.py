@@ -20,8 +20,16 @@ replacement="""OutlinedButton.icon(
             try {
               final picked = await ImagePicker().pickMultiImage(imageQuality: 82);
               if (!pageContext.mounted || picked.isEmpty) return;
-              final additions = picked.take(remain).toList();
+              final existingPaths = photos.map((e) => e.path).toSet();
+              final additions = picked.where((e) => !existingPaths.contains(e.path)).take(remain).toList();
+              if (additions.isEmpty) {
+                ScaffoldMessenger.of(pageContext).showSnackBar(const SnackBar(content: Text('이미 추가된 사진입니다.')));
+                return;
+              }
               setPageState(() { photos.addAll(additions); });
+              if (additions.length < picked.length) {
+                ScaffoldMessenger.of(pageContext).showSnackBar(const SnackBar(content: Text('중복 사진은 제외하고 추가했습니다.')));
+              }
             } catch (e) {
               if (pageContext.mounted) ScaffoldMessenger.of(pageContext).showSnackBar(const SnackBar(content: Text('사진 선택에 실패했습니다. 다시 시도해주세요.')));
             }
@@ -32,15 +40,15 @@ replacement="""OutlinedButton.icon(
         if (photos.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: Wrap(spacing:10,runSpacing:10,children:List.generate(photos.length,(i){final photo=photos[i];return SizedBox(key:ValueKey(photo.path),width:100,height:86,child:Stack(clipBehavior:Clip.none,children:[Positioned.fill(child:ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(photo.path),fit:BoxFit.cover))),Positioned(right:-4,top:-4,child:IconButton.filled(tooltip:'사진 삭제',constraints:const BoxConstraints.tightFor(width:36,height:36),padding:EdgeInsets.zero,onPressed:saving?null:(){setPageState((){photos.removeAt(i);});},icon:const Icon(Icons.close,size:20)))]));})),
+            child: Wrap(spacing:10,runSpacing:10,children:List.generate(photos.length,(i){final photo=photos[i];return SizedBox(key:ValueKey('${photo.path}#$i'),width:100,height:86,child:Stack(clipBehavior:Clip.none,children:[Positioned.fill(child:ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(photo.path),fit:BoxFit.cover))),Positioned(right:-4,top:-4,child:IconButton.filled(tooltip:'사진 삭제',constraints:const BoxConstraints.tightFor(width:36,height:36),padding:EdgeInsets.zero,onPressed:saving?null:(){setPageState((){photos.removeAt(i);});},icon:const Icon(Icons.close,size:20)))]));})),
           ),
         """
 block=block[:btn]+replacement+block[mark:]
 s=s[:start]+block+s[end:]
 final_block=s[start:s.find('  Widget _placePhoto(',start)]
-required=['builder: (pageContext, setPageState)','pickMultiImage(imageQuality: 82)','setPageState(() { photos.addAll(additions); })','Image.file(File(photo.path)','photos.removeAt(i)']
+required=['builder: (pageContext, setPageState)','pickMultiImage(imageQuality: 82)','existingPaths','중복 사진은 제외하고 추가했습니다.','photos.addAll(additions)',"ValueKey('${photo.path}#$i')",'photos.removeAt(i)']
 missing=[x for x in required if x not in final_block]
-if 'photos.clear()' in final_block or 'setS(() { photos.' in final_block or missing: raise SystemExit('FAILED photo page-state validation: '+','.join(missing))
+if 'photos.clear()' in final_block or missing: raise SystemExit('FAILED photo duplicate-safety validation: '+','.join(missing))
 
 # Make the currently open detail sheet stateful so Save/Unsave changes immediately.
 detail_start=s.find('  Future<void> _showPlace(Place p) async {')
@@ -51,21 +59,16 @@ old_builder="builder: (ctx) => DraggableScrollableSheet("
 new_builder="builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => DraggableScrollableSheet("
 changed_builder=False
 if old_builder in detail:
-    detail=detail.replace(old_builder,new_builder,1)
-    changed_builder=True
-elif new_builder not in detail:
-    raise SystemExit('FAILED: place detail sheet builder missing')
-# Earlier workflow step changes the save body, so patch the stable saveSavedIds call only.
+    detail=detail.replace(old_builder,new_builder,1); changed_builder=True
+elif new_builder not in detail: raise SystemExit('FAILED: place detail sheet builder missing')
 needle='await widget.data.saveSavedIds(saved);'
 if needle not in detail: raise SystemExit('FAILED: favorite save call missing')
-if 'setSheetState(() {});' not in detail:
-    detail=detail.replace(needle, needle+' if (ctx.mounted) setSheetState(() {});',1)
+if 'setSheetState(() {});' not in detail: detail=detail.replace(needle, needle+' if (ctx.mounted) setSheetState(() {});',1)
 if changed_builder:
-    close='    ));\n  }\n\n'
-    idx=detail.rfind(close)
+    close='    ));\n  }\n\n'; idx=detail.rfind(close)
     if idx<0: raise SystemExit('FAILED: detail close anchor missing')
     detail=detail[:idx]+'    )));\n  }\n\n'+detail[idx+len(close):]
-required_detail=['saveSavedIds(saved)', "'저장됨'", 'saved.contains(p.id)', 'setSheetState(() {})']
+required_detail=['saveSavedIds(saved)',"'저장됨'",'saved.contains(p.id)','setSheetState(() {})']
 missing_detail=[x for x in required_detail if x not in detail]
 if missing_detail: raise SystemExit('FAILED: favorite detail validation: '+','.join(missing_detail))
 s=s[:detail_start]+detail+s[detail_end:]
@@ -80,4 +83,4 @@ new_title="title:Row(children:[Expanded(child:Text('${x['title']}')),const Sized
 if old_title in s: s=s.replace(old_title,new_title,1)
 if new_title not in s: raise SystemExit('FAILED: vehicle market list status badge patch missing')
 p.write_text(s,encoding='utf-8')
-print('OK: multi-photo preserved; favorite button redraws immediately; market status visible')
+print('OK: duplicate photos blocked safely; multi-photo preserved; favorite toggle preserved; market status visible')
