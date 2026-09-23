@@ -42,31 +42,29 @@ required=['builder: (pageContext, setPageState)','pickMultiImage(imageQuality: 8
 missing=[x for x in required if x not in final_block]
 if 'photos.clear()' in final_block or 'setS(() { photos.' in final_block or missing: raise SystemExit('FAILED photo page-state validation: '+','.join(missing))
 
-# Patch the place-detail sheet itself so the Save button redraws immediately.
+# Make the currently open detail sheet stateful so Save/Unsave changes immediately.
 detail_start=s.find('  Future<void> _showPlace(Place p) async {')
 detail_end=s.find('  Widget _heightCompatibility(Place p)', detail_start)
 if detail_start < 0 or detail_end < 0: raise SystemExit('FAILED: place detail boundaries missing')
 detail=s[detail_start:detail_end]
-old="builder: (ctx) => DraggableScrollableSheet("
-new="builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => DraggableScrollableSheet("
-if old in detail:
-    detail=detail.replace(old,new,1)
-elif new not in detail:
+old_builder="builder: (ctx) => DraggableScrollableSheet("
+new_builder="builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => DraggableScrollableSheet("
+changed_builder=False
+if old_builder in detail:
+    detail=detail.replace(old_builder,new_builder,1)
+    changed_builder=True
+elif new_builder not in detail:
     raise SystemExit('FAILED: place detail sheet builder missing')
-old_save="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); }"
-new_save="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); if (ctx.mounted) setSheetState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); }"
-if old_save in detail:
-    detail=detail.replace(old_save,new_save,1)
-elif 'setSheetState(() {})' not in detail:
-    raise SystemExit('FAILED: favorite save body missing')
-# StatefulBuilder needs one additional closing paren at the end of showModalBottomSheet.
-if new in detail:
-    stripped=detail.rstrip()
-    if stripped.endswith('));\n  }'):
-        idx=detail.rfind('));\n  }')
-        detail=detail[:idx]+')));\n  }'+detail[idx+7:]
-    elif not stripped.endswith(')));\n  }'):
-        raise SystemExit('FAILED: detail close anchor missing')
+# Earlier workflow step changes the save body, so patch the stable saveSavedIds call only.
+needle='await widget.data.saveSavedIds(saved);'
+if needle not in detail: raise SystemExit('FAILED: favorite save call missing')
+if 'setSheetState(() {});' not in detail:
+    detail=detail.replace(needle, needle+' if (ctx.mounted) setSheetState(() {});',1)
+if changed_builder:
+    close='    ));\n  }\n\n'
+    idx=detail.rfind(close)
+    if idx<0: raise SystemExit('FAILED: detail close anchor missing')
+    detail=detail[:idx]+'    )));\n  }\n\n'+detail[idx+len(close):]
 required_detail=['saveSavedIds(saved)', "'저장됨'", 'saved.contains(p.id)', 'setSheetState(() {})']
 missing_detail=[x for x in required_detail if x not in detail]
 if missing_detail: raise SystemExit('FAILED: favorite detail validation: '+','.join(missing_detail))
