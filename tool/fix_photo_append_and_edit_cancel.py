@@ -13,11 +13,13 @@ mark=block.find(marker,btn)
 if btn<0 or mark<0: raise SystemExit('FAILED: photo UI anchors not found')
 replacement="""OutlinedButton.icon(
           onPressed: () async {
-            if (photos.length >= 6) { _msg('장소사진은 최대 6장입니다.'); return; }
+            final remain = 6 - photos.length;
+            if (remain <= 0) { _msg('장소사진은 최대 6장입니다.'); return; }
             try {
-              final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 82);
-              if (picked == null) return;
-              setS(() { photos.add(picked); });
+              final picked = await ImagePicker().pickMultiImage(imageQuality: 82);
+              if (picked.isEmpty) return;
+              final additions = picked.take(remain).toList();
+              setS(() { photos.addAll(additions); });
             } catch (e) {
               _msg('사진 선택에 실패했습니다. 다시 시도해주세요.');
             }
@@ -55,9 +57,9 @@ replacement="""OutlinedButton.icon(
 block=block[:btn]+replacement+block[mark:]
 s=s[:start]+block+s[end:]
 final_block=s[start:s.find('  Widget _placePhoto(',start)]
-required=['pickImage(source: ImageSource.gallery, imageQuality: 82)','photos.add(picked)','Image.file(File(photo.path)','photos.removeAt(i)']
+required=['pickMultiImage(imageQuality: 82)','photos.addAll(additions)','Image.file(File(photo.path)','photos.removeAt(i)']
 missing=[x for x in required if x not in final_block]
-if 'photos.clear()' in final_block or 'pickMultiImage' in final_block or missing:
+if 'photos.clear()' in final_block or 'pickImage(source:' in final_block or missing:
     raise SystemExit('FAILED photo behavior validation: '+','.join(missing))
 p.write_text(s,encoding='utf-8')
 
@@ -67,4 +69,4 @@ old="const SizedBox(height:12),FilledButton(onPressed:()=>Navigator.pop(ctx,true
 if old in s:
     s=s.replace(old,"const SizedBox(height:12),if(isEdit)OutlinedButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('수정 취소')),if(isEdit)const SizedBox(height:8),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))",1)
 p.write_text(s,encoding='utf-8')
-print('OK: place single-photo append + preview + X delete verified')
+print('OK: multi-photo append + preview + X delete verified')
