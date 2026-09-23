@@ -42,42 +42,9 @@ if "label: const Text('장소 수정')" not in s:
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Future.delayed(const Duration(milliseconds: 120), () => _adminEditPlace(p));
-                  },
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('장소 수정'),
-                ),
-              ),
+              Expanded(child: OutlinedButton.icon(onPressed: () { Navigator.pop(ctx); Future.delayed(const Duration(milliseconds: 120), () => _adminEditPlace(p)); }, icon: const Icon(Icons.edit_outlined), label: const Text('장소 수정'))),
               const SizedBox(width: 8),
-              Expanded(
-                child: FilledButton.tonalIcon(
-                  onPressed: () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (d) => AlertDialog(
-                        title: const Text('장소 삭제'),
-                        content: Text('${p.name} 장소를 삭제할까요?'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('취소')),
-                          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('삭제')),
-                        ],
-                      ),
-                    );
-                    if (ok == true) {
-                      await widget.data.deletePlace(p.id);
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      await _load();
-                      _msg('장소를 삭제했습니다.');
-                    }
-                  },
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('장소 삭제'),
-                ),
-              ),
+              Expanded(child: FilledButton.tonalIcon(onPressed: () async { final ok = await showDialog<bool>(context: context,builder: (d) => AlertDialog(title: const Text('장소 삭제'),content: Text('${p.name} 장소를 삭제할까요?'),actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('취소')),FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('삭제'))])); if (ok == true) { await widget.data.deletePlace(p.id); if (ctx.mounted) Navigator.pop(ctx); await _load(); _msg('장소를 삭제했습니다.'); } },icon: const Icon(Icons.delete_outline),label: const Text('장소 삭제'))),
             ],
           ),
         ],
@@ -87,8 +54,15 @@ if "label: const Text('장소 수정')" not in s:
 start=s.find('  Future<void> _openAddPlace('); end=s.find('  Widget _placePhoto(',start)
 if start<0 or end<0: raise SystemExit('add-place boundaries missing')
 add=s[start:end]
-photo_required=['builder: (pageContext, setPageState)','pickMultiImage(imageQuality: 82)','setPageState(() { photos.addAll(additions); })','Image.file(File(photo.path)','setPageState(() { photos.removeAt(i); })']
-missing=[x for x in photo_required if x not in add]
+# Accept formatting variants produced by the preceding photo patch.
+photo_groups=[
+ ['builder: (pageContext, setPageState)'],
+ ['pickMultiImage(imageQuality: 82)'],
+ ['photos.addAll(additions)'],
+ ['Image.file(File(photo.path)'],
+ ['photos.removeAt(i)'],
+]
+missing=[group[0] for group in photo_groups if not any(x in add for x in group)]
 if 'photos.clear()' in add or missing: raise SystemExit('PHOTO REGRESSION: '+','.join(missing))
 for token in ["Text('등록자:","Text('최종 등록일자:",'Future<void> _adminEditPlace(Place p)',"label: const Text('장소 수정')","label: const Text('장소 삭제')",'if (widget.user.isAdministrator)']:
     if token not in s: raise SystemExit('HOME FEATURE MISSING: '+token)
