@@ -9,9 +9,14 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     method=r'''  Future<void> _adminEditPlace(Place p) async {
     if (!widget.user.isAdministrator) return;
     final name=TextEditingController(text:p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'),''));
-    final address=TextEditingController(text:p.address); final hours=TextEditingController(text:p.hours); final phone=TextEditingController(text:p.phone); final note=TextEditingController(text:p.note); final height=TextEditingController(text:p.maxHeightMm==null?'':(p.maxHeightMm!/1000).toString());
+    final address=TextEditingController(text:p.address);
+    final hours=TextEditingController(text:p.hours);
+    final phone=TextEditingController(text:p.phone);
+    final note=TextEditingController(text:p.note);
+    final height=TextEditingController(text:p.maxHeightMm==null?'':(p.maxHeightMm!/1000).toString());
     final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('장소 수정 (관리자)'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),TextField(controller:phone,decoration:const InputDecoration(labelText:'문의연락처')),TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),TextField(controller:note,maxLines:3,decoration:const InputDecoration(labelText:'이용방법 / 주의사항'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('저장'))]));
-    if(ok!=true)return; p.name=name.text.trim();p.address=address.text.trim();p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
+    if(ok!=true)return;
+    p.name=name.text.trim();p.address=address.text.trim();p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
     try{await widget.data.updatePlace(p);await _load();_msg('장소를 수정했습니다.');}catch(e){_msg('장소 수정에 실패했습니다: $e');}
   }
 
@@ -19,13 +24,10 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     s=s.replace(anchor,method+anchor,1)
 
 show_start=s.find('  Future<void> _showPlace(Place p) async {')
-if show_start<0: raise SystemExit('showPlace missing after admin method patch')
-show_end=s.find('\n  ',show_start+40)
-# Locate a reliable ListView children opening inside _showPlace instead of depending on redesigned text.
+if show_start<0: raise SystemExit('showPlace missing')
 if "Text('최종 등록일자:" not in s[show_start:]:
-    candidates=['children: [','children:[']
     pos=-1; token=''
-    for c in candidates:
+    for c in ['children: [','children:[']:
         x=s.find(c,show_start)
         if x>=0: pos=x; token=c; break
     if pos<0: raise SystemExit('showPlace children anchor missing')
@@ -33,12 +35,51 @@ if "Text('최종 등록일자:" not in s[show_start:]:
     meta="\n        Text('등록자: ${p.ownerNickname.trim().isEmpty ? '닉네임 없음' : p.ownerNickname}'),\n        Text('최종 등록일자: ${p.createdAt==null ? '-' : p.createdAt!.toLocal().toString().substring(0,16)}'),"
     s=s[:insert]+meta+s[insert:]
 
-if "label:const Text('장소 수정')" not in s:
+if "label: const Text('장소 수정')" not in s:
     anchor="        if (!p.isApproved && _isMine(p)) ...["
     if anchor not in s: raise SystemExit('admin button insertion anchor missing')
     admin=r'''        if (widget.user.isAdministrator) ...[
-          const SizedBox(height:14),
-          Row(children:[Expanded(child:OutlinedButton.icon(onPressed:(){Navigator.pop(ctx);Future.delayed(const Duration(milliseconds:120),()=>_adminEditPlace(p));},icon:const Icon(Icons.edit_outlined),label:const Text('장소 수정'))),const SizedBox(width:8),Expanded(child:FilledButton.tonalIcon(onPressed:()async{final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('장소 삭제'),content:Text('${p.name} 장소를 삭제할까요?'),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('삭제'))]));if(ok==true){await widget.data.deletePlace(p.id);if(ctx.mounted)Navigator.pop(ctx);await _load();_msg('장소를 삭제했습니다.');}},icon:const Icon(Icons.delete_outline),label:const Text('장소 삭제')))],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Future.delayed(const Duration(milliseconds: 120), () => _adminEditPlace(p));
+                  },
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('장소 수정'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (d) => AlertDialog(
+                        title: const Text('장소 삭제'),
+                        content: Text('${p.name} 장소를 삭제할까요?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('취소')),
+                          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('삭제')),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      await widget.data.deletePlace(p.id);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      await _load();
+                      _msg('장소를 삭제했습니다.');
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('장소 삭제'),
+                ),
+              ),
+            ],
+          ),
         ],
 '''
     s=s.replace(anchor,admin+anchor,1)
@@ -49,7 +90,7 @@ add=s[start:end]
 photo_required=['builder: (pageContext, setPageState)','pickMultiImage(imageQuality: 82)','setPageState(() { photos.addAll(additions); })','Image.file(File(photo.path)','setPageState(() { photos.removeAt(i); })']
 missing=[x for x in photo_required if x not in add]
 if 'photos.clear()' in add or missing: raise SystemExit('PHOTO REGRESSION: '+','.join(missing))
-for token in ["Text('등록자:","Text('최종 등록일자:",'Future<void> _adminEditPlace(Place p)',"label:const Text('장소 수정')","label:const Text('장소 삭제')",'if (widget.user.isAdministrator)']:
+for token in ["Text('등록자:","Text('최종 등록일자:",'Future<void> _adminEditPlace(Place p)',"label: const Text('장소 수정')","label: const Text('장소 삭제')",'if (widget.user.isAdministrator)']:
     if token not in s: raise SystemExit('HOME FEATURE MISSING: '+token)
 p.write_text(s,encoding='utf-8')
 
