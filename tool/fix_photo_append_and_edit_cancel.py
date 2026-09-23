@@ -6,9 +6,6 @@ start=s.find('  Future<void> _openAddPlace(')
 end=s.find('  Widget _placePhoto(',start)
 if start<0 or end<0: raise SystemExit('FAILED: add-place boundaries not found')
 block=s[start:end]
-# The registration screen is a StatefulBuilder whose local setter is setPageState.
-# Never use the parent HomeScreen setState/setS for the local photos list: that
-# rebuilds the wrong widget and leaves the registration page visually unchanged.
 if 'builder: (pageContext, setPageState)' not in block:
     raise SystemExit('FAILED: registration StatefulBuilder/setPageState not found')
 label=block.find("label: Text('장소사진")
@@ -66,6 +63,15 @@ required=['builder: (pageContext, setPageState)','pickMultiImage(imageQuality: 8
 missing=[x for x in required if x not in final_block]
 if 'photos.clear()' in final_block or 'setS(() { photos.' in final_block or missing:
     raise SystemExit('FAILED photo page-state validation: '+','.join(missing))
+
+# Place save button: persistence was succeeding but the modal did not visually rebuild.
+# Close the detail sheet after success, then show an explicit confirmation on the main screen.
+old="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }"
+new="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); if (ctx.mounted) Navigator.pop(ctx); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { if (wasSaved) { saved.add(p.id); } else { saved.remove(p.id); } if (mounted) setState(() {}); _msg('저장 처리에 실패했습니다: $e'); }"
+if old in s:
+    s=s.replace(old,new,1)
+if new not in s:
+    raise SystemExit('FAILED: place save feedback patch missing')
 p.write_text(s,encoding='utf-8')
 
 p=Path('lib/screens/vehicle_market_screen.dart')
@@ -73,5 +79,12 @@ s=p.read_text(encoding='utf-8')
 old="const SizedBox(height:12),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))"
 if old in s:
     s=s.replace(old,"const SizedBox(height:12),if(isEdit)OutlinedButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('수정 취소')),if(isEdit)const SizedBox(height:8),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))",1)
+# Always show sale state directly in each list row, including active listings.
+old_title="title:Row(children:[Expanded(child:Text('${x['title']}')),if(x['status']=='sold')const Chip(label:Text('판매완료'))]),"
+new_title="title:Row(children:[Expanded(child:Text('${x['title']}')),const SizedBox(width:6),Chip(label:Text(x['status']=='sold'?'판매완료':'판매중'))]),"
+if old_title in s:
+    s=s.replace(old_title,new_title,1)
+if new_title not in s:
+    raise SystemExit('FAILED: vehicle market list status badge patch missing')
 p.write_text(s,encoding='utf-8')
-print('OK: registration local page state drives multi-photo add/preview/delete')
+print('OK: photo behavior preserved; place save feedback visible; market list always shows sale status')
