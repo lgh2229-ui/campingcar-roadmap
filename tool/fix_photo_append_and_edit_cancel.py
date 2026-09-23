@@ -64,16 +64,29 @@ missing=[x for x in required if x not in final_block]
 if 'photos.clear()' in final_block or 'setS(() { photos.' in final_block or missing:
     raise SystemExit('FAILED photo page-state validation: '+','.join(missing))
 
-# Save feedback may already have been patched in the checked-in source before
-# earlier workflow transforms run. Accept either form and only patch the legacy form.
-legacy="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }"
-patched="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); if (ctx.mounted) Navigator.pop(ctx); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { if (wasSaved) { saved.add(p.id); } else { saved.remove(p.id); } if (mounted) setState(() {}); _msg('저장 처리에 실패했습니다: $e'); }"
-if legacy in s:
-    s=s.replace(legacy,patched,1)
-# Do not fail merely because an earlier transform changed formatting/context.
-# The actual persistence call and confirmation text are the stable contract.
-if 'saveSavedIds(saved)' not in s or '저장한 장소에 추가했습니다.' not in s:
-    raise SystemExit('FAILED: place save persistence/feedback missing')
+# Place detail save button must toggle visually without closing the detail sheet.
+show=s.find('  Future<void> _showPlace(Place p) async {')
+show_end=s.find('  Future<void> _openAddPlace(',show)
+if show<0 or show_end<0: raise SystemExit('FAILED: showPlace boundaries missing')
+detail=s[show:show_end]
+# Remove previous behavior that closes the sheet after saving.
+detail=detail.replace('if (ctx.mounted) Navigator.pop(ctx); ', '')
+# Make the bottom sheet stateful so the button can repaint immediately.
+if 'StatefulBuilder' not in detail:
+    detail=detail.replace('builder: (ctx) => SafeArea(', 'builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => SafeArea(', 1)
+    # showModalBottomSheet builder gained one extra wrapper; close it at the end of this method expression.
+    marker='    ));\n'
+    pos=detail.rfind(marker)
+    if pos<0: raise SystemExit('FAILED: cannot close StatefulBuilder wrapper')
+    detail=detail[:pos]+'    )));\n'+detail[pos+len(marker):]
+# Replace static label/icon and ensure sheet repaint after optimistic toggle and rollback.
+detail=detail.replace("icon: const Icon(Icons.star_border), label: const Text('저장')", "icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장')")
+detail=detail.replace("icon:const Icon(Icons.star_border),label:const Text('저장')", "icon:Icon(saved.contains(p.id)?Icons.star:Icons.star_border),label:Text(saved.contains(p.id)?'저장됨':'저장')")
+detail=detail.replace('if (mounted) setState(() {}); _msg(', 'if (mounted) setState(() {}); if (ctx.mounted) setSheetState(() {}); _msg(')
+detail=detail.replace('if (mounted) setState(() {}); _msg(\'저장 처리에 실패했습니다:', 'if (mounted) setState(() {}); if (ctx.mounted) setSheetState(() {}); _msg(\'저장 처리에 실패했습니다:')
+if "'저장됨'" not in detail or 'setSheetState' not in detail or 'saveSavedIds(saved)' not in detail:
+    raise SystemExit('FAILED: visible save toggle patch missing')
+s=s[:show]+detail+s[show_end:]
 p.write_text(s,encoding='utf-8')
 
 p=Path('lib/screens/vehicle_market_screen.dart')
@@ -88,4 +101,4 @@ if old_title in s:
 if new_title not in s:
     raise SystemExit('FAILED: vehicle market list status badge patch missing')
 p.write_text(s,encoding='utf-8')
-print('OK: photo behavior preserved; save feedback compatible; market list always shows sale status')
+print('OK: photo behavior preserved; place save toggles 저장/저장됨 in-place; market status visible')
