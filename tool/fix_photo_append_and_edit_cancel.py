@@ -42,16 +42,34 @@ required=['builder: (pageContext, setPageState)','pickMultiImage(imageQuality: 8
 missing=[x for x in required if x not in final_block]
 if 'photos.clear()' in final_block or 'setS(() { photos.' in final_block or missing: raise SystemExit('FAILED photo page-state validation: '+','.join(missing))
 
-# Favorite UI is already patched by fix_favorite_sheet_state.py earlier in the workflow.
-# Do not rewrite its builder or exact save body here; only validate the final detail block.
+# Patch the place-detail sheet itself so the Save button redraws immediately.
 detail_start=s.find('  Future<void> _showPlace(Place p) async {')
 detail_end=s.find('  Widget _heightCompatibility(Place p)', detail_start)
 if detail_start < 0 or detail_end < 0: raise SystemExit('FAILED: place detail boundaries missing')
 detail=s[detail_start:detail_end]
-required_detail=['saveSavedIds(saved)', "'저장됨'", 'saved.contains(p.id)']
+old="builder: (ctx) => DraggableScrollableSheet("
+new="builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => DraggableScrollableSheet("
+if old in detail:
+    detail=detail.replace(old,new,1)
+elif new not in detail:
+    raise SystemExit('FAILED: place detail sheet builder missing')
+old_save="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); }"
+new_save="try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); if (ctx.mounted) setSheetState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); }"
+if old_save in detail:
+    detail=detail.replace(old_save,new_save,1)
+elif 'setSheetState(() {})' not in detail:
+    raise SystemExit('FAILED: favorite save body missing')
+# StatefulBuilder needs one additional closing paren at the end of showModalBottomSheet.
+if new in detail:
+    stripped=detail.rstrip()
+    if stripped.endswith('));\n  }'):
+        idx=detail.rfind('));\n  }')
+        detail=detail[:idx]+')));\n  }'+detail[idx+7:]
+    elif not stripped.endswith(')));\n  }'):
+        raise SystemExit('FAILED: detail close anchor missing')
+required_detail=['saveSavedIds(saved)', "'저장됨'", 'saved.contains(p.id)', 'setSheetState(() {})']
 missing_detail=[x for x in required_detail if x not in detail]
 if missing_detail: raise SystemExit('FAILED: favorite detail validation: '+','.join(missing_detail))
-
 s=s[:detail_start]+detail+s[detail_end:]
 p.write_text(s,encoding='utf-8')
 
@@ -64,4 +82,4 @@ new_title="title:Row(children:[Expanded(child:Text('${x['title']}')),const Sized
 if old_title in s: s=s.replace(old_title,new_title,1)
 if new_title not in s: raise SystemExit('FAILED: vehicle market list status badge patch missing')
 p.write_text(s,encoding='utf-8')
-print('OK: multi-photo preserved; existing favorite patch validated; market status visible')
+print('OK: multi-photo preserved; favorite button redraws immediately; market status visible')
