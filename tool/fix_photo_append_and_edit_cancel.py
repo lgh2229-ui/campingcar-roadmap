@@ -19,9 +19,9 @@ replacement="""OutlinedButton.icon(
               final picked = await ImagePicker().pickMultiImage(imageQuality: 82);
               if (picked.isEmpty) return;
               final additions = picked.take(remain).toList();
-              setS(() => photos.addAll(additions));
+              setS(() { photos.addAll(additions); });
             } catch (e) {
-              _msg('사진 선택에 실패했습니다: $e');
+              _msg('사진 선택에 실패했습니다. 다시 시도해주세요.');
             }
           },
           icon: const Icon(Icons.photo_library_outlined),
@@ -33,30 +33,31 @@ replacement="""OutlinedButton.icon(
             child: Wrap(
               spacing: 10,
               runSpacing: 10,
-              children: photos.map((photo) => SizedBox(
-                key: ValueKey(photo.path),
-                width: 100,
-                height: 86,
-                child: Stack(clipBehavior: Clip.none, children: [
-                  Positioned.fill(child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(photo.path), fit: BoxFit.cover))),
-                  Positioned(right: -4, top: -4, child: IconButton.filled(
-                    tooltip: '사진 삭제',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                    onPressed: () => setS(() => photos.remove(photo)),
-                    icon: const Icon(Icons.close, size: 20),
-                  )),
-                ]),
-              )).toList(),
+              children: List.generate(photos.length, (i) {
+                final photo = photos[i];
+                return SizedBox(
+                  key: ValueKey(photo.path),
+                  width: 100,
+                  height: 86,
+                  child: Stack(clipBehavior: Clip.none, children: [
+                    Positioned.fill(child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(photo.path), fit: BoxFit.cover))),
+                    Positioned(right: -4, top: -4, child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () { setS(() { photos.removeWhere((x) => x.path == photo.path); }); },
+                      child: Container(width: 36, height: 36, alignment: Alignment.center, decoration: const BoxDecoration(color: Colors.black87, shape: BoxShape.circle), child: const Icon(Icons.close, color: Colors.white, size: 22)),
+                    )),
+                  ]),
+                );
+              }),
             ),
           ),
         """
 block=block[:btn]+replacement+block[mark:]
 s=s[:start]+block+s[end:]
 final_block=s[start:s.find('  Widget _placePhoto(',start)]
-required=['StatefulBuilder(builder: (ctx, setS)', 'pickMultiImage(imageQuality: 82)', 'setS(() => photos.addAll(additions))', 'Image.file(File(photo.path)', 'onPressed: () => setS(() => photos.remove(photo))']
+required=['pickMultiImage(imageQuality: 82)','photos.addAll(additions)',"ValueKey(photo.path)",'HitTestBehavior.opaque','photos.removeWhere((x) => x.path == photo.path)']
 missing=[x for x in required if x not in final_block]
-if 'photos.clear()' in final_block or missing: raise SystemExit('FAILED photo validation: '+','.join(missing))
+if 'photos.clear()' in final_block or missing: raise SystemExit('FAILED photo behavior validation: '+','.join(missing))
 p.write_text(s,encoding='utf-8')
 
 p=Path('lib/screens/vehicle_market_screen.dart')
@@ -69,4 +70,4 @@ for old in [
 old="const SizedBox(height:12),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))"
 if old in s:s=s.replace(old,"const SizedBox(height:12),if(isEdit)OutlinedButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('수정 취소')),if(isEdit)const SizedBox(height:8),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))",1)
 p.write_text(s,encoding='utf-8')
-print('validated add-place picker state + append + preview + X delete')
+print('validated place photo picker append + preview + X delete behavior')
