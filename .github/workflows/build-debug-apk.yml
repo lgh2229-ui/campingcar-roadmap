@@ -46,6 +46,8 @@ jobs:
         run: python tool/fix_photo_append_and_edit_cancel.py
       - name: Apply metadata, photo controls, and admin improvements
         run: python tool/apply_metadata_photo_admin_improvements.py
+      - name: Add place report photos and zoom viewer
+        run: python tool/add_place_report_photos.py
       - name: Run subosito/flutter-action@v2
         uses: subosito/flutter-action@v2
         with:
