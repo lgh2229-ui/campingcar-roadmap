@@ -72,10 +72,29 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   Future<void> report(Map<String,dynamic>x) async {final c=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('매물 신고'),content:TextField(controller:c,maxLength:500,maxLines:4,decoration:const InputDecoration(labelText:'신고 사유',border:OutlineInputBorder())),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('신고'))]));if(ok==true&&c.text.trim().isNotEmpty){try{await db.from('vehicle_market_reports').insert({'listing_id':x['id'],'reporter_id':uid,'reason':c.text.trim()});msg('신고가 접수되었습니다.');}catch(e){msg('이미 신고했거나 접수에 실패했습니다.');}}}
   Widget adSlot()=>Card(margin:const EdgeInsets.all(12),child:Container(height:72,alignment:Alignment.center,child:const Text('광고 영역',style:TextStyle(fontWeight:FontWeight.bold))));
 
+  Future<void> _openMarketPhotos(List<String> photos,int initial) async {
+    if(photos.isEmpty)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(viewerContext){
+      return Scaffold(
+        backgroundColor:Colors.black,
+        appBar:AppBar(backgroundColor:Colors.black,foregroundColor:Colors.white,title:const Text('중고차 사진')),
+        body:PageView.builder(
+          controller:PageController(initialPage:initial),
+          itemCount:photos.length,
+          itemBuilder:(pageContext,i)=>InteractiveViewer(
+            minScale:1,
+            maxScale:5,
+            child:Center(child:Image.network(photos[i],fit:BoxFit.contain,errorBuilder:(context,error,stackTrace)=>const Icon(Icons.broken_image,color:Colors.white,size:64))),
+          ),
+        ),
+      );
+    }));
+  }
+
   Future<void> detail(Map<String,dynamic>x) async {
     final photos=List<String>.from(x['image_urls']??const []),mine=x['owner_id']==uid;
     await showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      if(photos.isNotEmpty)SizedBox(height:220,child:PageView(children:photos.map((u)=>ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.network(u,fit:BoxFit.cover))).toList())),const SizedBox(height:10),Row(children:[Expanded(child:Text('${x['title']}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))),Chip(label:Text(x['status']=='sold'?'판매완료':'판매중'))]),Text('${x['manufacturer']} ${x['model']} · ${x['model_year']??'-'}년'),Text('주행거리 ${x['mileage_km']??'-'}km · ${x['region']}'),Text(money(x['price_krw']),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const Divider(),
+      if(photos.isNotEmpty)SizedBox(height:220,child:PageView.builder(itemCount:photos.length,itemBuilder:(_,i)=>GestureDetector(onTap:()=>_openMarketPhotos(photos,i),child:ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.network(photos[i],fit:BoxFit.cover))))),const SizedBox(height:10),Row(children:[Expanded(child:Text('${x['title']}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))),Chip(label:Text(x['status']=='sold'?'판매완료':'판매중'))]),Text('${x['manufacturer']} ${x['model']} · ${x['model_year']??'-'}년'),Text('주행거리 ${x['mileage_km']??'-'}km · ${x['region']}'),Text(money(x['price_krw']),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const Divider(),
       Text('배터리 ${x['battery_ah']??'없음'}Ah · 태양광 ${x['solar_w']??'없음'}W'),Text('인버터 ${x['inverter_w']??'없음'}W · 주행충전 ${x['alternator_charger_a']??'없음'}A'),Text('한전충전 ${x['shore_power']==true?'있음':'없음'} · 청수 ${x['fresh_water_l']??'없음'}L · 오수 ${x['grey_water_l']??'없음'}L'),Text('화장실 ${x['toilet_type']=='cassette'?'카트리지':x['toilet_type']=='black'?'블랙':'없음'} ${x['toilet_capacity_l']??''}${x['toilet_capacity_l']!=null?'L':''}'),if('${x['description']??''}'.isNotEmpty)Padding(padding:const EdgeInsets.only(top:10),child:Text('${x['description']}')),const SizedBox(height:10),Text('연락처: ${x['phone']}'),const SizedBox(height:12),
       if(mine)Wrap(spacing:8,children:[OutlinedButton(onPressed:(){Navigator.pop(ctx);edit(x);},child:const Text('수정')),OutlinedButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,x['status']=='sold'?'active':'sold');},child:Text(x['status']=='sold'?'판매중으로 변경':'판매완료')),TextButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,'delete');},child:const Text('삭제'))]) else OutlinedButton.icon(onPressed:()=>report(x),icon:const Icon(Icons.report_outlined),label:const Text('매물 신고'))
     ]))));
