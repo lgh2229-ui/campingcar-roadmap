@@ -7,7 +7,26 @@ if "package:supabase_flutter/supabase_flutter.dart" not in s:
 anchor='  Widget _heightCompatibility(Place p)'
 if anchor not in s: raise SystemExit('place report: height anchor missing')
 if 'Future<void> _reportPlace(Place p)' not in s:
-    methods=r'''  Future<void> _reportPlace(Place p) async {
+    methods=r'''  Future<void> _showLocalReportPhotos(List<XFile> photos,int initial) async {
+    if(photos.isEmpty)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(viewerContext){
+      return Scaffold(
+        backgroundColor:Colors.black,
+        appBar:AppBar(backgroundColor:Colors.black,foregroundColor:Colors.white,title:const Text('첨부사진')),
+        body:PageView.builder(
+          controller:PageController(initialPage:initial),
+          itemCount:photos.length,
+          itemBuilder:(pageContext,i)=>InteractiveViewer(
+            minScale:1,
+            maxScale:5,
+            child:Center(child:Image.file(File(photos[i].path),fit:BoxFit.contain)),
+          ),
+        ),
+      );
+    }));
+  }
+
+  Future<void> _reportPlace(Place p) async {
     if (widget.user.isAdministrator) return;
     String type='정보 오류';
     final body=TextEditingController();
@@ -20,7 +39,7 @@ if 'Future<void> _reportPlace(Place p)' not in s:
         DropdownButtonFormField<String>(initialValue:type,decoration:const InputDecoration(labelText:'신고 사유'),items:['정보 오류','이용 불가','폐쇄/없어진 장소','부적절한 내용','기타'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:sending?null:(v)=>setD(()=>type=v??type)),
         const SizedBox(height:8),TextField(controller:body,maxLines:4,enabled:!sending,decoration:const InputDecoration(labelText:'상세 내용',hintText:'확인이 필요한 내용을 입력해주세요.',border:OutlineInputBorder())),const SizedBox(height:10),
         OutlinedButton.icon(onPressed:sending?null:()async{final remain=5-photos.length;if(remain<=0)return;final picked=await ImagePicker().pickMultiImage(imageQuality:82);if(!dialogContext.mounted||picked.isEmpty)return;final existing=photos.map((e)=>e.path).toSet();setD(()=>photos.addAll(picked.where((e)=>!existing.contains(e.path)).take(remain)));},icon:const Icon(Icons.photo_library_outlined),label:Text('사진 첨부 (${photos.length}/5)')),
-        if(photos.isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Wrap(spacing:8,runSpacing:8,children:List.generate(photos.length,(i)=>SizedBox(width:88,height:76,child:Stack(clipBehavior:Clip.none,children:[Positioned.fill(child:ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(photos[i].path),fit:BoxFit.cover))),Positioned(right:-5,top:-5,child:IconButton.filled(constraints:const BoxConstraints.tightFor(width:32,height:32),padding:EdgeInsets.zero,onPressed:sending?null:()=>setD(()=>photos.removeAt(i)),icon:const Icon(Icons.close,size:18)))])))))
+        if(photos.isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Wrap(spacing:8,runSpacing:8,children:List.generate(photos.length,(i)=>SizedBox(width:88,height:76,child:Stack(clipBehavior:Clip.none,children:[Positioned.fill(child:GestureDetector(onTap:()=>_showLocalReportPhotos(List<XFile>.from(photos),i),child:ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(photos[i].path),fit:BoxFit.cover)))),Positioned(right:-5,top:-5,child:IconButton.filled(constraints:const BoxConstraints.tightFor(width:32,height:32),padding:EdgeInsets.zero,onPressed:sending?null:()=>setD(()=>photos.removeAt(i)),icon:const Icon(Icons.close,size:18)))])))))
       ]))),
       actions:[TextButton(onPressed:sending?null:()=>Navigator.pop(dialogContext,false),child:const Text('취소')),FilledButton(onPressed:sending?null:()async{if(body.text.trim().isEmpty)return;setD(()=>sending=true);try{final db=Supabase.instance.client;final uid=db.auth.currentUser?.id;if(uid==null)throw Exception('로그인이 필요합니다.');final urls=<String>[];for(final x in photos){final ext=x.path.split('.').last.toLowerCase();final safe=RegExp(r'^[a-z0-9]{2,5}$').hasMatch(ext)?ext:'jpg';final path='$uid/${p.id}/${const Uuid().v4()}.$safe';await db.storage.from('report-photos').upload(path,File(x.path),fileOptions:const FileOptions(cacheControl:'3600',upsert:false));urls.add(db.storage.from('report-photos').getPublicUrl(path));}await db.from('place_reports').insert({'place_id':p.id,'reporter_id':uid,'report_type':type,'body':body.text.trim(),'photo_urls':urls});if(dialogContext.mounted)Navigator.pop(dialogContext,true);}catch(e){if(dialogContext.mounted){setD(()=>sending=false);ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content:Text('신고 접수에 실패했습니다: $e')));}}},child:Text(sending?'접수 중...':'신고 접수'))]
     )));
