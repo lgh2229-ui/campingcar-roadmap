@@ -47,6 +47,19 @@ for gradle_name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
     g = g.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
     g = g.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 36')
     g = g.replace('targetSdkVersion flutter.targetSdkVersion', 'targetSdkVersion 36')
+    # flutter_local_notifications requires Java 8+ core library desugaring.
+    if gradle_name.endswith('.kts'):
+        compile_marker = '    compileOptions {\\n'
+        if compile_marker in g and 'isCoreLibraryDesugaringEnabled = true' not in g:
+            g = g.replace(compile_marker, compile_marker + '        isCoreLibraryDesugaringEnabled = true\\n', 1)
+        if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in g:
+            g += '\\ndependencies {\\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\\n}\\n'
+    else:
+        compile_marker = '    compileOptions {\\n'
+        if compile_marker in g and 'coreLibraryDesugaringEnabled true' not in g:
+            g = g.replace(compile_marker, compile_marker + '        coreLibraryDesugaringEnabled true\\n', 1)
+        if "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:" not in g:
+            g += "\\ndependencies {\\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'\\n}\\n"
     g = g.replace('applicationId = "kr.co.campingcarroadmap.campingcar_roadmap"', 'applicationId = "kr.co.campingcarroadmap.app"')
     g = g.replace("applicationId 'kr.co.campingcarroadmap.campingcar_roadmap'", "applicationId 'kr.co.campingcarroadmap.app'")
     g = g.replace('applicationId "kr.co.campingcarroadmap.campingcar_roadmap"', 'applicationId "kr.co.campingcarroadmap.app"')
