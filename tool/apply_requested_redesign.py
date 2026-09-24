@@ -49,12 +49,15 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
     Widget serviceRow(String service, void Function(void Function()) setLocal) {
       final selected = draft.contains(service);
       final price = draftPrices[service] ?? '전체';
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        FilterChip(label: Text(_filterLabel(service)), selected: selected, onSelected: (v) => setLocal(() {
-          if (v) { draft.add(service); draftPrices.putIfAbsent(service, () => '전체'); } else { draft.remove(service); draftPrices.remove(service); }
-        })),
-        if (selected) Padding(padding: const EdgeInsets.only(left: 12, bottom: 8), child: Wrap(spacing: 6, children: ['전체','무료','유료'].map((e) => ChoiceChip(label: Text(e), selected: price == e, onSelected: (_) => setLocal(() => draftPrices[service] = e))).toList())),
-      ]);
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(children: [
+          SizedBox(width: 92, child: CheckboxListTile(contentPadding: EdgeInsets.zero, dense: true, controlAffinity: ListTileControlAffinity.leading, title: Text(_filterLabel(service)), value: selected, onChanged: (v) => setLocal(() {
+            if (v == true) { draft.add(service); draftPrices.putIfAbsent(service, () => '전체'); } else { draft.remove(service); draftPrices.remove(service); }
+          }))),
+          if (selected) ...['전체','무료','유료'].map((e) => Expanded(child: RadioListTile<String>(contentPadding: EdgeInsets.zero, dense: true, visualDensity: VisualDensity.compact, title: Text(e), value: e, groupValue: price, onChanged: (v) => setLocal(() => draftPrices[service] = v ?? '전체')))),
+        ]),
+      );
     }
     await showDialog<void>(
       context: context,
@@ -70,7 +73,7 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
             const SizedBox(height: 12),
             const Text('캠핑카 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            ...businessFilters.map((e) => serviceRow(e, setLocal)),
+            Wrap(spacing: 6, runSpacing: 6, children: businessFilters.map((e) => FilterChip(label: Text(e == '부품·용품' ? '부품/용품' : e), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); draftPrices.remove(e); } }))).toList()),
           ]))),
           actions: [
             TextButton(onPressed: () => setLocal(() { draft.clear(); draftPrices.clear(); }), child: const Text('초기화')),
