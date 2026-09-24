@@ -40,7 +40,8 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
   }
 
   Future<void> _showMapFilterDialog() async {
-    final draft = Set<String>.from(selectedMapFilters);\n    var draftPrice = mapPriceFilter;
+    final draft = Set<String>.from(selectedMapFilters);
+    var draftPrice = mapPriceFilter;
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -51,7 +52,11 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
             child: SingleChildScrollView(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                 CheckboxListTile(contentPadding: EdgeInsets.zero, value: draft.isEmpty, title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)), onChanged: (_) => setLocal(() => draft.clear())),
-                const Divider(),\n                const Text('요금', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),\n                const SizedBox(height: 8),\n                Wrap(spacing: 6, children: ['전체','무료','유료'].map((e) => ChoiceChip(label: Text(e), selected: draftPrice == e, onSelected: (_) => setLocal(() => draftPrice = e))).toList()),\n                const SizedBox(height: 18),
+                const Divider(),
+                const Text('요금', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(spacing: 6, children: ['전체','무료','유료'].map((e) => ChoiceChip(label: Text(e), selected: draftPrice == e, onSelected: (_) => setLocal(() => draftPrice = e))).toList()),
+                const SizedBox(height: 18),
                 const Text('캠핑·편의', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Wrap(spacing: 6, runSpacing: 6, children: campingFilters.map((e) => FilterChip(label: Text(_filterLabel(e)), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
