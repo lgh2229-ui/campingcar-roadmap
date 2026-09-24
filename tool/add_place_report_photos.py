@@ -56,7 +56,7 @@ if 'Future<List<Map<String,dynamic>>> _notificationRows()' not in s:
     build_anchor='  @override\n  Widget build(BuildContext context) {'
     if build_anchor not in s: raise SystemExit('notification build anchor missing')
     s=s.replace(build_anchor,notify_methods+build_anchor,1)
-notification_anchor="        if (selectedSpot != null)\\n          Positioned(left: 12, right: 12, bottom: 86,"
+notification_anchor="        if (selectedSpot != null)"
 if notification_anchor in s and 'child: _notificationButton()' not in s:
     s=s.replace(notification_anchor,"        Positioned(right: 14, top: 118, child: Material(elevation: 2, shape: const CircleBorder(), child: _notificationButton())),\\n"+notification_anchor,1)
 if 'Future<List<Map<String,dynamic>>> _notificationRows()' not in s or 'child: _notificationButton()' not in s: raise SystemExit('notification UI patch missing')
