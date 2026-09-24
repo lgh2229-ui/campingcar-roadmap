@@ -14,7 +14,7 @@ s = s.replace(
     "  static const serviceFilters = ['전체', ...campingFilters, ...businessFilters];",
 )
 if '  final Set<String> selectedMapFilters = {};' not in s:
-    s = s.replace('class _HomeScreenState extends State<HomeScreen> {', 'class _HomeScreenState extends State<HomeScreen> {\n  final Set<String> selectedMapFilters = {};\n  String mapPriceFilter = '전체';', 1)
+    s = s.replace('class _HomeScreenState extends State<HomeScreen> {', "class _HomeScreenState extends State<HomeScreen> {\n  final Set<String> selectedMapFilters = {};\n  String mapPriceFilter = '전체';", 1)
 s = s.replace("  String filter = '전체';\n", '')
 
 start = s.find('  bool _isMine(Place p)')
