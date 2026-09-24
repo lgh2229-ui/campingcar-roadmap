@@ -33,6 +33,34 @@ old_place="itemBuilder: (_, i) => ClipRRect(borderRadius: BorderRadius.circular(
 new_place="itemBuilder: (_, i) => GestureDetector(onTap:()=>_openPlacePhotos(p.photoUrls,i),child:ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i])))"
 if old_place in s:s=s.replace(old_place,new_place,1)
 if '_openPlacePhotos(p.photoUrls,i)' not in s: raise SystemExit('place photo tap patch missing')
+
+# Add in-app notification center and unread badge.
+if 'Future<List<Map<String,dynamic>>> _notificationRows()' not in s:
+    notify_methods=r'''  Future<List<Map<String,dynamic>>> _notificationRows() async {
+    final db=Supabase.instance.client;
+    final rows=await db.from('notifications').select().eq('user_id',_currentAuthorId).order('created_at',ascending:false).limit(100);
+    return List<Map<String,dynamic>>.from(rows);
+  }
+  Future<int> _unreadNotificationCount() async {
+    try { final rows=await _notificationRows(); return rows.where((row)=>row['is_read']!=true).length; } catch (_) { return 0; }
+  }
+  Future<void> _openNotifications() async {
+    final db=Supabase.instance.client; var rows=await _notificationRows(); if(!mounted)return;
+    await showModalBottomSheet<void>(context:context,showDragHandle:true,isScrollControlled:true,builder:(sheetContext)=>StatefulBuilder(builder:(sheetContext,setSheetState)=>SafeArea(child:SizedBox(height:MediaQuery.of(sheetContext).size.height*.78,child:Column(children:[
+      Padding(padding:const EdgeInsets.fromLTRB(16,0,8,8),child:Row(children:[const Expanded(child:Text('알림',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold))),if(rows.any((row)=>row['is_read']!=true))TextButton(onPressed:()async{await db.from('notifications').update({'is_read':true}).eq('user_id',_currentAuthorId).eq('is_read',false);rows=rows.map((row)=><String,dynamic>{...row,'is_read':true}).toList();setSheetState((){});if(mounted)setState((){});},child:const Text('모두 읽음'))])),
+      Expanded(child:rows.isEmpty?const Center(child:Text('새 알림이 없습니다.')):ListView.separated(itemCount:rows.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final row=rows[i],unread=row['is_read']!=true;return ListTile(leading:Icon(unread?Icons.notifications_active:Icons.notifications_none),title:Text(row['title']?.toString()??'',style:TextStyle(fontWeight:unread?FontWeight.bold:FontWeight.normal)),subtitle:Text((row['body']?.toString()??'')+'\\n'+(row['created_at']?.toString()??'')),isThreeLine:true,onTap:()async{if(unread){await db.from('notifications').update({'is_read':true}).eq('id',row['id']);setSheetState(()=>rows[i]=<String,dynamic>{...row,'is_read':true});if(mounted)setState((){});}});}))
+    ]))))));
+  }
+  Widget _notificationButton()=>FutureBuilder<int>(future:_unreadNotificationCount(),builder:(context,snapshot){final n=snapshot.data??0;return Stack(clipBehavior:Clip.none,children:[IconButton(onPressed:_openNotifications,icon:const Icon(Icons.notifications_outlined),tooltip:'알림'),if(n>0)Positioned(right:2,top:2,child:Container(padding:const EdgeInsets.symmetric(horizontal:5,vertical:1),decoration:BoxDecoration(color:Theme.of(context).colorScheme.error,borderRadius:BorderRadius.circular(10)),child:Text(n>99?'99+':n.toString(),style:TextStyle(color:Theme.of(context).colorScheme.onError,fontSize:10,fontWeight:FontWeight.bold))))]);});
+'''
+    build_anchor='  @override\n  Widget build(BuildContext context) {'
+    if build_anchor not in s: raise SystemExit('notification build anchor missing')
+    s=s.replace(build_anchor,notify_methods+build_anchor,1)
+notification_anchor=\"        if (selectedSpot != null)\\n          Positioned(left: 12, right: 12, bottom: 86,\"
+if notification_anchor in s and 'child: _notificationButton()' not in s:
+    s=s.replace(notification_anchor,\"        Positioned(right: 14, top: 118, child: Material(elevation: 2, shape: const CircleBorder(), child: _notificationButton())),\\n\"+notification_anchor,1)
+if 'Future<List<Map<String,dynamic>>> _notificationRows()' not in s or 'child: _notificationButton()' not in s: raise SystemExit('notification UI patch missing')
+
 anchor='  Widget _heightCompatibility(Place p)'
 if anchor not in s: raise SystemExit('place report: height anchor missing')
 if 'Future<void> _reportPlace(Place p)' not in s:
