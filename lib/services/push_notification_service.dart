@@ -27,6 +27,9 @@ class PushNotificationService {
       await _local.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
       await FirebaseMessaging.instance.requestPermission(alert:true,badge:true,sound:true);
       await _registerToken();
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) _handleTap(initial);
       await _tokenSub?.cancel();
       _tokenSub = FirebaseMessaging.instance.onTokenRefresh.listen(_saveToken);
       FirebaseMessaging.onMessage.listen((m) async {
@@ -34,6 +37,10 @@ class PushNotificationService {
         await _local.show(m.hashCode,n.title,n.body,const NotificationDetails(android:AndroidNotificationDetails('campingcar_alerts','캠핑카족 알림',channelDescription:'장소 승인, 신고, 의견 및 서비스 알림',importance:Importance.high,priority:Priority.high)));
       });
     } catch (e) { debugPrint('Push init failed: $e'); }
+  }
+
+  void _handleTap(RemoteMessage message) {
+    debugPrint('Push opened: kind=${message.data['kind']} reference_id=${message.data['reference_id']}');
   }
 
   Future<void> syncForSignedInUser() => _registerToken();
