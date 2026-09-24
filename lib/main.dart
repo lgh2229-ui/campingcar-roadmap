@@ -11,6 +11,7 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/recovery_screen.dart';
 import 'screens/signup_screen.dart';
+import 'services/push_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,7 @@ Future<void> main() async {
     }
   }
 
+  await PushNotificationService.instance.initialize(client);
   runApp(CampingCarRoadmapApp(client: client));
 }
 
@@ -70,6 +72,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   }
 
   Future<void> _logout() async {
+    await PushNotificationService.instance.disableCurrentToken();
     await auth.logout();
     if (mounted) setState(() => user = null);
   }
@@ -88,7 +91,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
       home: !ready
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : user == null
-              ? LoginScreen(auth: auth, onLoggedIn: (u) => setState(() => user = u))
+              ? LoginScreen(auth: auth, onLoggedIn: (u) { setState(() => user = u); PushNotificationService.instance.syncForSignedInUser(); })
               : user!.isAdministrator
                   ? AdminHomeScreen(
                       user: user!,
