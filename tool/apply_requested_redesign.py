@@ -55,7 +55,7 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
           SizedBox(width: 135, child: CheckboxListTile(contentPadding: EdgeInsets.zero, dense: true, controlAffinity: ListTileControlAffinity.leading, title: Text(_filterLabel(service), maxLines: 1, softWrap: false), value: selected, onChanged: (v) => setLocal(() {
             if (v == true) { draft.add(service); draftPrices.putIfAbsent(service, () => '전체'); } else { draft.remove(service); draftPrices.remove(service); }
           }))),
-          if (selected) Expanded(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: ['전체','무료','유료'].map((e) => Flexible(child: InkWell(onTap: () => setLocal(() => draftPrices[service] = e), child: Row(mainAxisSize: MainAxisSize.min, children: [Radio<String>(materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: const VisualDensity(horizontal: -4, vertical: -4), value: e, groupValue: price, onChanged: (v) => setLocal(() => draftPrices[service] = v ?? '전체')), Text(e, maxLines: 1, softWrap: false, overflow: TextOverflow.visible)]))).toList())),
+          if (selected) Expanded(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: ['전체','무료','유료'].map<Widget>((e) => Flexible(child: InkWell(onTap: () => setLocal(() => draftPrices[service] = e), child: Row(mainAxisSize: MainAxisSize.min, children: [Radio<String>(materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: const VisualDensity(horizontal: -4, vertical: -4), value: e, groupValue: price, onChanged: (v) => setLocal(() => draftPrices[service] = v ?? '전체')), Text(e, maxLines: 1, softWrap: false)])))).toList())),
         ]),
       );
     }
