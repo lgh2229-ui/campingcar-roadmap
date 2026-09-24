@@ -4,6 +4,35 @@ p=Path('lib/screens/home_screen.dart')
 s=p.read_text(encoding='utf-8')
 if "package:supabase_flutter/supabase_flutter.dart" not in s:
     s=s.replace("import 'package:latlong2/latlong.dart';", "import 'package:latlong2/latlong.dart';\nimport 'package:supabase_flutter/supabase_flutter.dart';",1)
+# Make registered place photos tappable in the normal place-detail sheet too.
+if 'Future<void> _openPlacePhotos(' not in s:
+    place_viewer=r'''  Future<void> _openPlacePhotos(List<String> urls,int initial) async {
+    if(urls.isEmpty)return;
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(viewerContext){
+      return Scaffold(
+        backgroundColor:Colors.black,
+        appBar:AppBar(backgroundColor:Colors.black,foregroundColor:Colors.white,title:const Text('장소 사진')),
+        body:PageView.builder(
+          controller:PageController(initialPage:initial),
+          itemCount:urls.length,
+          itemBuilder:(pageContext,i)=>InteractiveViewer(
+            minScale:1,
+            maxScale:5,
+            child:Center(child:_placePhoto(urls[i])),
+          ),
+        ),
+      );
+    }));
+  }
+
+'''
+    photo_anchor='  Future<void> _showPlace(Place p) async {'
+    if photo_anchor not in s: raise SystemExit('place photo viewer anchor missing')
+    s=s.replace(photo_anchor,place_viewer+photo_anchor,1)
+old_place="itemBuilder: (_, i) => ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i]))"
+new_place="itemBuilder: (_, i) => GestureDetector(onTap:()=>_openPlacePhotos(p.photoUrls,i),child:ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i])))"
+if old_place in s:s=s.replace(old_place,new_place,1)
+if '_openPlacePhotos(p.photoUrls,i)' not in s: raise SystemExit('place photo tap patch missing')
 anchor='  Widget _heightCompatibility(Place p)'
 if anchor not in s: raise SystemExit('place report: height anchor missing')
 if 'Future<void> _reportPlace(Place p)' not in s:
