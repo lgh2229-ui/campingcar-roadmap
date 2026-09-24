@@ -12,6 +12,7 @@ required_permissions = [
     'android.permission.CAMERA',
     'android.permission.READ_MEDIA_IMAGES',
     'com.google.android.gms.permission.AD_ID',
+    'android.permission.POST_NOTIFICATIONS',
 ]
 manifest_tag = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
 if manifest_tag in s:
