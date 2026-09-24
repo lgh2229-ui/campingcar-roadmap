@@ -14,7 +14,7 @@ s = s.replace(
     "  static const serviceFilters = ['전체', ...campingFilters, ...businessFilters];",
 )
 if '  final Set<String> selectedMapFilters = {};' not in s:
-    s = s.replace('class _HomeScreenState extends State<HomeScreen> {', "class _HomeScreenState extends State<HomeScreen> {\n  final Set<String> selectedMapFilters = {};\n  String mapPriceFilter = '전체';", 1)
+    s = s.replace('class _HomeScreenState extends State<HomeScreen> {', "class _HomeScreenState extends State<HomeScreen> {\n  final Set<String> selectedMapFilters = {};\n  final Map<String, String> mapServicePriceFilters = {};", 1)
 s = s.replace("  String filter = '전체';\n", '')
 
 start = s.find('  bool _isMine(Place p)')
@@ -23,17 +23,21 @@ if start < 0 or end < 0:
     raise SystemExit('filter anchors missing')
 logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
 
+  bool _servicePriceMatches(Place p, String service, String price) {
+    if (!p.services.contains(service)) return false;
+    if (price == '전체') return true;
+    final value = '${p.prices[service] ?? ''}'.trim();
+    if (value.isEmpty || value.contains('정보 없음') || value.contains('확인 필요') || value.contains('금액정보 없음')) return false;
+    final isFree = value.contains('무료');
+    return price == '무료' ? isFree : !isFree;
+  }
+
   List<Place> get visiblePlaces {
     final approved = places.where((p) => p.isApproved).toList();
+    if (selectedMapFilters.isEmpty) return approved;
     return approved.where((p) {
-      final services = selectedMapFilters.isEmpty ? p.services : p.services.where(selectedMapFilters.contains).toList();
-      if (selectedMapFilters.isNotEmpty && services.isEmpty) return false;
-      if (mapPriceFilter == '전체') return true;
-      for (final service in services) {
-        final value = '${p.prices[service] ?? ''}'.trim();
-        if (value.isEmpty || value.contains('정보 없음') || value.contains('확인 필요') || value.contains('금액정보 없음')) continue;
-        final isFree = value.contains('무료');
-        if (mapPriceFilter == '무료' ? isFree : !isFree) return true;
+      for (final service in selectedMapFilters) {
+        if (_servicePriceMatches(p, service, mapServicePriceFilters[service] ?? '전체')) return true;
       }
       return false;
     }).toList();
@@ -41,35 +45,36 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
 
   Future<void> _showMapFilterDialog() async {
     final draft = Set<String>.from(selectedMapFilters);
-    var draftPrice = mapPriceFilter;
+    final draftPrices = Map<String, String>.from(mapServicePriceFilters);
+    Widget serviceRow(String service, void Function(void Function()) setLocal) {
+      final selected = draft.contains(service);
+      final price = draftPrices[service] ?? '전체';
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        FilterChip(label: Text(_filterLabel(service)), selected: selected, onSelected: (v) => setLocal(() {
+          if (v) { draft.add(service); draftPrices.putIfAbsent(service, () => '전체'); } else { draft.remove(service); draftPrices.remove(service); }
+        })),
+        if (selected) Padding(padding: const EdgeInsets.only(left: 12, bottom: 8), child: Wrap(spacing: 6, children: ['전체','무료','유료'].map((e) => ChoiceChip(label: Text(e), selected: price == e, onSelected: (_) => setLocal(() => draftPrices[service] = e))).toList())),
+      ]);
+    }
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
           title: const Text('지도 필터'),
-          content: SizedBox(
-            width: 420,
-            child: SingleChildScrollView(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                CheckboxListTile(contentPadding: EdgeInsets.zero, value: draft.isEmpty, title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)), onChanged: (_) => setLocal(() => draft.clear())),
-                const Divider(),
-                const Text('요금', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(spacing: 6, children: ['전체','무료','유료'].map((e) => ChoiceChip(label: Text(e), selected: draftPrice == e, onSelected: (_) => setLocal(() => draftPrice = e))).toList()),
-                const SizedBox(height: 18),
-                const Text('캠핑·편의', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: campingFilters.map((e) => FilterChip(label: Text(_filterLabel(e)), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
-                const SizedBox(height: 18),
-                const Text('캠핑카 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(spacing: 6, runSpacing: 6, children: businessFilters.map((e) => FilterChip(label: Text(e), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); } }))).toList()),
-              ]),
-            ),
-          ),
+          content: SizedBox(width: 420, child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            CheckboxListTile(contentPadding: EdgeInsets.zero, value: draft.isEmpty, title: const Text('전체', style: TextStyle(fontWeight: FontWeight.bold)), onChanged: (_) => setLocal(() { draft.clear(); draftPrices.clear(); })),
+            const Divider(),
+            const Text('캠핑·편의', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            ...campingFilters.map((e) => serviceRow(e, setLocal)),
+            const SizedBox(height: 12),
+            const Text('캠핑카 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            ...businessFilters.map((e) => serviceRow(e, setLocal)),
+          ]))),
           actions: [
-            TextButton(onPressed: () => setLocal(() => draft.clear()), child: const Text('초기화')),
-            FilledButton(onPressed: () { setState(() { selectedMapFilters..clear()..addAll(draft); mapPriceFilter = draftPrice; }); Navigator.pop(ctx); }, child: const Text('적용')),
+            TextButton(onPressed: () => setLocal(() { draft.clear(); draftPrices.clear(); }), child: const Text('초기화')),
+            FilledButton(onPressed: () { setState(() { selectedMapFilters..clear()..addAll(draft); mapServicePriceFilters..clear()..addAll(draftPrices); }); Navigator.pop(ctx); }, child: const Text('적용')),
           ],
         ),
       ),
@@ -90,7 +95,7 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
 s = s[:start] + logic + s[end:]
 old_choice = "          SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),"
 old_helper = "          SingleChildScrollView(\n            scrollDirection: Axis.horizontal,\n            child: Row(children: serviceFilters.map(_mapFilterButton).toList()),\n          ),"
-new_filter = "          Align(alignment: Alignment.centerLeft, child: FilledButton.tonalIcon(onPressed: _showMapFilterDialog, icon: const Icon(Icons.tune), label: Text(selectedMapFilters.isEmpty && mapPriceFilter == '전체' ? '필터 · 전체' : '필터 · $mapPriceFilter · ${selectedMapFilters.length}'))),"
+new_filter = "          Align(alignment: Alignment.centerLeft, child: FilledButton.tonalIcon(onPressed: _showMapFilterDialog, icon: const Icon(Icons.tune), label: Text(selectedMapFilters.isEmpty ? '필터 · 전체' : '필터 ${selectedMapFilters.length}'))),"
 if old_choice in s:
     s = s.replace(old_choice, new_filter, 1)
 elif old_helper in s:
