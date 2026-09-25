@@ -36,10 +36,13 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
     final approved = places.where((p) => p.isApproved).toList();
     if (selectedMapFilters.isEmpty) return approved;
     return approved.where((p) {
+      // Every selected filter must match the same place (AND semantics).
+      // Previously this returned true when ANY selected service matched,
+      // so a place with free parking but unavailable water still appeared.
       for (final service in selectedMapFilters) {
-        if (_servicePriceMatches(p, service, mapServicePriceFilters[service] ?? '전체')) return true;
+        if (!_servicePriceMatches(p, service, mapServicePriceFilters[service] ?? '전체')) return false;
       }
-      return false;
+      return true;
     }).toList();
   }
 
