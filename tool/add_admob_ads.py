@@ -32,10 +32,15 @@ class _AdMobBannerState extends State<AdMobBanner> {
   }
 
   void _load() {
+    const productionAdUnitId = String.fromEnvironment('ADMOB_BANNER_UNIT_ID');
+    final adUnitId = kDebugMode
+        ? 'ca-app-pub-3940256099942544/6300978111'
+        : productionAdUnitId;
+    // Never create a release BannerAd with a placeholder/invalid unit ID.
+    // An invalid release ID can terminate the app on startup on some devices.
+    if (adUnitId.isEmpty) return;
     final ad = BannerAd(
-      adUnitId: kDebugMode
-          ? 'ca-app-pub-3940256099942544/6300978111'
-          : 'ca-app-pub-4393751265116181/REPLACE_WITH_BANNER_UNIT_ID',
+      adUnitId: adUnitId,
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(
