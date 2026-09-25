@@ -33,22 +33,6 @@ if 'google_mobile_ads:' in Path('pubspec.yaml').read_text(encoding='utf-8') and 
     if start >= 0 and end >= 0:
         metadata = '''\n        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="ca-app-pub-3940256099942544~3347511713" />'''
         s = s[:end + 1] + metadata + s[end + 1:]
-# AdMob startup isolation test: remove the SDK's automatic startup provider.
-# The app's banner code still initializes Mobile Ads after Flutter's first frame.
-if 'google_mobile_ads:' in Path('pubspec.yaml').read_text(encoding='utf-8'):
-    if 'xmlns:tools=' not in s:
-        s = s.replace(
-            '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-            '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">',
-            1,
-        )
-    if 'MobileAdsInitProvider' not in s:
-        provider = """        <provider
-            android:name="com.google.android.gms.ads.MobileAdsInitProvider"
-            tools:node="remove" />
-"""
-        s = s.replace('</application>', provider + '</application>', 1)
-
 p.write_text(s, encoding='utf-8')
 
 # Google Play 2026 target requirement: ensure API 36 where Flutter template allows it.
