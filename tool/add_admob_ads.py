@@ -5,7 +5,7 @@ from pathlib import Path
 pub = Path('pubspec.yaml')
 s = pub.read_text(encoding='utf-8')
 if 'google_mobile_ads:' not in s:
-    s = s.replace('  url_launcher: ^6.3.2\n', '  url_launcher: ^6.3.2\n  google_mobile_ads: ^6.0.0\n')
+    s = s.replace('  url_launcher: ^6.3.2\n', '  url_launcher: ^6.3.2\n  google_mobile_ads: ^7.0.0\n')
     pub.write_text(s, encoding='utf-8')
 
 ad = Path('lib/widgets/admob_banner.dart')
