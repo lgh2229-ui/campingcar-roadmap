@@ -125,7 +125,7 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
           python tool/configure_release_signing.py
-          flutter build apk --release --dart-define=SUPABASE_URL="$SUPABASE_URL" --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+          flutter build apk --release --dart-define=USE_NEXT_GEN_SDK=true --dart-define=SUPABASE_URL="$SUPABASE_URL" --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
       - name: Dump merged release manifest and dependency tree
         run: |
           echo "=== MERGED RELEASE MANIFEST ADS ==="
