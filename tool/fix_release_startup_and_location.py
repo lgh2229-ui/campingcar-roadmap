@@ -6,6 +6,7 @@ from pathlib import Path
 p = Path('lib/main.dart')
 s = p.read_text(encoding='utf-8')
 s = s.replace('  await MobileAds.instance.initialize();\n', '')
+s = s.replace('  MobileAds.instance.initialize();\n', '')
 s = s.replace('  MobileAds.instance.initialize().catchError((_) {});\n', '')
 s = s.replace('  // Ads are optional. Never prevent app startup if the SDK is slow/fails.\n', '')
 # Remove the Mobile Ads import too, so release startup has no ads native call.
