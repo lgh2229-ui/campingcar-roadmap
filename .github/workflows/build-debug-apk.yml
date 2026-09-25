@@ -59,6 +59,15 @@ jobs:
         run: rm -f test/widget_test.dart
       - name: Prepare Android permissions, AdMob, and API 36
         run: python tool/prepare_android.py
+      - name: Verify AdMob manifest wiring
+        run: |
+          echo "=== pubspec AdMob ==="
+          grep -n 'google_mobile_ads' pubspec.yaml || true
+          echo "=== AndroidManifest AdMob ==="
+          grep -n -A3 -B2 'com.google.android.gms.ads.APPLICATION_ID' android/app/src/main/AndroidManifest.xml || true
+          if grep -q 'google_mobile_ads:' pubspec.yaml; then
+            grep -q 'com.google.android.gms.ads.APPLICATION_ID' android/app/src/main/AndroidManifest.xml || (echo "FATAL: AdMob dependency enabled but APPLICATION_ID missing" && exit 1)
+          fi
       - name: Configure Firebase Android
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
