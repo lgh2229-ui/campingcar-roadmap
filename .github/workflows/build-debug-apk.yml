@@ -133,6 +133,25 @@ jobs:
           echo "=== RELEASE ADS DEPENDENCIES ==="
           cd android
           ./gradlew :app:dependencies --configuration releaseRuntimeClasspath | grep -E 'play-services-ads|google_mobile_ads|play-services-basement|play-services-tasks' || true
+      - name: Create one-click Windows crash log collector
+        run: |
+          cat > collect-crash-log.bat <<'EOF'
+          @echo off
+          adb devices
+          adb logcat -c
+          adb shell am force-stop kr.co.campingcarroadmap.app
+          adb shell monkey -p kr.co.campingcarroadmap.app 1
+          timeout /t 5 /nobreak >nul
+          adb logcat -d -v threadtime > campingcar-crash-log.txt
+          echo.
+          echo DONE: campingcar-crash-log.txt
+          pause
+          EOF
+      - name: Upload crash log collector
+        uses: actions/upload-artifact@v4
+        with:
+          name: campingcar-crash-log-collector-windows
+          path: collect-crash-log.bat
       - name: Upload release APK for device validation
         uses: actions/upload-artifact@v4
         with:
