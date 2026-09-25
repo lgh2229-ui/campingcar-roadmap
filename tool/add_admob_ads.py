@@ -1,6 +1,6 @@
 from pathlib import Path
 
-# AdMob diagnostic build: latest plugin + Google's SAMPLE app ID/test banner.
+# AdMob production banner build: validated plugin/toolchain + production banner ID.
 # This separates an account/app-ID configuration problem from a plugin problem.
 pub = Path('pubspec.yaml')
 s = pub.read_text(encoding='utf-8')
@@ -29,7 +29,7 @@ class _AdMobBannerState extends State<AdMobBanner> {
         await MobileAds.instance.initialize();
         if (!mounted) return;
         final ad = BannerAd(
-          adUnitId: 'ca-app-pub-3940256099942544/6300978111',
+          adUnitId: 'ca-app-pub-4393751265116181/4592255152',
           size: AdSize.banner,
           request: const AdRequest(),
           listener: BannerAdListener(
@@ -72,4 +72,4 @@ if 'const AdMobBanner()' not in h:
     if close < 0: raise SystemExit('navigation closing marker not found')
     h=h[:close+len('\n      ),')]+']),'+h[close+len('\n      ),'):]
 home.write_text(h, encoding='utf-8')
-print('AdMob diagnostic: v9.1.0 + official test banner')
+print('AdMob production banner configured')
