@@ -33,8 +33,20 @@ Future<void> main() async {
     }
   }
 
-  await PushNotificationService.instance.initialize(client);
   runApp(CampingCarRoadmapApp(client: client));
+
+  // Start optional push services only after Flutter has rendered the app.
+  // A native Firebase/FCM failure must never block the first app frame.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future<void>(() async {
+      try {
+        await PushNotificationService.instance.initialize(client);
+      } catch (error, stackTrace) {
+        debugPrint('Push startup failed after first frame: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    });
+  });
 }
 
 class CampingCarRoadmapApp extends StatefulWidget {
