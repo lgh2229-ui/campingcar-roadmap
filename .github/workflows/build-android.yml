@@ -47,6 +47,8 @@ jobs:
           cache: true
       - name: Generate Android platform files
         run: flutter create . --platforms=android --org kr.co.campingcarroadmap --project-name campingcar_roadmap
+      - name: Pin Android toolchain for Mobile Ads compatibility
+        run: python tool/pin_android_toolchain.py
       - name: Remove generated default widget test
         run: rm -f test/widget_test.dart
       - name: Prepare Android permissions, AdMob, and API 36
@@ -87,7 +89,7 @@ jobs:
         run: |
           CODE=$(sed -n 's/^version: .*+\([0-9][0-9]*\)$/\1/p' pubspec.yaml)
           test -n "$CODE" || (echo "Cannot read versionCode" && exit 1)
-          if [ "$CODE" -le 107 ]; then echo "versionCode $CODE was already used; must be > 107"; exit 1; fi
+          if [ "$CODE" -le 111 ]; then echo "versionCode $CODE was already used; must be > 111"; exit 1; fi
           echo "Building Play versionCode $CODE"
       - name: Verify Supabase build configuration
         env:
