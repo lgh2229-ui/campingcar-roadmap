@@ -31,7 +31,7 @@ if Path('lib/widgets/admob_banner.dart').exists() and 'com.google.android.gms.ad
     start = s.find(marker)
     end = s.find('>', start)
     if start >= 0 and end >= 0:
-        metadata = '''\n        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="ca-app-pub-4393751265116181~3875944017" />'''
+        metadata = '''\n        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="ca-app-pub-3940256099942544~3347511713" />'''
         s = s[:end + 1] + metadata + s[end + 1:]
 p.write_text(s, encoding='utf-8')
 
