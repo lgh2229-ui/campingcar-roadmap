@@ -24,9 +24,7 @@ class _AdMobBannerState extends State<AdMobBanner> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        await MobileAds.instance.initialize();
+    // Isolation test: keep the google_mobile_ads plugin linked, but do not\n    // call any Mobile Ads API from Dart. This distinguishes plugin loading\n    // from SDK initialization/ad loading.\n    return;\n    WidgetsBinding.instance.addPostFrameCallback((_) async {\n      try {\n        await MobileAds.instance.initialize();
         if (!mounted) return;
         final ad = BannerAd(
           adUnitId: 'ca-app-pub-3940256099942544/6300978111',
