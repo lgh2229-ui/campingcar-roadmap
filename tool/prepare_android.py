@@ -25,8 +25,8 @@ if manifest_tag in s:
 
 s = s.replace('android:label="campingcar_roadmap"', 'android:label="캠핑카족 로드맵"')
 
-# Google Mobile Ads requires the AdMob app ID as Android manifest metadata.
-if 'com.google.android.gms.ads.APPLICATION_ID' not in s:
+# Google Mobile Ads metadata is added only when the plugin is enabled.
+if Path('lib/widgets/admob_banner.dart').exists() and 'com.google.android.gms.ads.APPLICATION_ID' not in s:
     marker = '<application'
     start = s.find(marker)
     end = s.find('>', start)
