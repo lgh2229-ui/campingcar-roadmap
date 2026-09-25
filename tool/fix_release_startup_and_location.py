@@ -8,6 +8,8 @@ s = p.read_text(encoding='utf-8')
 s = s.replace('  await MobileAds.instance.initialize();\n', '')
 s = s.replace('  MobileAds.instance.initialize().catchError((_) {});\n', '')
 s = s.replace('  // Ads are optional. Never prevent app startup if the SDK is slow/fails.\n', '')
+# Remove the Mobile Ads import too, so release startup has no ads native call.
+s = s.replace("import 'package:google_mobile_ads/google_mobile_ads.dart';\n", '')
 p.write_text(s, encoding='utf-8')
 
 # Persist and render the exact GPS point when My Location is pressed.
