@@ -98,6 +98,10 @@ jobs:
         run: |
           test -n "$SUPABASE_URL" || (echo "Missing SUPABASE_URL" && exit 1)
           test -n "$SUPABASE_PUBLISHABLE_KEY" || (echo "Missing SUPABASE_PUBLISHABLE_KEY" && exit 1)
+      - name: Verify production AdMob IDs
+        run: |
+          grep -q '4393751265116181~3875944017' android/app/src/main/AndroidManifest.xml || (echo "Production AdMob app ID missing" && exit 1)
+          grep -q '4393751265116181/4592255152' lib/widgets/admob_banner.dart || (echo "Production banner ID missing" && exit 1)
       - name: Build release AAB with Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
