@@ -122,9 +122,26 @@ new = """      bottomNavigationBar: Column(
           ),
         ],
       ),"""
-if old not in h:
-    raise SystemExit('HomeScreen bottomNavigationBar marker not found')
-h = h.replace(old, new, 1)
+if old in h:
+    h = h.replace(old, new, 1)
+elif 'const AdMobBanner()' not in h:
+    marker = '      bottomNavigationBar:'
+    pos = h.find(marker)
+    if pos < 0:
+        raise SystemExit('HomeScreen bottomNavigationBar not found')
+    # Other build patches may have reformatted NavigationBar. Inject the banner
+    # using a stable wrapper around the existing bottomNavigationBar expression.
+    start = pos + len(marker)
+    nav = h.find('NavigationBar(', start)
+    if nav < 0:
+        raise SystemExit('HomeScreen NavigationBar not found')
+    h = h[:start] + ' Column(mainAxisSize: MainAxisSize.min, children: [const AdMobBanner(), ' + h[start:]
+    # Close the wrapper immediately after the NavigationBar block, before Scaffold close.
+    close = h.find('\n      ),\n    );', nav)
+    if close < 0:
+        raise SystemExit('HomeScreen NavigationBar closing marker not found')
+    h = h[:close + len('\n      ),')] + ']),' + h[close + len('\n      ),'):]
+
 home.write_text(h, encoding='utf-8')
 
 print('AdMob banner restored with Google test banner for debug builds')
