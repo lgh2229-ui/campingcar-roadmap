@@ -126,6 +126,13 @@ jobs:
           EOF
           python tool/configure_release_signing.py
           flutter build apk --release --dart-define=SUPABASE_URL="$SUPABASE_URL" --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+      - name: Dump merged release manifest and dependency tree
+        run: |
+          echo "=== MERGED RELEASE MANIFEST ADS ==="
+          find build -path '*merged_manifests*release*AndroidManifest.xml' -print -exec grep -n -A4 -B3 'com.google.android.gms.ads.APPLICATION_ID' {} \; || true
+          echo "=== RELEASE ADS DEPENDENCIES ==="
+          cd android
+          ./gradlew :app:dependencies --configuration releaseRuntimeClasspath | grep -E 'play-services-ads|google_mobile_ads|play-services-basement|play-services-tasks' || true
       - name: Upload release APK for device validation
         uses: actions/upload-artifact@v4
         with:
