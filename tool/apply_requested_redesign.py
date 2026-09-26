@@ -60,8 +60,18 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
             if (v == true) { draft.add(service); draftPrices.putIfAbsent(service, () => '전체'); } else { draft.remove(service); draftPrices.remove(service); }
           }));
           final prices = Wrap(spacing: compact ? 2 : 6, runSpacing: 2, children: ['전체','무료','유료'].map<Widget>((e) => InkWell(onTap: () => setLocal(() => draftPrices[service] = e), child: Row(mainAxisSize: MainAxisSize.min, children: [Radio<String>(materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, visualDensity: const VisualDensity(horizontal: -4, vertical: -4), value: e, groupValue: price, onChanged: (v) => setLocal(() => draftPrices[service] = v ?? '전체')), Text(e, maxLines: 1, softWrap: false)]))).toList());
-          if (compact) return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [SizedBox(width: double.infinity, child: check), if (selected) Padding(padding: const EdgeInsets.only(left: 42, bottom: 4), child: prices)]);
-          return Row(children: [SizedBox(width: 135, child: check), if (selected) Expanded(child: prices)]);
+          final scale = compact ? (box.maxWidth / 390).clamp(0.78, 1.0) : 1.0;
+          return FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: box.maxWidth / scale,
+              child: Row(children: [
+                SizedBox(width: compact ? 125 : 135, child: check),
+                if (selected) Expanded(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: prices)),
+              ]),
+            ),
+          );
         }),
       );
     }
