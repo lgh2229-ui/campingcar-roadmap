@@ -1,7 +1,7 @@
 name: campingcar_roadmap
 description: 캠핑카족 로드맵 Flutter MVP
 publish_to: 'none'
-version: 1.9.19+112
+version: 1.9.20+113
 # trigger debug build after release crash fix
 
 environment:
