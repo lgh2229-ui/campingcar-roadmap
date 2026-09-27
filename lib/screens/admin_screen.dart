@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/admin_review_task.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
@@ -52,6 +54,8 @@ class _AdminScreenState extends State<AdminScreen> {
     final selected = p.services.toSet();
     final prices = <String, TextEditingController>{for (final s in services) s: TextEditingController(text: p.prices[s] ?? '')};
     String reservation = p.reservation.isEmpty ? '예약불필요' : p.reservation;
+    final keptPhotos = <String>[...p.photoUrls];
+    final newPhotos = <XFile>[];
 
     final save = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
       title: const Text('등록 장소 수정'),
@@ -69,6 +73,17 @@ class _AdminScreenState extends State<AdminScreen> {
         TextField(controller: height, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '진입 최대 높이', suffixText: 'm')),
         TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '문의연락처')),
         TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: '이용방법 / 주의사항')),
+        const SizedBox(height: 10),
+        if (keptPhotos.isNotEmpty) Wrap(spacing: 8, runSpacing: 8, children: keptPhotos.map((url) => Stack(children: [
+          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: 92, height: 92, fit: BoxFit.cover)),
+          Positioned(right: 0, top: 0, child: IconButton.filled(onPressed: () => setS(() => keptPhotos.remove(url)), icon: const Icon(Icons.close, size: 18), tooltip: '사진 삭제')),
+        ])).toList()),
+        if (newPhotos.isNotEmpty) Wrap(spacing: 8, runSpacing: 8, children: newPhotos.map((file) => Stack(children: [
+          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(file.path), width: 92, height: 92, fit: BoxFit.cover)),
+          Positioned(right: 0, top: 0, child: IconButton.filled(onPressed: () => setS(() => newPhotos.remove(file)), icon: const Icon(Icons.close, size: 18), tooltip: '추가사진 삭제')),
+        ])).toList()),
+        OutlinedButton.icon(onPressed: () async { final picked = await ImagePicker().pickMultiImage(imageQuality: 82, limit: 6); setS(() { final room = 6 - keptPhotos.length - newPhotos.length; if (room > 0) newPhotos.addAll(picked.take(room)); }); }, icon: const Icon(Icons.add_photo_alternate_outlined), label: Text('사진 추가 (${keptPhotos.length + newPhotos.length}/6)')),
+        const Text('사진은 최대 6장까지 유지·삭제·추가할 수 있습니다.', style: TextStyle(fontSize: 12)),
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('저장'))],
     )));
@@ -84,7 +99,10 @@ class _AdminScreenState extends State<AdminScreen> {
     p.maxHeightMm = meters == null ? null : (meters * 1000).round();
     p.phone = phone.text.trim();
     p.note = note.text.trim();
+    if (keptPhotos.isEmpty && newPhotos.isEmpty) return _msg('장소사진을 1장 이상 남겨주세요.');
     try {
+      final uploaded = newPhotos.isEmpty ? <String>[] : await widget.data.uploadPlacePhotos(p.id, newPhotos.map((e) => File(e.path)).toList());
+      p.photoUrls = [...keptPhotos, ...uploaded];
       await widget.data.updatePlace(p);
       _msg('장소 정보를 수정했습니다.');
       await _load();
