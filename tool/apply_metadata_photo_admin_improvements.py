@@ -16,9 +16,15 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     final height=TextEditingController(text:p.maxHeightMm==null?'':(p.maxHeightMm!/1000).toString());
     final keptPhotos=<String>[...p.photoUrls];
     final newPhotos=<XFile>[];
+    LatLng editedPoint=LatLng(p.latitude,p.longitude);
+    Future<void> applyAddress(String value) async {
+      final q=value.trim();if(q.isEmpty)return;
+      try{final uri=Uri.parse('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=kr&accept-language=ko&q=${Uri.encodeQueryComponent(q)}');final r=await http.get(uri,headers:{'User-Agent':'CampingCarRoadmap/1.9'});final rows=jsonDecode(r.body) as List;if(rows.isNotEmpty){editedPoint=LatLng(double.parse('${rows.first['lat']}'),double.parse('${rows.first['lon']}'));}}catch(_){}
+    }
     final ok=await showDialog<bool>(context:context,builder:(d)=>StatefulBuilder(builder:(d,setS)=>AlertDialog(title:const Text('장소 수정 (관리자)'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
       TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),
-      TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),
+      TextField(controller:address,decoration:const InputDecoration(labelText:'주소'),onSubmitted:(v)async{await applyAddress(v);setS((){});}),
+      Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:()async{await applyAddress(address.text);setS((){});_msg('주소 위치를 지도 좌표에 반영했습니다.');},icon:const Icon(Icons.location_searching),label:const Text('주소 위치 적용'))),
       TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),
       TextField(controller:phone,decoration:const InputDecoration(labelText:'문의연락처')),
       TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),
@@ -38,7 +44,8 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     ]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('저장'))])));
     if(ok!=true)return;
     if(keptPhotos.isEmpty&&newPhotos.isEmpty){_msg('장소사진을 1장 이상 남겨주세요.');return;}
-    p.name=name.text.trim();p.address=address.text.trim();p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
+    await applyAddress(address.text);
+    p.name=name.text.trim();p.address=address.text.trim();p.latitude=editedPoint.latitude;p.longitude=editedPoint.longitude;p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
     try{
       final uploaded=newPhotos.isEmpty?<String>[]:await widget.data.uploadPlacePhotos(p.id,newPhotos.map((e)=>File(e.path)).toList());
       p.photoUrls=[...keptPhotos,...uploaded];
