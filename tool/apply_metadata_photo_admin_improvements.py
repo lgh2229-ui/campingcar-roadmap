@@ -8,16 +8,42 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     if anchor not in s: raise SystemExit('showPlace anchor missing')
     method=r'''  Future<void> _adminEditPlace(Place p) async {
     if (!widget.user.isAdministrator) return;
-    final name=TextEditingController(text:p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'),''));
+    final name=TextEditingController(text:p.name.replaceFirst(RegExp(r'^\\[(승인 대기|승인 반려)\\]\\s*'),''));
     final address=TextEditingController(text:p.address);
     final hours=TextEditingController(text:p.hours);
     final phone=TextEditingController(text:p.phone);
     final note=TextEditingController(text:p.note);
     final height=TextEditingController(text:p.maxHeightMm==null?'':(p.maxHeightMm!/1000).toString());
-    final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('장소 수정 (관리자)'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),TextField(controller:phone,decoration:const InputDecoration(labelText:'문의연락처')),TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),TextField(controller:note,maxLines:3,decoration:const InputDecoration(labelText:'이용방법 / 주의사항'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('저장'))]));
+    final keptPhotos=<String>[...p.photoUrls];
+    final newPhotos=<XFile>[];
+    final ok=await showDialog<bool>(context:context,builder:(d)=>StatefulBuilder(builder:(d,setS)=>AlertDialog(title:const Text('장소 수정 (관리자)'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+      TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),
+      TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),
+      TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),
+      TextField(controller:phone,decoration:const InputDecoration(labelText:'문의연락처')),
+      TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),
+      TextField(controller:note,maxLines:3,decoration:const InputDecoration(labelText:'이용방법 / 주의사항')),
+      const SizedBox(height:12),
+      if(keptPhotos.isNotEmpty)Wrap(spacing:8,runSpacing:8,children:keptPhotos.map((url)=>Stack(children:[
+        ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network(url,width:92,height:92,fit:BoxFit.cover)),
+        Positioned(right:0,top:0,child:IconButton.filled(onPressed:()=>setS(()=>keptPhotos.remove(url)),icon:const Icon(Icons.close,size:18),tooltip:'기존 사진 삭제')),
+      ])).toList()),
+      if(newPhotos.isNotEmpty)Wrap(spacing:8,runSpacing:8,children:newPhotos.map((photo)=>Stack(children:[
+        ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(photo.path),width:92,height:92,fit:BoxFit.cover)),
+        Positioned(right:0,top:0,child:IconButton.filled(onPressed:()=>setS(()=>newPhotos.remove(photo)),icon:const Icon(Icons.close,size:18),tooltip:'추가 사진 삭제')),
+      ])).toList()),
+      const SizedBox(height:8),
+      OutlinedButton.icon(onPressed:()async{final room=6-keptPhotos.length-newPhotos.length;if(room<=0){_msg('사진은 최대 6장입니다.');return;}final picked=await ImagePicker().pickMultiImage(imageQuality:82,limit:room);setS(()=>newPhotos.addAll(picked.take(room)));},icon:const Icon(Icons.add_photo_alternate_outlined),label:Text('사진 추가 (${keptPhotos.length+newPhotos.length}/6)')),
+      const Text('기존 사진은 X로 삭제하고 새 사진을 추가할 수 있습니다. 최소 1장은 남겨주세요.',style:TextStyle(fontSize:12)),
+    ]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('저장'))])));
     if(ok!=true)return;
+    if(keptPhotos.isEmpty&&newPhotos.isEmpty){_msg('장소사진을 1장 이상 남겨주세요.');return;}
     p.name=name.text.trim();p.address=address.text.trim();p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
-    try{await widget.data.updatePlace(p);await _load();_msg('장소를 수정했습니다.');}catch(e){_msg('장소 수정에 실패했습니다: $e');}
+    try{
+      final uploaded=newPhotos.isEmpty?<String>[]:await widget.data.uploadPlacePhotos(p.id,newPhotos.map((e)=>File(e.path)).toList());
+      p.photoUrls=[...keptPhotos,...uploaded];
+      await widget.data.updatePlace(p);await _load();_msg('장소를 수정했습니다.');
+    }catch(e){_msg('장소 수정에 실패했습니다: $e');}
   }
 
 '''
