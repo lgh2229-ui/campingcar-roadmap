@@ -19,29 +19,12 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     LatLng editedPoint=LatLng(p.latitude,p.longitude);
     Future<void> applyAddress(String value) async {
       final q=value.trim();if(q.isEmpty)throw Exception('주소를 입력해주세요.');
-      Future<List<dynamic>> search(String query) async {
-        final uri=Uri.parse('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=kr&accept-language=ko&q=${Uri.encodeQueryComponent(query)}');
-        final r=await http.get(uri,headers:{'User-Agent':'CampingCarRoadmap/1.9'});
-        if(r.statusCode!=200)throw Exception('주소 위치 검색 실패 (HTTP ${r.statusCode})');
-        return jsonDecode(r.body) as List;
-      }
-      var rows=await search(q);
-      if(rows.isEmpty){
-        final simplified=q.replaceAll(RegExp(r'\\([^)]*\\)'),' ').replaceAll(RegExp(r'\\s+'),' ').trim();
-        if(simplified!=q)rows=await search(simplified);
-      }
-      // Korean lot-number (지번) addresses such as 읍/면/동/리 + 123-4 must be
-      // searched as-is. Only use the road-name fallback when the input actually
-      // contains a road-name suffix, so a valid 지번 number is never stripped.
-      if(rows.isEmpty){
-        final isRoadAddress=RegExp(r'(대로|로|길)\\s*\\d').hasMatch(q);
-        if(isRoadAddress){
-          final roadOnly=q.replaceAll(RegExp(r'\\s+\\d+(?:-\\d+)?(?:\\s+.*)?$'),'').trim();
-          if(roadOnly.isNotEmpty&&roadOnly!=q)rows=await search(roadOnly);
-        }
-      }
-      if(rows.isEmpty)throw Exception('도로명/지번 주소를 찾지 못했습니다. 주소를 확인하거나 지도에서 위치를 직접 지정해주세요.');
-      editedPoint=LatLng(double.parse('${rows.first['lat']}'),double.parse('${rows.first['lon']}'));
+      final picked=await _pickKoreanAddress(q);
+      if(picked==null)throw Exception('주소 선택이 취소되었습니다.');
+      final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
+      if(lat==null||lon==null)throw Exception('주소 좌표를 확인하지 못했습니다.');
+      address.text='${picked['roadAddr']??''}'.trim().isNotEmpty?'${picked['roadAddr']}':'${picked['jibunAddr']??q}';
+      editedPoint=LatLng(lat,lon);
     }
     final ok=await showDialog<bool>(context:context,builder:(d)=>StatefulBuilder(builder:(d,setS)=>AlertDialog(title:const Text('장소 수정 (관리자)'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
       TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),
@@ -66,7 +49,6 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     ]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('저장'))])));
     if(ok!=true)return;
     if(keptPhotos.isEmpty&&newPhotos.isEmpty){_msg('장소사진을 1장 이상 남겨주세요.');return;}
-    try{await applyAddress(address.text);}catch(e){_msg('$e');return;}
     p.name=name.text.trim();p.address=address.text.trim();p.latitude=editedPoint.latitude;p.longitude=editedPoint.longitude;p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
     try{
       final uploaded=newPhotos.isEmpty?<String>[]:await widget.data.uploadPlacePhotos(p.id,newPhotos.map((e)=>File(e.path)).toList());
