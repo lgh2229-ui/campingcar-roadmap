@@ -18,6 +18,23 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     final newPhotos=<XFile>[];
     LatLng editedPoint=LatLng(p.latitude,p.longitude);
     var addressPointApplied=false;
+    Future<void> pickPointOnMap() async {
+      final picked=await showDialog<LatLng>(context:context,builder:(ctx){
+        var point=editedPoint;
+        final pickerMap=MapController();
+        return StatefulBuilder(builder:(ctx,setP)=>Dialog(child:SizedBox(width:520,height:620,child:Column(children:[
+          Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(ctx),icon:const Icon(Icons.close))])),
+          const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('지도를 이동한 뒤 원하는 위치를 길게 누르세요. 빨간 핀이 실제 저장 위치입니다.')),
+          const SizedBox(height:8),
+          Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,p)=>setP(()=>point=p)),children:[
+            TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),
+            MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))]),
+          ])),
+          Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:()=>Navigator.pop(ctx),child:const Text('취소'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>Navigator.pop(ctx,point),child:const Text('이 위치 적용')))])),
+        ]))));
+      });
+      if(picked!=null){editedPoint=picked;addressPointApplied=true;}
+    }
     Future<void> applyAddress(String value) async {
       final q=value.trim();if(q.isEmpty)throw Exception('주소를 입력해주세요.');
       final picked=await _pickKoreanAddress(q);
@@ -31,6 +48,7 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
       TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),
       TextField(controller:address,decoration:const InputDecoration(labelText:'주소'),onSubmitted:(v)async{await applyAddress(v);setS((){});}),
       Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:()async{try{await applyAddress(address.text);setS((){});_msg('주소 위치를 찾았습니다. 저장을 누르면 아이콘 위치가 변경됩니다.');}catch(e){_msg('$e');}},icon:const Icon(Icons.location_searching),label:const Text('주소 위치 적용'))),
+      Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:()async{await pickPointOnMap();setS((){});if(addressPointApplied)_msg('지도에서 위치를 지정했습니다. 저장을 누르면 아이콘 위치가 변경됩니다.');},icon:const Icon(Icons.map_outlined),label:const Text('주소 검색이 안 되면 지도에서 직접 위치 지정'))),
       TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),
       TextField(controller:phone,decoration:const InputDecoration(labelText:'문의연락처')),
       TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),
