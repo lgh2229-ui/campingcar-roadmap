@@ -17,6 +17,7 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     final keptPhotos=<String>[...p.photoUrls];
     final newPhotos=<XFile>[];
     LatLng editedPoint=LatLng(p.latitude,p.longitude);
+    var addressPointApplied=false;
     Future<void> applyAddress(String value) async {
       final q=value.trim();if(q.isEmpty)throw Exception('주소를 입력해주세요.');
       final picked=await _pickKoreanAddress(q);
@@ -24,7 +25,7 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
       final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
       if(lat==null||lon==null)throw Exception('주소 좌표를 확인하지 못했습니다.');
       address.text='${picked['roadAddr']??''}'.trim().isNotEmpty?'${picked['roadAddr']}':'${picked['jibunAddr']??q}';
-      editedPoint=LatLng(lat,lon);
+      editedPoint=LatLng(lat,lon);addressPointApplied=true;
     }
     final ok=await showDialog<bool>(context:context,builder:(d)=>StatefulBuilder(builder:(d,setS)=>AlertDialog(title:const Text('장소 수정 (관리자)'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
       TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),
@@ -49,6 +50,7 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     ]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('저장'))])));
     if(ok!=true)return;
     if(keptPhotos.isEmpty&&newPhotos.isEmpty){_msg('장소사진을 1장 이상 남겨주세요.');return;}
+    if(address.text.trim()!=p.address.trim()&&!addressPointApplied){_msg('주소가 변경되었습니다. 먼저 주소 위치 적용을 눌러 위치를 선택해주세요.');return;}
     p.name=name.text.trim();p.address=address.text.trim();p.latitude=editedPoint.latitude;p.longitude=editedPoint.longitude;p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
     try{
       final uploaded=newPhotos.isEmpty?<String>[]:await widget.data.uploadPlacePhotos(p.id,newPhotos.map((e)=>File(e.path)).toList());
