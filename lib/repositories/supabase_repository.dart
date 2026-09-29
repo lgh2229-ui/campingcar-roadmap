@@ -34,7 +34,7 @@ class SupabaseRepository implements AppDataRepository {
   }
 
   @override Future<void> addPlace(Place place) async {final payload=place.toSupabaseJson();payload['owner_id']=_uid;payload['approval_status']='pending';await client.from('places').insert(payload);}
-  @override Future<void> updatePlace(Place place) async => client.from('places').update(place.toSupabaseJson()).eq('id',place.id);
+  @override Future<void> updatePlace(Place place) async {final rows=await client.from('places').update(place.toSupabaseJson()).eq('id',place.id).select('id,latitude,longitude,address');if((rows as List).isEmpty)throw Exception('장소 좌표 업데이트 권한이 없거나 대상 장소를 찾지 못했습니다.');}
   @override Future<void> deletePlace(String placeId) async {await client.from('places').delete().eq('id',placeId);}
   @override Future<List<Place>> pendingPlaces() async {final rows=await client.from('places_view').select().eq('approval_status','pending').order('created_at',ascending:false);final out=(rows as List).map((e)=>Place.fromJson(Map<String,dynamic>.from(e))).toList();await _attachOwnerNames(out);return out;}
   @override Future<void> approvePlace(String placeId) async {await client.from('places').update({'approval_status':'approved','approved_at':DateTime.now().toIso8601String(),'approved_by':_uid}).eq('id',placeId);}
