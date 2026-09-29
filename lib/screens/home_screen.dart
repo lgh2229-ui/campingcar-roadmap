@@ -167,11 +167,28 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _searchAddress() async {
     final q=search.text.trim();if(q.isEmpty)return;
     try{
+      final needle=q.toLowerCase();
+      final local=places.where((p)=>p.name.toLowerCase().contains(needle)).toList();
+      if(local.isNotEmpty){
+        Place? picked;
+        if(local.length==1){
+          picked=local.first;
+        }else if(mounted){
+          picked=await showModalBottomSheet<Place>(context:context,showDragHandle:true,builder:(ctx)=>SafeArea(child:ListView.separated(
+            shrinkWrap:true,itemCount:local.length,separatorBuilder:(_,__)=>const Divider(height:1),
+            itemBuilder:(_,i){final p=local[i];return ListTile(leading:const Icon(Icons.place_outlined),title:Text(p.name),subtitle:p.address.trim().isEmpty?null:Text(p.address),onTap:()=>Navigator.pop(ctx,p));}
+          )));
+        }
+        if(picked!=null){
+          final point=LatLng(picked.latitude,picked.longitude);center=point;map.move(point,17);if(mounted)setState((){});
+          return;
+        }
+      }
       final picked=await _pickKoreanAddress(q);if(picked==null)return;
       final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
       if(lat==null||lon==null){_msg('주소는 찾았지만 좌표를 확인하지 못했습니다.');return;}
       final point=LatLng(lat,lon);center=point;map.move(point,16);if(mounted)setState((){});
-    }catch(e){_msg('주소 검색에 실패했습니다: $e');}
+    }catch(e){_msg('검색에 실패했습니다: $e');}
   }
 
   String _cleanPart(dynamic v) {
@@ -277,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         Positioned(top: 10, left: 10, right: 10, child: Column(children: [
-          Material(elevation: 3, borderRadius: BorderRadius.circular(12), child: Row(children: [Expanded(child: TextField(controller: search, onSubmitted: (_) => _searchAddress(), decoration: const InputDecoration(hintText: '지역명 또는 주소 검색', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 14)))), IconButton(onPressed: _searchAddress, icon: const Icon(Icons.search))])),
+          Material(elevation: 3, borderRadius: BorderRadius.circular(12), child: Row(children: [Expanded(child: TextField(controller: search, onSubmitted: (_) => _searchAddress(), decoration: const InputDecoration(hintText: '등록 장소명 또는 주소 검색', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 14)))), IconButton(onPressed: _searchAddress, icon: const Icon(Icons.search))])),
           const SizedBox(height: 8),
           SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),
         ])),
