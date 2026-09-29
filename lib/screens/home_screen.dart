@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
@@ -145,39 +146,32 @@ class _HomeScreenState extends State<HomeScreen> {
     return m == null || m <= 0 ? null : (m * 1000).round();
   }
 
+  Future<List<Map<String,dynamic>>> _koreanAddressSearch(String q) async {
+    final r=await Supabase.instance.client.functions.invoke('korean-address-search',body:{'keyword':q});
+    final data=Map<String,dynamic>.from(r.data as Map);
+    if(data['error']!=null)throw Exception(data['error']);
+    return (data['results'] as List? ?? const []).map((e)=>Map<String,dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String,dynamic>?> _pickKoreanAddress(String q) async {
+    final data=await _koreanAddressSearch(q);
+    if(data.isEmpty){_msg('도로명/지번 주소 검색 결과가 없습니다.');return null;}
+    if(!mounted)return null;
+    return showModalBottomSheet<Map<String,dynamic>>(context:context,showDragHandle:true,builder:(ctx)=>SafeArea(child:ListView.separated(
+      shrinkWrap:true,itemCount:data.length,separatorBuilder:(_,__)=>const Divider(height:1),
+      itemBuilder:(_,i){final row=data[i];final road='${row['roadAddr']??''}'.trim(),jibun='${row['jibunAddr']??''}'.trim();
+        return ListTile(leading:const Icon(Icons.location_on_outlined),title:Text(road.isNotEmpty?road:jibun),subtitle:jibun.isNotEmpty&&jibun!=road?Text('지번  $jibun'):null,onTap:()=>Navigator.pop(ctx,row));}
+    )));
+  }
+
   Future<void> _searchAddress() async {
-    final q = search.text.trim();
-    if (q.isEmpty) return;
-    try {
-      final uri = Uri.parse('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=kr&accept-language=ko&q=${Uri.encodeQueryComponent(q)}');
-      final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.9'});
-      final data = jsonDecode(r.body) as List;
-      if (data.isEmpty) return _msg('검색 결과가 없습니다.');
-      if (!mounted) return;
-      final picked = await showModalBottomSheet<Map<String, dynamic>>(
-        context: context,
-        showDragHandle: true,
-        builder: (ctx) => SafeArea(
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: data.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final row = Map<String, dynamic>.from(data[i] as Map);
-              var label = '${row['display_name'] ?? ''}'.replaceAll('대한민국', '').replaceAll('Republic of Korea', '').trim();
-              return ListTile(title: Text(label), leading: const Icon(Icons.location_on_outlined), onTap: () => Navigator.pop(ctx, row));
-            },
-          ),
-        ),
-      );
-      if (picked == null) return;
-      final point = LatLng(double.parse('${picked['lat']}'), double.parse('${picked['lon']}'));
-      center = point;
-      map.move(point, 16);
-      if (mounted) setState(() {});
-    } catch (_) {
-      _msg('주소 검색에 실패했습니다.');
-    }
+    final q=search.text.trim();if(q.isEmpty)return;
+    try{
+      final picked=await _pickKoreanAddress(q);if(picked==null)return;
+      final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
+      if(lat==null||lon==null){_msg('주소는 찾았지만 좌표를 확인하지 못했습니다.');return;}
+      final point=LatLng(lat,lon);center=point;map.move(point,16);if(mounted)setState((){});
+    }catch(e){_msg('주소 검색에 실패했습니다: $e');}
   }
 
   String _cleanPart(dynamic v) {
