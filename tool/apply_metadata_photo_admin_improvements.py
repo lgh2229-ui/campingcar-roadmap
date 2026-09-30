@@ -16,6 +16,9 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
     final height=TextEditingController(text:p.maxHeightMm==null?'':(p.maxHeightMm!/1000).toString());
     final keptPhotos=<String>[...p.photoUrls];
     final newPhotos=<XFile>[];
+    final selected=<String>{...p.services};
+    final prices=<String,TextEditingController>{for(final s in ['급수','블랙탱크 비움','노지/차박','공중화장실']) s:TextEditingController(text:p.prices[s]??'')};
+    String reservation=p.reservation.isEmpty?'예약불필요':p.reservation;
     LatLng editedPoint=LatLng(p.latitude,p.longitude);
     var addressPointApplied=false;
     Future<void> pickPointOnMap() async {
@@ -49,7 +52,9 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
       TextField(controller:address,decoration:const InputDecoration(labelText:'주소'),onSubmitted:(v)async{await applyAddress(v);setS((){});}),
       Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:()async{try{await applyAddress(address.text);setS((){});_msg('주소 위치를 찾았습니다. 저장을 누르면 아이콘 위치가 변경됩니다.');}catch(e){_msg('$e');}},icon:const Icon(Icons.location_searching),label:const Text('주소 위치 적용'))),
       Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:()async{await pickPointOnMap();setS((){});if(addressPointApplied)_msg('지도에서 위치를 지정했습니다. 저장을 누르면 아이콘 위치가 변경됩니다.');},icon:const Icon(Icons.map_outlined),label:const Text('주소 검색이 안 되면 지도에서 직접 위치 지정'))),
+      ...prices.entries.map((e)=>Row(children:[Checkbox(value:selected.contains(e.key),onChanged:(v)=>setS((){if(v==true){selected.add(e.key);}else{selected.remove(e.key);e.value.clear();}})),Expanded(flex:2,child:Text(e.key)),Expanded(flex:3,child:TextField(controller:e.value,enabled:selected.contains(e.key),decoration:const InputDecoration(hintText:'금액 / 무료')))])),
       TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),
+      DropdownButtonFormField<String>(initialValue:reservation,items:['예약불필요','예약필수','전화문의'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>reservation=v??reservation,decoration:const InputDecoration(labelText:'예약 여부')),
       TextField(controller:phone,decoration:const InputDecoration(labelText:'문의연락처')),
       TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),
       TextField(controller:note,maxLines:3,decoration:const InputDecoration(labelText:'이용방법 / 주의사항')),
@@ -67,9 +72,11 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
       const Text('기존 사진은 X로 삭제하고 새 사진을 추가할 수 있습니다. 최소 1장은 남겨주세요.',style:TextStyle(fontSize:12)),
     ]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('저장'))])));
     if(ok!=true)return;
+    if(name.text.trim().isEmpty||selected.isEmpty){_msg('장소명과 서비스 항목을 입력해주세요.');return;}
+    for(final s in selected){if(prices[s]!.text.trim().isEmpty){_msg('$s 금액을 입력해주세요. 무료면 "무료"라고 입력해주세요.');return;}}
     if(keptPhotos.isEmpty&&newPhotos.isEmpty){_msg('장소사진을 1장 이상 남겨주세요.');return;}
     if(address.text.trim()!=p.address.trim()&&!addressPointApplied){_msg('주소가 변경되었습니다. 먼저 주소 위치 적용을 눌러 위치를 선택해주세요.');return;}
-    p.name=name.text.trim();p.address=address.text.trim();p.latitude=editedPoint.latitude;p.longitude=editedPoint.longitude;p.hours=hours.text.trim();p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
+    p.name=name.text.trim();p.address=address.text.trim();p.latitude=editedPoint.latitude;p.longitude=editedPoint.longitude;p.services=selected.toList();p.prices={for(final s in selected)s:prices[s]!.text.trim()};p.hours=hours.text.trim();p.reservation=reservation;p.phone=phone.text.trim();p.note=note.text.trim();p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);
     try{
       final uploaded=newPhotos.isEmpty?<String>[]:await widget.data.uploadPlacePhotos(p.id,newPhotos.map((e)=>File(e.path)).toList());
       p.photoUrls=[...keptPhotos,...uploaded];
@@ -121,6 +128,18 @@ photo_groups=[
 ]
 missing=[group[0] for group in photo_groups if not any(x in add for x in group)]
 if 'photos.clear()' in add or missing: raise SystemExit('PHOTO REGRESSION: '+','.join(missing))
+if 'var registrationPoint=spot;' not in add:
+    add=add.replace("    final name = TextEditingController();","    var registrationPoint=spot;\n    final name = TextEditingController();",1)
+    add=add.replace("final address = TextEditingController(text: await _reverseAddress(spot));","final address = TextEditingController(text: await _reverseAddress(registrationPoint));",1)
+    add=add.replace("spot.latitude.toStringAsFixed(6)","registrationPoint.latitude.toStringAsFixed(6)").replace("spot.longitude.toStringAsFixed(6)","registrationPoint.longitude.toStringAsFixed(6)")
+    addr="TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)')),"
+    addr_new="""TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (도로명/지번)')),
+        Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:()async{try{final picked=await _pickKoreanAddress(address.text.trim());if(picked==null)return;final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();if(lat==null||lon==null){_msg('주소 좌표를 확인하지 못했습니다.');return;}final road=(picked['roadAddr']??'').toString().trim();final jibun=(picked['jibunAddr']??'').toString().trim();address.text=road.isNotEmpty?road:(jibun.isNotEmpty?jibun:address.text);registrationPoint=LatLng(lat,lon);setS((){});_msg('주소 위치를 적용했습니다.');}catch(e){_msg('$e');}},icon:const Icon(Icons.location_searching),label:const Text('주소 위치 적용'))),
+        Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:()async{var point=registrationPoint;final pickerMap=MapController();final picked=await showDialog<LatLng>(context:context,builder:(mctx)=>StatefulBuilder(builder:(mctx,setM)=>Dialog(child:SizedBox(width:520,height:620,child:Column(children:[Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(mctx),icon:const Icon(Icons.close))])),const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('원하는 위치를 길게 누른 뒤 이 위치 적용을 누르세요.')),const SizedBox(height:8),Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,v)=>setM(()=>point=v)),children:[TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))])])),Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:()=>Navigator.pop(mctx),child:const Text('취소'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>Navigator.pop(mctx,point),child:const Text('이 위치 적용')))]))])))));if(picked!=null){registrationPoint=picked;setS((){});}},icon:const Icon(Icons.map_outlined),label:const Text('주소 검색이 안 되면 지도에서 직접 위치 지정'))),"""
+    if addr not in add: raise SystemExit('registration address anchor missing')
+    add=add.replace(addr,addr_new,1)
+    add=add.replace("latitude: spot.latitude,","latitude: registrationPoint.latitude,",1).replace("longitude: spot.longitude,","longitude: registrationPoint.longitude,",1)
+    s=s[:start]+add+s[end:]
 for token in ["Text('등록자:","Text('최종 등록일자:",'Future<void> _adminEditPlace(Place p)',"label: const Text('장소 수정')","label: const Text('장소 삭제')",'if (widget.user.isAdministrator)']:
     if token not in s: raise SystemExit('HOME FEATURE MISSING: '+token)
 p.write_text(s,encoding='utf-8')
