@@ -5,12 +5,13 @@ s = p.read_text()
 start = s.index('  Future<void> _openAddPlace(LatLng spot) async {')
 end = s.index('  Widget _placePhoto(String value) {', start)
 method = r'''  Future<void> _openAddPlace(LatLng spot) async {
+    var registrationPoint = spot;
     final name = TextEditingController();
     final hours = TextEditingController();
     final maxHeight = TextEditingController();
     final phone = TextEditingController();
     final note = TextEditingController();
-    final address = TextEditingController(text: await _reverseAddress(spot));
+    final address = TextEditingController(text: await _reverseAddress(registrationPoint));
     final prices = <String, TextEditingController>{
       '블랙탱크 비움': TextEditingController(),
       '급수': TextEditingController(),
@@ -30,11 +31,13 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
           builder: (pageContext, setPageState) => Scaffold(
             appBar: AppBar(title: const Text('새 장소 등록'), leading: IconButton(icon: const Icon(Icons.close), onPressed: saving ? null : () => Navigator.pop(pageContext))),
             body: SafeArea(child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 32), children: [
-              Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(pageContext).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)), child: Text('등록 위치 ${spot.latitude.toStringAsFixed(6)}, ${spot.longitude.toStringAsFixed(6)}')),
+              Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(pageContext).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)), child: Text('등록 위치 ${registrationPoint.latitude.toStringAsFixed(6)}, ${registrationPoint.longitude.toStringAsFixed(6)}')),
               const SizedBox(height: 12),
               TextField(controller: name, decoration: const InputDecoration(labelText: '장소명', border: OutlineInputBorder())),
               const SizedBox(height: 12),
-              TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)', border: OutlineInputBorder())),
+              TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (도로명/지번)', border: OutlineInputBorder())),
+              Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{try{final picked=await _pickKoreanAddress(address.text.trim());if(picked==null)return;final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();if(lat==null||lon==null){_msg('주소 좌표를 확인하지 못했습니다.');return;}final road=(picked['roadAddr']??'').toString().trim(),jibun=(picked['jibunAddr']??'').toString().trim();address.text=road.isNotEmpty?road:(jibun.isNotEmpty?jibun:address.text);registrationPoint=LatLng(lat,lon);setPageState((){});_msg('주소 위치를 적용했습니다.');}catch(e){_msg('$e');}},icon:const Icon(Icons.location_searching),label:const Text('주소 위치 적용'))),
+              Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{var point=registrationPoint;final pickerMap=MapController();final picked=await showDialog<LatLng>(context:pageContext,builder:(mctx)=>StatefulBuilder(builder:(mctx,setM)=>Dialog(child:SizedBox(width:520,height:620,child:Column(children:[Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(mctx),icon:const Icon(Icons.close))])),const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('원하는 위치를 길게 누른 뒤 이 위치 적용을 누르세요.')),const SizedBox(height:8),Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,v)=>setM(()=>point=v)),children:[TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))])])),Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:()=>Navigator.pop(mctx),child:const Text('취소'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>Navigator.pop(mctx,point),child:const Text('이 위치 적용')))]))])))));if(picked!=null){registrationPoint=picked;setPageState((){});}},icon:const Icon(Icons.map_outlined),label:const Text('주소 검색이 안 되면 지도에서 직접 위치 지정'))),
               const SizedBox(height: 18), const Text('서비스 항목 및 금액', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 6),
               ...prices.entries.map((e) => Card(margin: const EdgeInsets.symmetric(vertical: 4), child: Padding(padding: const EdgeInsets.fromLTRB(4, 4, 10, 4), child: Row(children: [
                 Checkbox(value: selected.contains(e.key), onChanged: saving ? null : (v) => setPageState(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })),
@@ -78,7 +81,7 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
                 if (photos.isEmpty) { msg('장소사진을 1장 이상 등록해주세요.'); return; }
                 setPageState(() => saving = true);
                 try {
-                  final place = Place(id: const Uuid().v4(), name: name.text.trim(), latitude: spot.latitude, longitude: spot.longitude, address: address.text.trim(), services: selected.toList(), prices: {for (final service in selected) service: prices[service]!.text.trim()}, hours: hours.text.trim(), reservation: reservation, maxHeightMm: maxHeight.text.trim().isEmpty ? null : _metersToMm(maxHeight.text), phone: phone.text.trim(), note: note.text.trim(), ownerId: _currentAuthorId, approvalStatus: 'pending');
+                  final place = Place(id: const Uuid().v4(), name: name.text.trim(), latitude: registrationPoint.latitude, longitude: registrationPoint.longitude, address: address.text.trim(), services: selected.toList(), prices: {for (final service in selected) service: prices[service]!.text.trim()}, hours: hours.text.trim(), reservation: reservation, maxHeightMm: maxHeight.text.trim().isEmpty ? null : _metersToMm(maxHeight.text), phone: phone.text.trim(), note: note.text.trim(), ownerId: _currentAuthorId, approvalStatus: 'pending');
                   await widget.data.addPlace(place);
                   place.photoUrls = await widget.data.uploadPlacePhotos(place.id, photos.map((e) => File(e.path)).toList());
                   selectedSpot = null;
