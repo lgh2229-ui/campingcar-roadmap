@@ -33,6 +33,21 @@ if 'google_mobile_ads:' in Path('pubspec.yaml').read_text(encoding='utf-8') and 
     if start >= 0 and end >= 0:
         metadata = '''\n        <meta-data\n            android:name="com.google.android.gms.ads.APPLICATION_ID"\n            android:value="ca-app-pub-4393751265116181~3875944017" />'''
         s = s[:end + 1] + metadata + s[end + 1:]
+# This app only reads location while the UI is in use; it does not run continuous
+# background location tracking. geolocator may contribute an FGS location service
+# through manifest merging, so explicitly remove that service and its FGS permissions.
+if 'xmlns:tools=' not in s:
+    s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">', 1)
+for permission in ['android.permission.FOREGROUND_SERVICE_LOCATION', 'android.permission.FOREGROUND_SERVICE']:
+    remove_permission = f'    <uses-permission android:name="{permission}" tools:node="remove" />'
+    if remove_permission not in s:
+        s = s.replace('<application', remove_permission + '\n    <application', 1)
+remove_service = '''        <service\n            android:name="com.baseflow.geolocator.GeolocatorLocationService"\n            tools:node="remove" />\n'''
+if 'android:name="com.baseflow.geolocator.GeolocatorLocationService"' not in s:
+    s = s.replace('<application', '<application', 1)
+    app_end = s.find('>', s.find('<application'))
+    s = s[:app_end + 1] + '\n' + remove_service + s[app_end + 1:]
+
 p.write_text(s, encoding='utf-8')
 
 # Google Play 2026 target requirement: ensure API 36 where Flutter template allows it.
