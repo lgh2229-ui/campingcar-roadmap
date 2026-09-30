@@ -257,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _mapPage() => Stack(children: [
         FlutterMap(
           mapController: map,
-          options: MapOptions(initialCenter: center, initialZoom: 14, onLongPress: (_, p) => _selectSpot(p)),
+          options: MapOptions(initialCenter: center, initialZoom: 14, interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate), onLongPress: (_, p) => _selectSpot(p)),
           children: [
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'kr.co.campingcarroadmap.app'),
             MarkerLayer(markers: [
