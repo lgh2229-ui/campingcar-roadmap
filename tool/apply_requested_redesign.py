@@ -162,10 +162,7 @@ s = s.replace("Text('이용가능 서비스'", "Text('이용안내'")
 s = s.replace("if (p.address.isNotEmpty) Text(p.address),", "if (p.address.isNotEmpty) Text('주소 : ${p.address}'),")
 s = s.replace("        if (p.phone.isNotEmpty) Text('문의연락처: ${p.phone}'),", "        if (p.phone.isNotEmpty) Text('문의연락처: ${p.phone}'),\n        if (p.phone.isNotEmpty && p.note.isNotEmpty) const SizedBox(height: 12),")
 
-new_prices = "    final prices = <String, TextEditingController>{for (final service in [...campingFilters, ...businessFilters]) service: TextEditingController()};"
-pat = re.compile(r"    final prices = <String, TextEditingController>\{.*?\};", re.S)
-if pat.search(s):
-    s = pat.sub(new_prices, s, count=1)
+# Keep registration price controllers defined by the registration patch.
 
 p.write_text(s, encoding='utf-8')
 print('requested redesign applied cleanly; vehicle market repair handled by prior build step')
