@@ -30,7 +30,7 @@ if 'Future<void> _adminEditPlace(Place p)' not in s:
           Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(ctx),icon:const Icon(Icons.close))])),
           const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('지도를 이동한 뒤 원하는 위치를 길게 누르세요. 빨간 핀이 실제 저장 위치입니다.')),
           const SizedBox(height:8),
-          Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,p)=>setP(()=>point=p)),children:[
+          Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,interactionOptions:const InteractionOptions(flags:InteractiveFlag.all & ~InteractiveFlag.rotate),onLongPress:(_,p)=>setP(()=>point=p)),children:[
             TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),
             MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))]),
           ])),
