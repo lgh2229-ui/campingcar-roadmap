@@ -54,7 +54,7 @@ class PushNotificationService {
     final c=_client; final uid=c?.auth.currentUser?.id;
     if(c==null||uid==null)return;
     try {
-      await c.from('push_tokens').upsert({'user_id':uid,'token':token,'platform':'android','enabled':true,'updated_at':DateTime.now().toUtc().toIso8601String()},onConflict:'token');
+      await c.rpc('register_push_token', params:{'p_token':token,'p_platform':'android'});
     } catch(e){debugPrint('Push token save failed: $e');}
   }
 
