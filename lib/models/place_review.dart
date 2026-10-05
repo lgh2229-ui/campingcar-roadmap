@@ -7,6 +7,7 @@ class PlaceReview {
     required this.status,
     required this.body,
     required this.createdAt,
+    this.photoUrls = const [],
   });
 
   final String id;
@@ -16,6 +17,7 @@ class PlaceReview {
   final String status;
   final String body;
   final DateTime createdAt;
+  final List<String> photoUrls;
 
   factory PlaceReview.fromJson(Map<String, dynamic> j) => PlaceReview(
         id: '${j['id']}',
@@ -25,5 +27,6 @@ class PlaceReview {
         status: '${j['status'] ?? 'ok'}',
         body: '${j['body'] ?? ''}',
         createdAt: DateTime.tryParse('${j['created_at']}') ?? DateTime.now(),
+        photoUrls: List<String>.from(j['photo_urls'] ?? const []),
       );
 }
