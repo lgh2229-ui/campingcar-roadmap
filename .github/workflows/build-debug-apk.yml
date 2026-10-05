@@ -1,4 +1,5 @@
 name: Build Android Debug APK
+# syntax repair rebuild
 
 on:
   push:
