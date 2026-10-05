@@ -16,7 +16,7 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
-  bool busy=false; int pendingCount=0, reportCount=0, feedbackCount=0, marketReportCount=0;
+  bool busy=false; int pendingCount=0, reportCount=0, feedbackCount=0, marketReportCount=0, mapRefreshSignal=0;
   @override void initState(){super.initState();_refreshCounts();}
   void _msg(String text){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(text)));}
   String _dt(DateTime? d)=>d==null?'-':d.toLocal().toString().substring(0,16);
@@ -25,9 +25,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget _badge(Widget child,int count)=>Stack(clipBehavior:Clip.none,children:[child,if(count>0)Positioned(right:-7,top:-8,child:Container(padding:const EdgeInsets.symmetric(horizontal:6,vertical:2),decoration:BoxDecoration(color:Colors.red,borderRadius:BorderRadius.circular(12)),constraints:const BoxConstraints(minWidth:20),child:Text(count>99?'99+':'$count',textAlign:TextAlign.center,style:const TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.bold))))]);
 
   @override Widget build(BuildContext context)=>Stack(children:[
-    HomeScreen(user:widget.user,auth:widget.auth,data:widget.data,onUserChanged:widget.onUserChanged,onLogout:widget.onLogout),
+    HomeScreen(user:widget.user,auth:widget.auth,data:widget.data,onUserChanged:widget.onUserChanged,onLogout:widget.onLogout,refreshSignal:mapRefreshSignal),
     Positioned(top:MediaQuery.of(context).padding.top+12,right:12,child:SafeArea(child:
-      _badge(FloatingActionButton.extended(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){_refreshCounts();}),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('관리자 통합관리')),pendingCount+reportCount+feedbackCount+marketReportCount)
+      _badge(FloatingActionButton.extended(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){if(mounted)setState(()=>mapRefreshSignal++);_refreshCounts();}),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('관리자 통합관리')),pendingCount+reportCount+feedbackCount+marketReportCount)
     )),
   ]);
 }
