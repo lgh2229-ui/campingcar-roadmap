@@ -23,6 +23,7 @@ class HomeScreen extends StatefulWidget {
     required this.data,
     required this.onUserChanged,
     required this.onLogout,
+    this.refreshSignal = 0,
   });
 
   final AppUser user;
@@ -30,6 +31,7 @@ class HomeScreen extends StatefulWidget {
   final AppDataRepository data;
   final ValueChanged<AppUser> onUserChanged;
   final Future<void> Function() onLogout;
+  final int refreshSignal;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -49,6 +51,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const serviceFilters = ['전체', '블랙탱크 비움', '급수', '노지/차박', '공중화장실'];
   String get _currentAuthorId => widget.user.authId.isEmpty ? widget.user.userId : widget.user.authId;
+
+  @override
+  void didUpdateWidget(covariant HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.refreshSignal != widget.refreshSignal) _load();
+  }
 
   @override
   void initState() {
