@@ -35,7 +35,7 @@ class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixi
   bool marketDone(Map<String,dynamic>x)=>['completed','handled','resolved','done'].contains('${x['status']??''}'.toLowerCase());
   final marketRows=reports.where((x)=>marketDone(x)==reportCompleted).map((x)=>({...x,'_kind':'market'})).toList();
   final reviewRows=reviewTasks.where((x)=>(x['handled']==true)==reportCompleted).map((x)=>({...x,'_kind':'review'})).toList();
-  final r=[...reviewRows,...marketRows]..sort((a,b)=>'${b['created_at']}'.compareTo('${a['created_at']}'));
+  final r=<Map<String,dynamic>>[...reviewRows,...marketRows]..sort((a,b)=>'${b['created_at']}'.compareTo('${a['created_at']}'));
   final pending=reports.where((x)=>!marketDone(x)).length+reviewTasks.where((x)=>x['handled']!=true).length;
   final completed=reports.where(marketDone).length+reviewTasks.where((x)=>x['handled']==true).length;
   return Column(children:[
