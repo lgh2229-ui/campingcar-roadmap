@@ -30,7 +30,16 @@ class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixi
     await _load();
   }catch(e){msg('처리완료 저장에 실패했습니다: $e');}
  }
- Future<void> _completeReport(Map<String,dynamic>x)async{try{await db.from('vehicle_market_reports').update({'status':'resolved'}).eq('id',x['id']);await _load();}catch(e){msg('신고 처리완료 저장에 실패했습니다: $e');}}
+ Future<void> _completeReport(Map<String,dynamic>x)async{
+  final c=TextEditingController(text:'${x['admin_reply']??''}');
+  final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(
+    title:const Text('신고 처리완료'),
+    content:TextField(controller:c,maxLines:5,decoration:const InputDecoration(labelText:'신고자에게 보낼 답변',hintText:'처리 결과를 입력해주세요.',border:OutlineInputBorder())),
+    actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('답변 후 처리완료'))]));
+  if(ok!=true)return;
+  if(c.text.trim().isEmpty){msg('답변 내용을 입력해주세요.');return;}
+  try{await db.from('vehicle_market_reports').update({'admin_reply':c.text.trim(),'status':'resolved','handled_by':db.auth.currentUser!.id,'handled_at':DateTime.now().toIso8601String()}).eq('id',x['id']);await _load();}catch(e){msg('신고 처리완료 저장에 실패했습니다: $e');}
+ }
  Widget _reportTab(){
   bool marketDone(Map<String,dynamic>x)=>['completed','handled','resolved','done'].contains('${x['status']??''}'.toLowerCase());
   final marketRows=reports.where((x)=>marketDone(x)==reportCompleted).map((x)=>({...x,'_kind':'market'})).toList();
@@ -48,7 +57,7 @@ class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixi
       return ListTile(leading:Icon(done?Icons.check_circle:Icons.rate_review_outlined),title:Text('장소 검증 · ${place['name']??'장소'}'),subtitle:Text('${x['reason']} · ${review['body']??''}\n작성자: ${_name(review['author_id'])} · 요청: ${_dt(x['created_at'])}${done&&'${x['admin_reply']??''}'.isNotEmpty?'\n답변: ${x['admin_reply']}':''}'),isThreeLine:true,trailing:done?const Text('처리완료'):FilledButton.tonal(onPressed:()=>_completeReviewTask(x),child:const Text('처리완료')));
     }
     final done=marketDone(x);
-    return ListTile(leading:Icon(done?Icons.check_circle:Icons.report_problem_outlined),title:Text('매물 ${x['listing_id']}'),subtitle:Text('${x['reason']}\n신고자: ${_name(x['reporter_id'])} · 요청: ${_dt(x['created_at'])}'),isThreeLine:true,trailing:done?const Text('처리완료'):FilledButton.tonal(onPressed:()=>_completeReport(x),child:const Text('처리완료')));
+    return ListTile(leading:Icon(done?Icons.check_circle:Icons.report_problem_outlined),title:Text('매물 ${x['listing_id']}'),subtitle:Text('${x['reason']}\n신고자: ${_name(x['reporter_id'])} · 요청: ${_dt(x['created_at'])}${done&&'${x['admin_reply']??''}'.isNotEmpty?'\n답변: ${x['admin_reply']}':''}'),isThreeLine:true,trailing:done?const Text('처리완료'):FilledButton.tonal(onPressed:()=>_completeReport(x),child:const Text('처리완료')));
    }))
   ]);
  }
