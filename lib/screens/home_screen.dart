@@ -504,58 +504,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Image.file(File(value), width: 210, height: 150, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const SizedBox(width: 210, child: Center(child: Icon(Icons.broken_image_outlined))));
   }
 
-  Future<void> _reportPlace(Place p) async {
-    String type = '정보가 다름';
-    final body = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setS) => AlertDialog(
-          title: const Text('장소 신고하기'),
-          content: Column(mainAxisSize: MainAxisSize.min, children: [
-            DropdownButtonFormField<String>(
-              initialValue: type,
-              decoration: const InputDecoration(labelText: '신고 사유'),
-              items: const ['정보가 다름', '이용 불가', '폐업/삭제 요청', '부적절한 장소', '기타']
-                  .map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-              onChanged: (v) => setS(() => type = v ?? type),
-            ),
-            TextField(controller: body, maxLength: 500, maxLines: 4, decoration: const InputDecoration(labelText: '상세 내용')),
-          ]),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('신고 접수')),
-          ],
-        ),
-      ),
-    );
-    if (ok != true) return;
-    try {
-      final db = Supabase.instance.client;
-      final row = await db.from('place_reports').insert({
-        'place_id': p.id,
-        'reporter_id': db.auth.currentUser!.id,
-        'report_type': type,
-        'body': body.text.trim(),
-      }).select('id').single();
-      final admins = await db.from('profiles').select('id').eq('role', 'admin');
-      for (final a in admins as List) {
-        try {
-          await db.from('notifications').insert({
-            'user_id': a['id'],
-            'title': '새 장소 신고가 접수되었습니다',
-            'body': '${p.name} · $type',
-            'kind': 'place_report_submitted',
-            'reference_id': row['id'],
-          });
-        } catch (_) {}
-      }
-      _msg('신고가 접수되었습니다. 관리자가 확인하겠습니다.');
-    } catch (e) {
-      _msg('신고 접수에 실패했습니다: $e');
-    }
-  }
-
   Future<void> _showPlace(Place p) async {
     final reviews = p.isApproved ? await widget.data.reviews(p.id) : <PlaceReview>[];
     if (!mounted) return;
@@ -595,12 +543,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 8),
             Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),
           ]),
-          const SizedBox(height: 8),
-          SizedBox(width: double.infinity, child: OutlinedButton.icon(
-            onPressed: () { Navigator.pop(ctx); _reportPlace(p); },
-            icon: const Icon(Icons.flag_outlined),
-            label: const Text('신고하기'),
-          )),
           const Divider(height: 28),
           const Text('검증 리뷰', style: TextStyle(fontWeight: FontWeight.bold)),
           if (reviews.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('아직 검증 리뷰가 없습니다.')),
