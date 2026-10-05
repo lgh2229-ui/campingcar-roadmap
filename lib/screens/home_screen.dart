@@ -378,11 +378,49 @@ class _HomeScreenState extends State<HomeScreen> {
           FilledButton.tonal(onPressed: _passwordGate, child: const Text('개인정보 변경')),
           const SizedBox(height: 8),
           OutlinedButton(onPressed: _vehicleDialog, child: const Text('차량정보 변경')),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(onPressed: _openMyResponses, icon: const Icon(Icons.mark_chat_read_outlined), label: const Text('내 문의 · 처리결과')),
           const SizedBox(height: 18),
           const Divider(),
           TextButton.icon(onPressed: _deleteAccount, icon: const Icon(Icons.delete_forever_outlined), label: const Text('회원탈퇴')),
         ]),
       );
+
+  Future<void> _openMyResponses() async {
+    final db=Supabase.instance.client;
+    try{
+      final a=await Future.wait([
+        db.from('vehicle_market_reports').select().eq('reporter_id',_currentAuthorId).order('created_at',ascending:false),
+        db.from('review_admin_tasks').select('*, reviews!inner(author_id,body,status), places(name)').eq('reviews.author_id',_currentAuthorId).order('created_at',ascending:false),
+      ]);
+      if(!mounted)return;
+      final rows=<Map<String,dynamic>>[
+        ...List<Map<String,dynamic>>.from(a[0]).map((x)=>({...x,'_kind':'report'})),
+        ...List<Map<String,dynamic>>.from(a[1]).map((x)=>({...x,'_kind':'review'})),
+      ]..sort((x,y)=>'${y['created_at']}'.compareTo('${x['created_at']}'));
+      await showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>SafeArea(child:SizedBox(
+        height:MediaQuery.of(ctx).size.height*.82,
+        child:Column(children:[
+          const Padding(padding:EdgeInsets.fromLTRB(16,4,16,12),child:Text('내 문의 · 처리결과',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold))),
+          Expanded(child:rows.isEmpty?const Center(child:Text('확인할 신고나 검증리뷰가 없습니다.')):ListView.builder(itemCount:rows.length,itemBuilder:(_,i){
+            final x=rows[i],isReview=x['_kind']=='review';
+            final done=isReview?x['handled']==true:'${x['status']??''}'=='resolved';
+            final reply='${x['admin_reply']??''}'.trim();
+            final review=isReview?Map<String,dynamic>.from(x['reviews']??{}):<String,dynamic>{};
+            final place=isReview?Map<String,dynamic>.from(x['places']??{}):<String,dynamic>{};
+            return Card(margin:const EdgeInsets.fromLTRB(12,5,12,5),child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(isReview?'검증리뷰 · ${place['name']??'장소'}':'중고캠핑카 신고',style:const TextStyle(fontWeight:FontWeight.bold)),
+              const SizedBox(height:6),
+              Text(isReview?'${x['reason']??''} · ${review['body']??''}':'${x['reason']??''}'),
+              const SizedBox(height:8),
+              Text(done?'처리완료':'처리대기',style:TextStyle(fontWeight:FontWeight.bold,color:done?Theme.of(ctx).colorScheme.primary:Theme.of(ctx).colorScheme.tertiary)),
+              if(done&&reply.isNotEmpty)...[const Divider(height:20),const Text('관리자 답변',style:TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:4),Text(reply)],
+            ])));
+          }))
+        ])
+      )));
+    }catch(e){_msg('처리결과를 불러오지 못했습니다: $e');}
+  }
 
   Future<void> _passwordGate() async {
     final c = TextEditingController();
