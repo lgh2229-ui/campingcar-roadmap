@@ -589,6 +589,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 8),
             Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),
           ]),
+          if(widget.user.isAdministrator)...[const SizedBox(height:8),Row(children:[Expanded(child:FilledButton.tonalIcon(onPressed:(){Navigator.pop(ctx);_adminEditPlace(p);},icon:const Icon(Icons.edit_outlined),label:const Text('장소 수정'))),const SizedBox(width:8),Expanded(child:OutlinedButton.icon(onPressed:(){Navigator.pop(ctx);_adminDeletePlace(p);},icon:const Icon(Icons.delete_outline),label:const Text('장소 삭제')))])],
           const Divider(height: 28),
           const Text('검증 리뷰', style: TextStyle(fontWeight: FontWeight.bold)),
           if (reviews.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('아직 검증 리뷰가 없습니다.')),
@@ -621,6 +622,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (mine) PopupMenuButton<String>(onSelected: (v) async { if (v == 'edit') await _editReview(p, r); if (v == 'delete') await _deleteReview(p, r); }, itemBuilder: (_) => const [PopupMenuItem(value: 'edit', child: Text('수정')), PopupMenuItem(value: 'delete', child: Text('삭제'))]),
           ]),
           if (r.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(r.body)),
+          if (r.photoUrls.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: SizedBox(height: 82, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: r.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 6), itemBuilder: (_, i) => ClipRRect(borderRadius: BorderRadius.circular(8), child: _placePhoto(r.photoUrls[i]))))),
           Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _openReviewComments(r), icon: const Icon(Icons.chat_bubble_outline, size: 18), label: const Text('댓글'))),
         ]),
       ),
@@ -651,22 +653,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openReview(Place p) async {
-    String status = 'ok';
-    final body = TextEditingController();
-    final ok = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
-      title: const Text('검증리뷰'),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        RadioListTile<String>(value: 'ok', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('이용가능')),
-        RadioListTile<String>(value: 'change', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('변경')),
-        RadioListTile<String>(value: 'bad', groupValue: status, onChanged: (v) => setS(() => status = v!), title: const Text('이용불가')),
-        TextField(controller: body, maxLength: 200, maxLines: 3, decoration: const InputDecoration(labelText: '리뷰 내용')),
-        if (status != 'ok') const Text('변경/이용불가 리뷰는 관리자 검증리뷰 확인 목록에도 자동 등록됩니다.', style: TextStyle(fontSize: 12)),
-      ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('등록'))],
-    )));
-    if (ok != true) return;
-    try { await widget.data.addReview(placeId: p.id, status: status, body: body.text); _msg('검증리뷰가 등록되었습니다.'); await _load(); if (mounted) _showPlace(p); } catch (e) { _msg('리뷰 등록에 실패했습니다: $e'); }
+    String status='ok'; final body=TextEditingController(); final photos=<XFile>[];
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setS)=>AlertDialog(title:const Text('검증리뷰'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[RadioListTile<String>(value:'ok',groupValue:status,onChanged:(v)=>setS(()=>status=v!),title:const Text('이용가능')),RadioListTile<String>(value:'change',groupValue:status,onChanged:(v)=>setS(()=>status=v!),title:const Text('변경')),RadioListTile<String>(value:'bad',groupValue:status,onChanged:(v)=>setS(()=>status=v!),title:const Text('이용불가')),TextField(controller:body,maxLength:200,maxLines:3,decoration:const InputDecoration(labelText:'리뷰 내용')),Align(alignment:Alignment.centerLeft,child:OutlinedButton.icon(onPressed:()async{final picked=await ImagePicker().pickMultiImage(imageQuality:82,limit:10);if(picked.isNotEmpty)setS((){for(final x in picked){if(photos.length<10&&!photos.any((e)=>e.path==x.path))photos.add(x);}});},icon:const Icon(Icons.add_photo_alternate_outlined),label:Text('사진 첨부 ('+photos.length.toString()+'/10)'))),if(photos.isNotEmpty)SizedBox(height:72,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:photos.length,separatorBuilder:(_,__)=>const SizedBox(width:6),itemBuilder:(_,i)=>Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(photos[i].path),width:88,height:72,fit:BoxFit.cover)),Positioned(right:0,top:0,child:InkWell(onTap:()=>setS(()=>photos.removeAt(i)),child:const CircleAvatar(radius:11,child:Icon(Icons.close,size:14))))]))),if(status!='ok')const Padding(padding:EdgeInsets.only(top:8),child:Text('변경/이용불가 리뷰는 관리자 검증리뷰 확인 목록에도 자동 등록됩니다.',style:TextStyle(fontSize:12)))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('등록'))])));
+    if(ok!=true)return;try{await widget.data.addReview(placeId:p.id,status:status,body:body.text,photos:photos.map((e)=>File(e.path)).toList());_msg('검증리뷰가 등록되었습니다.');await _load();if(mounted)_showPlace(p);}catch(e){_msg('리뷰 등록에 실패했습니다: '+e.toString());}
   }
+
+  Future<void> _adminEditPlace(Place p) async {
+    if(!widget.user.isAdministrator)return _msg('관리자만 수정할 수 있습니다.');final name=TextEditingController(text:p.name.replaceFirst(RegExp(r'^\\[(승인 대기|승인 반려)\\]\\s*'),'')),address=TextEditingController(text:p.address),hours=TextEditingController(text:p.hours),height=TextEditingController(text:p.maxHeightMm==null?'':_meters(p.maxHeightMm!)),phone=TextEditingController(text:p.phone),note=TextEditingController(text:p.note);final serviceNames=['급수','블랙탱크 비움','노지/차박','공중화장실'];final selected=p.services.toSet();final prices={for(final s in serviceNames)s:TextEditingController(text:p.prices[s]??'')};String reservation=['예약불필요','예약필수','전화문의'].contains(p.reservation)?p.reservation:'전화문의';
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setS)=>AlertDialog(title:const Text('장소 정보 수정'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),...serviceNames.map((s)=>Row(children:[Checkbox(value:selected.contains(s),onChanged:(v)=>setS((){if(v==true)selected.add(s);else{selected.remove(s);prices[s]!.clear();}})),Expanded(flex:2,child:Text(s)),Expanded(flex:3,child:TextField(controller:prices[s],enabled:selected.contains(s),decoration:const InputDecoration(hintText:'금액 / 무료')))])),TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),DropdownButtonFormField<String>(initialValue:reservation,items:['예약불필요','예약필수','전화문의'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>reservation=v??reservation,decoration:const InputDecoration(labelText:'예약 여부')),TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'문의연락처')),TextField(controller:note,maxLines:3,decoration:const InputDecoration(labelText:'이용방법 / 주의사항'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('수정 저장'))])));if(ok!=true)return;if(name.text.trim().isEmpty||selected.isEmpty)return _msg('장소명과 서비스 항목을 입력해주세요.');for(final s in selected){if(prices[s]!.text.trim().isEmpty)return _msg(s+' 금액을 입력해주세요.');}p.name=name.text.trim();p.address=address.text.trim();p.services=selected.toList();p.prices={for(final s in selected)s:prices[s]!.text.trim()};p.hours=hours.text.trim();p.reservation=reservation;p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);p.phone=phone.text.trim();p.note=note.text.trim();try{await widget.data.updatePlace(p);await _load();_msg('장소 정보를 수정했습니다.');}catch(e){_msg('장소 수정에 실패했습니다: '+e.toString());}
+  }
+  Future<void> _adminDeletePlace(Place p) async {if(!widget.user.isAdministrator)return _msg('관리자만 삭제할 수 있습니다.');final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('장소 삭제'),content:Text('「'+p.name+'」 장소를 삭제할까요?\n삭제하면 복구할 수 없습니다.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('삭제'))]));if(ok!=true)return;try{await widget.data.deletePlace(p.id);await _load();_msg('장소를 삭제했습니다.');}catch(e){_msg('장소 삭제에 실패했습니다: '+e.toString());}}
 
   Future<void> _editReview(Place p, PlaceReview r) async {
     String status = r.status;
