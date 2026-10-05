@@ -27,7 +27,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   @override Widget build(BuildContext context)=>Stack(children:[
     HomeScreen(user:widget.user,auth:widget.auth,data:widget.data,onUserChanged:widget.onUserChanged,onLogout:widget.onLogout,refreshSignal:mapRefreshSignal),
     Positioned(top:MediaQuery.of(context).padding.top+12,right:12,child:SafeArea(child:
-      _badge(FloatingActionButton.extended(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){if(mounted)setState(()=>mapRefreshSignal++);_refreshCounts();}),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('관리자 통합관리')),pendingCount+reportCount+feedbackCount+marketReportCount)
+      _badge(FloatingActionButton(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){if(mounted)setState(()=>mapRefreshSignal++);_refreshCounts();}),child:const Icon(Icons.admin_panel_settings_outlined)),pendingCount+reportCount+feedbackCount+marketReportCount)
     )),
   ]);
 }
