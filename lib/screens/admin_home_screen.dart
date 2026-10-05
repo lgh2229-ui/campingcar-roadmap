@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import '../models/admin_review_task.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
 import '../repositories/app_data_repository.dart';
 import '../repositories/auth_repository.dart';
-import '../repositories/supabase_repository.dart';
 import 'admin_management_screen.dart';
 import 'home_screen.dart';
 
@@ -25,42 +23,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Future<void> _refreshCounts() async {try{final a=await Future.wait([widget.data.pendingPlaces(),widget.data.adminReviewTasks()]);if(mounted)setState((){pendingCount=(a[0] as List).length;reportCount=(a[1] as List).length;});}catch(_){} }
   Widget _badge(Widget child,int count)=>Stack(clipBehavior:Clip.none,children:[child,if(count>0)Positioned(right:-7,top:-8,child:Container(padding:const EdgeInsets.symmetric(horizontal:6,vertical:2),decoration:BoxDecoration(color:Colors.red,borderRadius:BorderRadius.circular(12)),constraints:const BoxConstraints(minWidth:20),child:Text(count>99?'99+':'$count',textAlign:TextAlign.center,style:const TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.bold))))]);
 
-  Future<void> _openApprovals() async {
-    setState(()=>busy=true); List<Place> all=[];
-    try{all=await widget.data.places();}catch(e){_msg('승인 목록을 불러오지 못했습니다: $e');}finally{if(mounted)setState(()=>busy=false);}
-    if(!mounted)return;
-    bool completed=false;
-    await showModalBottomSheet<void>(context:context,showDragHandle:true,isScrollControlled:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,setS){
-      final rows=completed?all.where((p)=>p.approvalStatus!='pending').toList():all.where((p)=>p.approvalStatus=='pending').toList();
-      return SafeArea(child:SizedBox(height:MediaQuery.of(ctx).size.height*.78,child:Column(children:[
-        Padding(padding:const EdgeInsets.fromLTRB(18,4,18,8),child:Row(children:[const Expanded(child:Text('장소 승인 목록',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold))),Chip(label:Text('${rows.length}건'))])),
-        Padding(padding:const EdgeInsets.symmetric(horizontal:12),child:SegmentedButton<bool>(segments:const [ButtonSegment(value:false,label:Text('처리대기')),ButtonSegment(value:true,label:Text('처리완료'))],selected:{completed},onSelectionChanged:(v)=>setS(()=>completed=v.first))),
-        const Divider(),Expanded(child:rows.isEmpty?Center(child:Text(completed?'처리 완료 내역이 없습니다.':'승인 대기 장소가 없습니다.')):ListView.separated(itemCount:rows.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final p=rows[i];return ListTile(leading:Icon(p.approvalStatus=='approved'?Icons.check_circle:p.approvalStatus=='rejected'?Icons.cancel:Icons.hourglass_top),title:Text(p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'),'')),subtitle:Text('${p.address}\n등록자: ${_owner(p)} · 요청: ${_dt(p.createdAt)}\n${p.services.join(' · ')}'),isThreeLine:true,trailing:completed?Text(p.approvalStatus=='approved'?'승인완료':'반려완료'):const Icon(Icons.chevron_right),onTap:completed?null:(){Navigator.pop(ctx);Navigator.of(context).push(MaterialPageRoute(builder:(_)=>AdminPlaceReviewScreen(place:p,data:widget.data))).then((_){_refreshCounts();setState((){});});});})),
-      ])));
-    })); await _refreshCounts();
-  }
-
-  Future<void> _openReports() async {
-    setState(()=>busy=true); List<AdminReviewTask> all=[];
-    try{if(widget.data is SupabaseRepository){all=await (widget.data as SupabaseRepository).adminReviewTasks(includeHandled:true);}else{all=await widget.data.adminReviewTasks();}}catch(e){_msg('신고 목록을 불러오지 못했습니다: $e');}finally{if(mounted)setState(()=>busy=false);}
-    if(!mounted)return; bool completed=false;
-    await showModalBottomSheet<void>(context:context,showDragHandle:true,isScrollControlled:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,setS){
-      final rows=all.where((t)=>t.handled==completed).toList();
-      return SafeArea(child:SizedBox(height:MediaQuery.of(ctx).size.height*.72,child:Column(children:[
-        Padding(padding:const EdgeInsets.fromLTRB(18,4,18,8),child:Row(children:[const Expanded(child:Text('신고 목록',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold))),Chip(label:Text('${rows.length}건'))])),
-        Padding(padding:const EdgeInsets.symmetric(horizontal:12),child:SegmentedButton<bool>(segments:const [ButtonSegment(value:false,label:Text('처리대기')),ButtonSegment(value:true,label:Text('처리완료'))],selected:{completed},onSelectionChanged:(v)=>setS(()=>completed=v.first))),
-        const Divider(),Expanded(child:rows.isEmpty?Center(child:Text(completed?'처리 완료 신고가 없습니다.':'처리할 신고가 없습니다.')):ListView.separated(itemCount:rows.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final t=rows[i];return ListTile(leading:Icon(t.handled?Icons.check_circle:Icons.report_problem_outlined),title:Text(t.reason),subtitle:Text('장소 ${t.placeId}\n요청: ${_dt(t.createdAt)}'),isThreeLine:true,trailing:t.handled?const Text('처리완료'):FilledButton.tonal(onPressed:()async{await widget.data.completeAdminReviewTask(t.id);all=all.map((x)=>x.id==t.id?AdminReviewTask(id:x.id,reviewId:x.reviewId,placeId:x.placeId,reason:x.reason,handled:true,createdAt:x.createdAt):x).toList();setS((){});await _refreshCounts();},child:const Text('확인 완료')));}))
-      ])));
-    })); await _refreshCounts();
-  }
-
   @override Widget build(BuildContext context)=>Stack(children:[
     HomeScreen(user:widget.user,auth:widget.auth,data:widget.data,onUserChanged:widget.onUserChanged,onLogout:widget.onLogout),
-    Positioned(top:MediaQuery.of(context).padding.top+12,right:12,child:SafeArea(child:Column(crossAxisAlignment:CrossAxisAlignment.end,children:[
-      FloatingActionButton.small(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){_refreshCounts();}),child:const Icon(Icons.manage_accounts)),const SizedBox(height:8),
-      _badge(FloatingActionButton.extended(heroTag:'adminApprovalList',onPressed:busy?null:_openApprovals,icon:const Icon(Icons.fact_check_outlined),label:const Text('승인목록')),pendingCount),const SizedBox(height:8),
-      _badge(FloatingActionButton.extended(heroTag:'adminReportList',onPressed:busy?null:_openReports,icon:const Icon(Icons.report_problem_outlined),label:const Text('신고목록')),reportCount),
-    ]))),
+    Positioned(top:MediaQuery.of(context).padding.top+12,right:12,child:SafeArea(child:
+      FloatingActionButton.extended(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){_refreshCounts();}),icon:const Icon(Icons.admin_panel_settings_outlined),label:const Text('관리자 통합관리'))
+    )),
   ]);
 }
 
