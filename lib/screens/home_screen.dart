@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
 import '../models/place_review.dart';
@@ -38,6 +39,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String _reservationUrl(String note){for(final line in note.split('\n')){if(line.startsWith('[예약링크]'))return line.substring(6).trim();}return '';}
+  String _visibleNote(String note)=>note.split('\n').where((e)=>!e.startsWith('[예약링크]')).join('\n').trim();
+  String _noteWithReservation(String note,String url){final clean=_visibleNote(note);return url.trim().isEmpty?clean:'${clean.isEmpty?'':clean+'\n'}[예약링크]${url.trim()}';}
+
   final map = MapController();
   final search = TextEditingController();
   List<Place> places = [];
@@ -480,6 +485,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final maxHeight = TextEditingController();
     final phone = TextEditingController();
     final note = TextEditingController();
+    final reservationUrl = TextEditingController();
     final selected = <String>{};
     final prices = <String, TextEditingController>{for (final s in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) s: TextEditingController()};
     final photos = <XFile>[];
@@ -495,7 +501,8 @@ class _HomeScreenState extends State<HomeScreen> {
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)')),
         ...prices.entries.map((e) => Row(children: [Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })), Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
         TextField(controller: hours, decoration: const InputDecoration(labelText: '운영시간')),
-        DropdownButtonFormField<String>(initialValue: reservation, items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => reservation = v ?? reservation, decoration: const InputDecoration(labelText: '예약 여부')),
+        DropdownButtonFormField<String>(initialValue: reservation, items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setS(() => reservation = v ?? reservation), decoration: const InputDecoration(labelText: '예약 여부')),
+        if(reservation=='예약필수') TextField(controller:reservationUrl,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'예약 링크',hintText:'https://...')),
         TextField(controller: maxHeight, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '진입 최대 높이', hintText: '예: 3.2', suffixText: 'm')),
         TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '문의연락처')),
         TextField(controller: note, maxLines: 3, decoration: const InputDecoration(labelText: '이용방법 / 주의사항')),
@@ -523,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
             reservation: reservation,
             maxHeightMm: maxHeight.text.trim().isEmpty ? null : _metersToMm(maxHeight.text),
             phone: phone.text.trim(),
-            note: note.text.trim(),
+            note: _noteWithReservation(note.text,reservation=='예약필수'?reservationUrl.text:''),
             ownerId: _currentAuthorId,
             approvalStatus: 'pending',
           );
@@ -570,10 +577,11 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 12),
         if (p.hours.isNotEmpty) Text('운영시간: ${p.hours}'),
         if (p.reservation.isNotEmpty) Text('예약: ${p.reservation}'),
+        if(p.reservation=='예약필수'&&_reservationUrl(p.note).isNotEmpty) OutlinedButton.icon(onPressed:()async{final raw=_reservationUrl(p.note);final u=Uri.tryParse(raw.startsWith('http')?raw:'https://$raw');if(u==null||!await launchUrl(u,mode:LaunchMode.externalApplication))_msg('예약 링크를 열 수 없습니다.');},icon:const Icon(Icons.open_in_new),label:const Text('예약 페이지 열기')),
         if (p.phone.isNotEmpty) Text('문의연락처: ${p.phone}'),
         if (p.maxHeightMm != null) Text('진입 최대 높이: ${_meters(p.maxHeightMm!)}m'),
         if (p.maxHeightMm != null && widget.user.vehicleHeightMm != null) _heightCompatibility(p),
-        if (p.note.isNotEmpty) Text('이용방법/주의사항: ${p.note}'),
+        if (_visibleNote(p.note).isNotEmpty) Text('이용방법/주의사항: ${_visibleNote(p.note)}'),
         if (!p.isApproved && _isMine(p)) ...[
           const SizedBox(height: 16),
           Card(color: _approvalColor(p, context), child: Padding(padding: const EdgeInsets.all(14), child: Text(p.isPending ? '관리자가 등록 내용을 확인 중입니다. 승인되면 전체 사용자 지도에 공개됩니다.' : '등록이 반려되었습니다. 관리자 검토 결과를 확인해 주세요.'))),
