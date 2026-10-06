@@ -1,9 +1,11 @@
-name: Build Android AAB
+name: Build Android AAB 122
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-    paths: [ '.github/workflows/build-android.yml', 'pubspec.yaml' ] # trigger 122
+    paths:
+      - '.github/workflows/build-android.yml'
+      - 'pubspec.yaml'
 
 jobs:
   build:
