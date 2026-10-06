@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# in-app reported place detail verification
+# draggable admin location picker verification
 
 on:
   push:
