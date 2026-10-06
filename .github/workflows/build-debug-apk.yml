@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# place photo edit verification build
+# report location market and reservation link verification
 
 on:
   push:
