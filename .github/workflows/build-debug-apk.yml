@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# report location market and reservation link verification
+# restore admin place location controls verification
 
 on:
   push:
