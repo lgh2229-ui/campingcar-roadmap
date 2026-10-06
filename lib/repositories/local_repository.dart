@@ -35,4 +35,6 @@ class LocalRepository implements AppDataRepository {
   @override Future<List<AdminReviewTask>> adminReviewTasks({bool includeHandled=false})async{final raw=(await _prefs).getString(_tasksKey);if(raw==null)return[];final rows=(jsonDecode(raw)as List).map((e)=>AdminReviewTask.fromJson(Map<String,dynamic>.from(e))).toList();return includeHandled?rows:rows.where((e)=>!e.handled).toList();}
   @override Future<void> completeAdminReviewTask(String id)async{}
   @override Future<List<String>> uploadPlacePhotos(String placeId,List<File> files)async=>files.map((e)=>e.path).toList();
+  @override Future<void> deletePlacePhoto(String placeId,String publicUrl) async {}
+
 }
