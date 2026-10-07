@@ -11,7 +11,7 @@ class AdminManagementScreen extends StatefulWidget{const AdminManagementScreen({
 class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixin{
  final db=Supabase.instance.client;final memberSearch=TextEditingController();late final TabController tabs;List<Map<String,dynamic>> market=[],members=[],feedback=[],reports=[],reviewTasks=[];List<Place> places=[];bool loading=true;String memberQuery='';bool approvalCompleted=false,feedbackCompleted=false,reportCompleted=false;
  @override void initState(){super.initState();tabs=TabController(length:4,vsync:this);_load();}@override void dispose(){memberSearch.dispose();tabs.dispose();super.dispose();}
- Future<void> _load()async{setState(()=>loading=true);try{final a=await Future.wait([db.from('vehicle_market_listings').select().order('created_at',ascending:false),db.from('profiles').select().order('created_at',ascending:false),db.from('app_feedback').select().order('created_at',ascending:false),db.from('vehicle_market_reports').select().order('created_at',ascending:false),db.from('review_admin_tasks').select('*, reviews(author_id,body,status,photo_urls), places(id,name,address,latitude,longitude)').order('created_at',ascending:false),db.from('places').select().order('created_at',ascending:false)]);if(mounted)setState((){market=List<Map<String,dynamic>>.from(a[0]);members=List<Map<String,dynamic>>.from(a[1]);feedback=List<Map<String,dynamic>>.from(a[2]);reports=List<Map<String,dynamic>>.from(a[3]);reviewTasks=List<Map<String,dynamic>>.from(a[4]);places=List<Map<String,dynamic>>.from(a[5]).map(Place.fromJson).toList();});}finally{if(mounted)setState(()=>loading=false);}}
+ Future<void> _load()async{setState(()=>loading=true);try{final a=await Future.wait([db.from('vehicle_market_listings').select().order('created_at',ascending:false),db.from('profiles').select().order('created_at',ascending:false),db.from('app_feedback').select().order('created_at',ascending:false),db.from('vehicle_market_reports').select().order('created_at',ascending:false),db.from('review_admin_tasks').select('*, reviews(id,author_id,body,status,photo_urls), places(id,name,address,latitude,longitude)').order('created_at',ascending:false),db.from('places').select().order('created_at',ascending:false)]);if(mounted)setState((){market=List<Map<String,dynamic>>.from(a[0]);members=List<Map<String,dynamic>>.from(a[1]);feedback=List<Map<String,dynamic>>.from(a[2]);reports=List<Map<String,dynamic>>.from(a[3]);reviewTasks=List<Map<String,dynamic>>.from(a[4]);places=List<Map<String,dynamic>>.from(a[5]).map(Place.fromJson).toList();});}finally{if(mounted)setState(()=>loading=false);}}
  String _userId(Map<String,dynamic>x)=>'${x['username']??x['user_id']??''}'.trim();
  String _nickname(Map<String,dynamic>x)=>'${x['nickname']??x['display_name']??''}'.trim();
  String _memberTitle(Map<String,dynamic>x){final a=_userId(x),b=_nickname(x);return a.isNotEmpty&&b.isNotEmpty?'$a · $b':a.isNotEmpty?a:b.isNotEmpty?b:'회원정보 없음';}
@@ -36,6 +36,9 @@ class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixi
   if(ok!=true)return;
   if(c.text.trim().isEmpty){msg('답변 내용을 입력해주세요.');return;}
   try{
+    final review=Map<String,dynamic>.from(x['reviews']??{});final reviewId='${review['id']??x['review_id']??''}';
+    if(reviewId.isEmpty)throw Exception('검증리뷰를 찾을 수 없습니다.');
+    await db.from('review_comments').insert({'review_id':reviewId,'author_id':db.auth.currentUser!.id,'body':c.text.trim()});
     await db.from('review_admin_tasks').update({'admin_reply':c.text.trim(),'handled':true,'handled_by':db.auth.currentUser!.id,'handled_at':DateTime.now().toIso8601String()}).eq('id',x['id']);
     await _load();
   }catch(e){msg('처리완료 저장에 실패했습니다: $e');}
