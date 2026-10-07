@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# rebuild forced update syntax fix
+# rebuild safe forced update UI
 
 on:
   push:
