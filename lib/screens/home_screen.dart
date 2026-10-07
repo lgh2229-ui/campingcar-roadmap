@@ -25,6 +25,7 @@ class HomeScreen extends StatefulWidget {
     required this.onUserChanged,
     required this.onLogout,
     this.refreshSignal = 0,
+    this.focusPlaceId,
   });
 
   final AppUser user;
@@ -33,6 +34,7 @@ class HomeScreen extends StatefulWidget {
   final ValueChanged<AppUser> onUserChanged;
   final Future<void> Function() onLogout;
   final int refreshSignal;
+  final String? focusPlaceId;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -55,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Place? editingLocationPlace;
   bool locationPickMode = false;
   bool loading = false;
+  bool _focusHandled=false;
 
   static const serviceFilters = ['전체', '블랙탱크 비움', '급수', '노지/차박', '공중화장실'];
   String get _currentAuthorId => widget.user.authId.isEmpty ? widget.user.userId : widget.user.authId;
@@ -77,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
       places = await widget.data.places();
       saved = await widget.data.savedIds();
       if (mounted) setState(() {});
+      if(!_focusHandled&&widget.focusPlaceId!=null){final hit=places.where((x)=>x.id==widget.focusPlaceId).toList();if(hit.isNotEmpty){_focusHandled=true;final p=hit.first;center=LatLng(p.latitude,p.longitude);map.move(center,17);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_showPlace(p);});}}
     } catch (e) {
       _msg('데이터를 불러오지 못했습니다: $e');
     }
