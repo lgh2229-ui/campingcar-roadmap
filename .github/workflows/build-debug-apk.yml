@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# review comments and admin resolution comments
+# forced latest-version gate
 
 on:
   push:
