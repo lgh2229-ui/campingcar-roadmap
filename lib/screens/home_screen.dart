@@ -638,7 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ]),
           if (r.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(r.body)),
           if (r.photoUrls.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: SizedBox(height: 82, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: r.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 6), itemBuilder: (_, i) => ClipRRect(borderRadius: BorderRadius.circular(8), child: _placePhoto(r.photoUrls[i]))))),
-          Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => _openReviewComments(r), icon: const Icon(Icons.chat_bubble_outline, size: 18), label: const Text('댓글'))),
+          FutureBuilder<List<ReviewComment>>(future:widget.data.reviewComments(r.id),builder:(_,snap){final cc=snap.data??const <ReviewComment>[];return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[if(cc.isNotEmpty)...[const Divider(),...cc.map((x)=>Padding(padding:const EdgeInsets.only(bottom:6),child:Text('${x.authorName.isEmpty?'사용자':x.authorName} · ${x.body}')))],Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () async {await _openReviewComments(r);if(mounted)setState((){});}, icon: const Icon(Icons.chat_bubble_outline, size: 18), label: Text(cc.isEmpty?'댓글':'댓글 ${cc.length}')))]);}),
         ]),
       ),
     );
