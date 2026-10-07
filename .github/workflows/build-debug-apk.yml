@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# restore photo tap zoom
+# preserve photo viewer in build patch
 
 on:
   push:
