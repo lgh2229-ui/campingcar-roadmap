@@ -112,38 +112,92 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
 
   @override
   Widget build(BuildContext context) {
+    Widget home;
+    if (!versionChecked) {
+      home = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    } else if (updateRequired) {
+      home = PopScope(
+        canPop: false,
+        child: Scaffold(
+          body: SafeArea(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.system_update, size: 72),
+                    const SizedBox(height: 20),
+                    const Text(
+                      '최신 버전 업데이트가 필요합니다',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      '캠핑카족 로드맵을 계속 사용하려면 최신 버전으로 업데이트해주세요.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          final uri = Uri.parse(updateUrl);
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        },
+                        icon: const Icon(Icons.update),
+                        label: const Text('업데이트하기'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (!ready) {
+      home = const Scaffold(body: Center(child: CircularProgressIndicator()));
+    } else if (user == null) {
+      home = LoginScreen(
+        auth: auth,
+        onLoggedIn: (u) {
+          setState(() => user = u);
+          PushNotificationService.instance.syncForSignedInUser();
+        },
+      );
+    } else if (user!.isAdministrator) {
+      home = AdminHomeScreen(
+        user: user!,
+        auth: auth,
+        data: data,
+        onUserChanged: (u) => setState(() => user = u),
+        onLogout: _logout,
+      );
+    } else {
+      home = HomeScreen(
+        user: user!,
+        auth: auth,
+        data: data,
+        onUserChanged: (u) => setState(() => user = u),
+        onLogout: _logout,
+      );
+    }
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: AppConfig.appName,
-      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff1976d2)), useMaterial3: true),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff1976d2)),
+        useMaterial3: true,
+      ),
       routes: {
         '/signup': (_) => SignupScreen(auth: auth),
         '/find-id': (_) => RecoveryScreen(auth: auth, mode: 'id'),
         '/find-pw': (_) => RecoveryScreen(auth: auth, mode: 'pw'),
       },
-      home: !versionChecked
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : updateRequired
-              ? PopScope(canPop:false,child:Scaffold(body:SafeArea(child:Center(child:Padding(padding:const EdgeInsets.all(28),child:Column(mainAxisSize:MainAxisSize.min,children:[const Icon(Icons.system_update,size:72),const SizedBox(height:20),const Text('최신 버전 업데이트가 필요합니다',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold),textAlign:TextAlign.center),const SizedBox(height:10),const Text('캠핑카족 로드맵을 계속 사용하려면 최신 버전으로 업데이트해주세요.',textAlign:TextAlign.center),const SizedBox(height:24),SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()async{final u=Uri.parse(updateUrl);await launchUrl(u,mode:LaunchMode.externalApplication);},icon:const Icon(Icons.update),label:const Text('업데이트하기'))])))))))
-          : !ready
-          ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : user == null
-              ? LoginScreen(auth: auth, onLoggedIn: (u) { setState(() => user = u); PushNotificationService.instance.syncForSignedInUser(); })
-              : user!.isAdministrator
-                  ? AdminHomeScreen(
-                      user: user!,
-                      auth: auth,
-                      data: data,
-                      onUserChanged: (u) => setState(() => user = u),
-                      onLogout: _logout,
-                    )
-                  : HomeScreen(
-                      user: user!,
-                      auth: auth,
-                      data: data,
-                      onUserChanged: (u) => setState(() => user = u),
-                      onLogout: _logout,
-                    ),
+      home: home,
     );
   }
 }
