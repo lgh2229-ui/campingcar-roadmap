@@ -693,12 +693,12 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('수정 저장'))],
     )));
     if (ok != true) return;
-    try { await widget.data.updateReview(reviewId: r.id, status: status, body: body.text); _msg('리뷰를 수정했습니다.'); await _load(); } catch (e) { _msg('리뷰 수정에 실패했습니다: $e'); }
+    try { await widget.data.updateReview(reviewId: r.id, status: status, body: body.text); _msg('리뷰를 수정했습니다.'); await _load(); if(mounted){Navigator.of(context).pop(); final hit=places.where((x)=>x.id==p.id).toList(); if(hit.isNotEmpty)_showPlace(hit.first);} } catch (e) { _msg('리뷰 수정에 실패했습니다: $e'); }
   }
 
   Future<void> _deleteReview(Place p, PlaceReview r) async {
     final ok = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(title: const Text('리뷰 삭제'), content: const Text('이 리뷰를 삭제할까요?'), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('삭제'))]));
     if (ok != true) return;
-    try { await widget.data.deleteReview(r.id); _msg('리뷰를 삭제했습니다.'); await _load(); } catch (e) { _msg('리뷰 삭제에 실패했습니다: $e'); }
+    try { await widget.data.deleteReview(r.id); _msg('리뷰를 삭제했습니다.'); await _load(); if(mounted){Navigator.of(context).pop(); final hit=places.where((x)=>x.id==p.id).toList(); if(hit.isNotEmpty)_showPlace(hit.first);} } catch (e) { _msg('리뷰 삭제에 실패했습니다: $e'); }
   }
 }
