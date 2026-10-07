@@ -55,6 +55,50 @@ detail_start=s.find('  Future<void> _showPlace(Place p) async {')
 detail_end=s.find('  Widget _heightCompatibility(Place p)', detail_start)
 if detail_start < 0 or detail_end < 0: raise SystemExit('FAILED: place detail boundaries missing')
 detail=s[detail_start:detail_end]
+# Preserve the photo viewer helper that lives immediately before _placePhoto.
+# This build patch rewrites the add-place block up to _placePhoto, so restore
+# the helper here if that rewrite removed it.
+viewer = """  void _showPhotoViewer(String value) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: Stack(
+          children: [
+            Center(
+              child: InteractiveViewer(
+                minScale: 0.8,
+                maxScale: 5,
+                child: value.startsWith('http://') || value.startsWith('https://')
+                    ? Image.network(value, fit: BoxFit.contain)
+                    : Image.file(File(value), fit: BoxFit.contain),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: SafeArea(
+                child: IconButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+"""
+if '_showPhotoViewer(String value)' not in s:
+    place_photo = s.find('  Widget _placePhoto(')
+    if place_photo < 0: raise SystemExit('FAILED: place photo helper anchor missing')
+    s = s[:place_photo] + viewer + s[place_photo:]
+    detail_start=s.find('  Future<void> _showPlace(Place p) async {')
+    detail_end=s.find('  Widget _heightCompatibility(Place p)', detail_start)
+    detail=s[detail_start:detail_end]
 old_builder="builder: (ctx) => DraggableScrollableSheet("
 new_builder="builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => DraggableScrollableSheet("
 changed_builder=False
