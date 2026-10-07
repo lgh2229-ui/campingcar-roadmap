@@ -4,6 +4,8 @@ import 'admin_home_screen.dart';
 import 'home_screen.dart';
 import '../models/place.dart';
 import '../repositories/supabase_repository.dart';
+import '../repositories/auth_repository.dart';
+import '../models/app_user.dart';
 class AdminManagementScreen extends StatefulWidget{const AdminManagementScreen({super.key});@override State<AdminManagementScreen> createState()=>_S();}
 class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixin{
  final db=Supabase.instance.client;final memberSearch=TextEditingController();late final TabController tabs;List<Map<String,dynamic>> market=[],members=[],feedback=[],reports=[],reviewTasks=[];List<Place> places=[];bool loading=true;String memberQuery='';bool approvalCompleted=false,feedbackCompleted=false,reportCompleted=false;
