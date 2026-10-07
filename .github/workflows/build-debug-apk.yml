@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# location picker button overlap fix
+# reported place map detail navigation verification
 
 on:
   push:
