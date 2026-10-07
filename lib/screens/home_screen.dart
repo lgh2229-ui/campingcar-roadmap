@@ -316,10 +316,10 @@ class _HomeScreenState extends State<HomeScreen> {
         ])),
         if (selectedSpot != null)
           Positioned(left:12,right:12,bottom:86,child:Card(child:ListTile(leading:const Icon(Icons.location_pin,color:Colors.red),title:Text('${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12)),trailing:locationPickMode?Wrap(spacing:4,children:[TextButton(onPressed:(){setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;});},child:const Text('취소')),FilledButton(onPressed:()async{final target=editingLocationPlace,spot=selectedSpot;if(target==null||spot==null)return;final a=await _reverseAddress(spot);target.latitude=spot.latitude;target.longitude=spot.longitude;target.address=a;try{await widget.data.updatePlace(target);await _load();if(!mounted)return;setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;center=spot;});map.move(spot,17);_msg('위치와 주소를 반영했습니다.');}catch(e){_msg('위치 수정에 실패했습니다: $e');}},child:const Text('확인'))]):TextButton(onPressed:()=>setState(()=>selectedSpot=null),child:const Text('취소'))))),
-        Positioned(right: 14, bottom: 18, child: Column(children: [
-          FloatingActionButton.small(heroTag: 'loc', onPressed: _locate, child: const Icon(Icons.my_location)),
-          const SizedBox(height: 10),
-          FloatingActionButton.extended(heroTag: 'add', onPressed: () {
+        Positioned(right:14,bottom:18,child:Column(children:[
+          if(!locationPickMode) FloatingActionButton.small(heroTag:'loc',onPressed:_locate,child:const Icon(Icons.my_location)),
+          if(!locationPickMode) const SizedBox(height:10),
+          if(!locationPickMode) FloatingActionButton.extended(heroTag: 'add', onPressed: () {
             if (selectedSpot == null) return _msg('지도에서 등록할 위치를 길게 눌러 빨간 핀을 먼저 찍어주세요.');
             _openAddPlace(selectedSpot!);
           }, icon: const Icon(Icons.add_location_alt_outlined), label: const Text('장소등록')),
