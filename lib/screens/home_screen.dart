@@ -577,6 +577,14 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(height: 6),
         Text(p.services.join(' · ')),
         if (p.address.isNotEmpty) Text(p.address),
+        if (p.ownerNickname.trim().isNotEmpty || p.createdAt != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              '등록자: ${p.ownerNickname.trim().isEmpty ? '닉네임 없음' : p.ownerNickname} · 등록일자: ${p.createdAt == null ? '-' : '${p.createdAt!.toLocal().year.toString().padLeft(4, '0')}.${p.createdAt!.toLocal().month.toString().padLeft(2, '0')}.${p.createdAt!.toLocal().day.toString().padLeft(2, '0')} ${p.createdAt!.toLocal().hour.toString().padLeft(2, '0')}:${p.createdAt!.toLocal().minute.toString().padLeft(2, '0')}'}',
+              style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+          ),
         if (p.photoUrls.isNotEmpty) ...[
           const SizedBox(height: 12),
           SizedBox(height: 150, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: p.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) => ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i])))),
