@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# rebuild safe forced update UI
+# restore place author and registration date
 
 on:
   push:
