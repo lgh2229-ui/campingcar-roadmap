@@ -124,7 +124,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
       home: !versionChecked
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : updateRequired
-              ? PopScope(canPop:false,child:Scaffold(body:SafeArea(child:Center(child:Padding(padding:const EdgeInsets.all(28),child:Column(mainAxisSize:MainAxisSize.min,children:[const Icon(Icons.system_update,size:72),const SizedBox(height:20),const Text('최신 버전 업데이트가 필요합니다',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold),textAlign:TextAlign.center),const SizedBox(height:10),const Text('캠핑카족 로드맵을 계속 사용하려면 최신 버전으로 업데이트해주세요.',textAlign:TextAlign.center),const SizedBox(height:24),SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()async{final u=Uri.parse(updateUrl);await launchUrl(u,mode:LaunchMode.externalApplication);},icon:const Icon(Icons.update),label:const Text('업데이트하기'))]))))))
+              ? PopScope(canPop:false,child:Scaffold(body:SafeArea(child:Center(child:Padding(padding:const EdgeInsets.all(28),child:Column(mainAxisSize:MainAxisSize.min,children:[const Icon(Icons.system_update,size:72),const SizedBox(height:20),const Text('최신 버전 업데이트가 필요합니다',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold),textAlign:TextAlign.center),const SizedBox(height:10),const Text('캠핑카족 로드맵을 계속 사용하려면 최신 버전으로 업데이트해주세요.',textAlign:TextAlign.center),const SizedBox(height:24),SizedBox(width:double.infinity,child:FilledButton.icon(onPressed:()async{final u=Uri.parse(updateUrl);await launchUrl(u,mode:LaunchMode.externalApplication);},icon:const Icon(Icons.update),label:const Text('업데이트하기'))])))))))
           : !ready
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : user == null
