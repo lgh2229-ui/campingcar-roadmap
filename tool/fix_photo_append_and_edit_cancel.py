@@ -58,41 +58,29 @@ detail=s[detail_start:detail_end]
 # Preserve the photo viewer helper that lives immediately before _placePhoto.
 # This build patch rewrites the add-place block up to _placePhoto, so restore
 # the helper here if that rewrite removed it.
-viewer = """  void _showPhotoViewer(String value) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (ctx) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: Stack(
-          children: [
-            Center(
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 5,
-                child: value.startsWith('http://') || value.startsWith('https://')
-                    ? Image.network(value, fit: BoxFit.contain)
-                    : Image.file(File(value), fit: BoxFit.contain),
-              ),
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: SafeArea(
-                child: IconButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                ),
-              ),
-            ),
-          ],
+viewer = """  void _showPhotoViewer(List<String> photos, int initial) {
+    if (photos.isEmpty) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (viewerContext) => Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white, title: Text('\\${initial + 1}/\\${photos.length}')),
+      body: PageView.builder(
+        controller: PageController(initialPage: initial),
+        itemCount: photos.length,
+        itemBuilder: (_, i) => InteractiveViewer(
+          minScale: 0.8,
+          maxScale: 5,
+          child: Center(
+            child: photos[i].startsWith('http://') || photos[i].startsWith('https://')
+                ? Image.network(photos[i], fit: BoxFit.contain)
+                : Image.file(File(photos[i]), fit: BoxFit.contain),
+          ),
         ),
       ),
-    );
+    )));
   }
 
 """
-if '_showPhotoViewer(String value)' not in s:
+if '_showPhotoViewer(List<String> photos, int initial)' not in s:
     place_photo = s.find('  Widget _placePhoto(')
     if place_photo < 0: raise SystemExit('FAILED: place photo helper anchor missing')
     s = s[:place_photo] + viewer + s[place_photo:]
