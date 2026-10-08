@@ -557,37 +557,29 @@ class _HomeScreenState extends State<HomeScreen> {
     )));
   }
 
-  void _showPhotoViewer(String value) {
-    showDialog<void>(
-      context: context,
-      barrierColor: Colors.black87,
-      builder: (ctx) => Dialog.fullscreen(
+  void _showPhotoViewer(List<String> photos, int initial) {
+    if (photos.isEmpty) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (viewerContext) => Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
         backgroundColor: Colors.black,
-        child: Stack(
-          children: [
-            Center(
-              child: InteractiveViewer(
-                minScale: 0.8,
-                maxScale: 5,
-                child: value.startsWith('http://') || value.startsWith('https://')
-                    ? Image.network(value, fit: BoxFit.contain)
-                    : Image.file(File(value), fit: BoxFit.contain),
-              ),
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: SafeArea(
-                child: IconButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
-                ),
-              ),
-            ),
-          ],
+        foregroundColor: Colors.white,
+        title: Text('${initial + 1}/${photos.length}'),
+      ),
+      body: PageView.builder(
+        controller: PageController(initialPage: initial),
+        itemCount: photos.length,
+        itemBuilder: (_, i) => InteractiveViewer(
+          minScale: 0.8,
+          maxScale: 5,
+          child: Center(
+            child: photos[i].startsWith('http://') || photos[i].startsWith('https://')
+                ? Image.network(photos[i], fit: BoxFit.contain)
+                : Image.file(File(photos[i]), fit: BoxFit.contain),
+          ),
         ),
       ),
-    );
+    )));
   }
 
   Widget _placePhoto(String value) {
@@ -620,7 +612,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         if (p.photoUrls.isNotEmpty) ...[
           const SizedBox(height: 12),
-          SizedBox(height: 150, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: p.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) => InkWell(onTap: () => _showPhotoViewer(p.photoUrls[i]), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i]))))),
+          SizedBox(height: 150, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: p.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) => InkWell(onTap: () => _showPhotoViewer(p.photoUrls, i), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i]))))),
         ],
         const SizedBox(height: 12),
         if (p.hours.isNotEmpty) Text('운영시간: ${p.hours}'),
@@ -678,7 +670,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (mine) PopupMenuButton<String>(onSelected: (v) async { if (v == 'edit') await _editReview(p, r); if (v == 'delete') await _deleteReview(p, r); }, itemBuilder: (_) => const [PopupMenuItem(value: 'edit', child: Text('수정')), PopupMenuItem(value: 'delete', child: Text('삭제'))]),
           ]),
           if (r.body.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(r.body)),
-          if (r.photoUrls.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: SizedBox(height: 82, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: r.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 6), itemBuilder: (_, i) => InkWell(onTap: () => _showPhotoViewer(r.photoUrls[i]), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: _placePhoto(r.photoUrls[i])))))),
+          if (r.photoUrls.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: SizedBox(height: 82, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: r.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 6), itemBuilder: (_, i) => InkWell(onTap: () => _showPhotoViewer(r.photoUrls, i), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: _placePhoto(r.photoUrls[i])))))),
           FutureBuilder<List<ReviewComment>>(future:widget.data.reviewComments(r.id),builder:(_,snap){final cc=snap.data??const <ReviewComment>[];return Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[if(cc.isNotEmpty)...[const Divider(),...cc.map((x)=>Padding(padding:const EdgeInsets.only(bottom:6),child:Text('${x.authorName.isEmpty?'사용자':x.authorName} · ${x.body}')))],Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () async {await _openReviewComments(r);if(mounted)setState((){});}, icon: const Icon(Icons.chat_bubble_outline, size: 18), label: Text(cc.isEmpty?'댓글':'댓글 ${cc.length}')))]);}),
         ]),
       ),
