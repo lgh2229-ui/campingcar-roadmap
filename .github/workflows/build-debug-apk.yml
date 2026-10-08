@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# swipe photos and vehicle water toilet filters
+# vehicle region and range filter redesign
 
 on:
   push:
