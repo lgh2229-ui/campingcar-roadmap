@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# preserve photo viewer in build patch
+# swipe photos and vehicle water toilet filters
 
 on:
   push:
