@@ -14,8 +14,8 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   final search = TextEditingController();
   bool loading = true;
   List<Map<String, dynamic>> rows = [];
-  String q = '', status = '전체', toilet = '전체', freshFilter = '전체', greyFilter = '전체', region = '';
-  int? minPrice, maxPrice, minYear, maxYear, maxKm, minBattery, minSolar, minInverter, minAlternator, minFresh, minGrey, minToilet;
+  String q = '', status = '전체', toilet = '전체', freshFilter = '전체', greyFilter = '전체', region = '전체', priceFilter = '전체', yearFilter = '전체', batteryFilter = '전체', solarFilter = '전체', inverterFilter = '전체', alternatorFilter = '전체';
+  int? minPrice, maxPrice, minYear, maxYear, maxKm, minBattery, maxBattery, minSolar, maxSolar, minInverter, maxInverter, minAlternator, maxAlternator, minFresh, minGrey, minToilet;
   bool? shore;
   String get uid => db.auth.currentUser?.id ?? '';
 
@@ -31,10 +31,13 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   List<Map<String,dynamic>> get filtered => rows.where((x){
     if(status!='전체' && '${x['status']}'!=(status=='판매중'?'active':'sold')) return false;
     final z=q.toLowerCase(); if(z.isNotEmpty && !('${x['title']} ${x['manufacturer']} ${x['model']} ${x['region']}'.toLowerCase().contains(z))) return false;
-    if(region.isNotEmpty && !('${x['region']}'.contains(region))) return false;
+    if(region!='전체' && !('${x['region']}'.contains(region))) return false;
     bool range(String k,int? lo,int? hi){final v=iv(x,k);return (lo==null||(v!=null&&v>=lo))&&(hi==null||(v!=null&&v<=hi));}
-    if(!range('price_krw',minPrice,maxPrice)||!range('model_year',minYear,maxYear)||!range('mileage_km',null,maxKm)) return false;
-    for(final e in [('battery_ah',minBattery),('solar_w',minSolar),('inverter_w',minInverter),('alternator_charger_a',minAlternator)]) { if(e.$2!=null&&!range(e.$1,e.$2,null)) return false; }
+    if(priceFilter=='금액설정' && !range('price_krw',minPrice,maxPrice)) return false;
+    if(yearFilter=='연식설정' && !range('model_year',minYear,maxYear)) return false;
+    if(!range('mileage_km',null,maxKm)) return false;
+    bool optionMatch(String mode,String key,int? lo,int? hi){final v=iv(x,key);if(mode=='전체')return true;if(mode=='없음')return v==null;if(mode=='있음')return v!=null&&range(key,lo,hi);return true;}
+    if(!optionMatch(batteryFilter,'battery_ah',minBattery,maxBattery)||!optionMatch(solarFilter,'solar_w',minSolar,maxSolar)||!optionMatch(inverterFilter,'inverter_w',minInverter,maxInverter)||!optionMatch(alternatorFilter,'alternator_charger_a',minAlternator,maxAlternator)) return false;
     if(freshFilter=='없음' && x['fresh_water_l']!=null) return false; if(freshFilter=='있음' && (iv(x,'fresh_water_l')==null || (minFresh!=null&&!range('fresh_water_l',minFresh,null)))) return false;
     if(greyFilter=='없음' && x['grey_water_l']!=null) return false; if(greyFilter=='있음' && (iv(x,'grey_water_l')==null || (minGrey!=null&&!range('grey_water_l',minGrey,null)))) return false;
     if(toilet!='전체' && '${x['toilet_type']}'!=toilet) return false; if(minToilet!=null&&!range('toilet_capacity_l',minToilet,null)) return false; if(shore!=null&&x['shore_power']!=shore) return false; return true;
@@ -44,16 +47,31 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
 
   Future<void> filters() async {
     TextEditingController c(int? v)=>TextEditingController(text:v?.toString()??'');
-    final a=c(minPrice),b=c(maxPrice),y1=c(minYear),y2=c(maxYear),km=c(maxKm),ba=c(minBattery),so=c(minSolar),inv=c(minInverter),alt=c(minAlternator),fr=c(minFresh),gr=c(minGrey),tc=c(minToilet),rg=TextEditingController(text:region); var st=status,tt=toilet,ff=freshFilter,gf=greyFilter; bool? sh=shore;
-    await showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,ss)=>SafeArea(child:Padding(padding:EdgeInsets.fromLTRB(16,0,16,MediaQuery.of(ctx).viewInsets.bottom+12),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      const Text('중고차 상세 필터',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:10),DropdownButtonFormField<String>(initialValue:st,decoration:const InputDecoration(labelText:'판매상태',border:OutlineInputBorder()),items:['전체','판매중','판매완료'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>ss(()=>st=v!)),const SizedBox(height:8),
-      Row(children:[Expanded(child:num(a,'최소가격','원')),const SizedBox(width:6),Expanded(child:num(b,'최대가격','원'))]),const SizedBox(height:8),Row(children:[Expanded(child:num(y1,'최소연식','년')),const SizedBox(width:6),Expanded(child:num(y2,'최대연식','년'))]),const SizedBox(height:8),num(km,'최대 주행거리','km'),const SizedBox(height:8),TextField(controller:rg,decoration:const InputDecoration(labelText:'판매지역',border:OutlineInputBorder())),const Divider(height:24),
-      Row(children:[Expanded(child:num(ba,'배터리','Ah')),const SizedBox(width:6),Expanded(child:num(so,'태양광','W'))]),const SizedBox(height:8),Row(children:[Expanded(child:num(inv,'인버터','W')),const SizedBox(width:6),Expanded(child:num(alt,'주행충전기','A'))]),const SizedBox(height:8),DropdownButtonFormField<bool?>(initialValue:sh,decoration:const InputDecoration(labelText:'한전충전',border:OutlineInputBorder()),items:const [DropdownMenuItem(value:null,child:Text('전체')),DropdownMenuItem(value:true,child:Text('있음')),DropdownMenuItem(value:false,child:Text('없음'))],onChanged:(v)=>ss(()=>sh=v)),const SizedBox(height:8),
-      Row(children:[Expanded(child:DropdownButtonFormField<String>(initialValue:ff,decoration:const InputDecoration(labelText:'청수',border:OutlineInputBorder()),items:['전체','없음','있음'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>ss(()=>ff=v!))),if(ff=='있음')...[const SizedBox(width:6),Expanded(child:TextField(controller:fr,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'용량',suffixText:'리터 이상',border:OutlineInputBorder())))]]),const SizedBox(height:8),
-      Row(children:[Expanded(child:DropdownButtonFormField<String>(initialValue:gf,decoration:const InputDecoration(labelText:'오수',border:OutlineInputBorder()),items:['전체','없음','있음'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>ss(()=>gf=v!))),if(gf=='있음')...[const SizedBox(width:6),Expanded(child:TextField(controller:gr,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'용량',suffixText:'리터 이상',border:OutlineInputBorder())))]]),const SizedBox(height:8),
+    final a=c(minPrice),b=c(maxPrice),y1=c(minYear),y2=c(maxYear),km=c(maxKm);
+    final ba1=c(minBattery),ba2=c(maxBattery),so1=c(minSolar),so2=c(maxSolar),inv1=c(minInverter),inv2=c(maxInverter),alt1=c(minAlternator),alt2=c(maxAlternator);
+    final fr=c(minFresh),gr=c(minGrey),tc=c(minToilet);
+    var st=status,tt=toilet,ff=freshFilter,gf=greyFilter,reg=region,pf=priceFilter,yf=yearFilter,bf=batteryFilter,sf=solarFilter,inf=inverterFilter,af=alternatorFilter; bool? sh=shore;
+    const regions=['전체','서울','경기','인천','부산','대구','대전','광주','울산','세종','강원','충북','충남','전북','전남','경북','경남','제주'];
+    Widget select(String label,String value,List<String> values,ValueChanged<String> onChanged)=>DropdownButtonFormField<String>(initialValue:value,decoration:InputDecoration(labelText:label,border:const OutlineInputBorder()),items:values.map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v){if(v!=null)onChanged(v);});
+    Widget rangeFields(TextEditingController lo,TextEditingController hi,String unit)=>Row(children:[Expanded(child:TextField(controller:lo,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:'최저',suffixText:unit,border:const OutlineInputBorder()))),const Padding(padding:EdgeInsets.symmetric(horizontal:6),child:Text('~')),Expanded(child:TextField(controller:hi,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:'최고',suffixText:unit,border:const OutlineInputBorder())))]);
+    Widget option(String label,String mode,TextEditingController lo,TextEditingController hi,String unit,ValueChanged<String> change)=>Column(children:[select(label,mode,const ['전체','없음','있음'],(v)=>ss(()=>change(v))),if(mode=='있음')...[const SizedBox(height:6),rangeFields(lo,hi,unit)],const SizedBox(height:8)]);
+    await showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,setLocal){ss=setLocal;return SafeArea(child:Padding(padding:EdgeInsets.fromLTRB(16,0,16,MediaQuery.of(ctx).viewInsets.bottom+12),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      const Text('중고차 상세 필터',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:10),
+      select('판매상태',st,const ['전체','판매중','판매완료'],(v)=>ss(()=>st=v)),const SizedBox(height:8),
+      select('판매지역',reg,regions,(v)=>ss(()=>reg=v)),const SizedBox(height:8),
+      select('금액',pf,const ['전체','금액설정'],(v)=>ss(()=>pf=v)),if(pf=='금액설정')...[const SizedBox(height:6),rangeFields(a,b,'원')],const SizedBox(height:8),
+      select('연식',yf,const ['전체','연식설정'],(v)=>ss(()=>yf=v)),if(yf=='연식설정')...[const SizedBox(height:6),rangeFields(y1,y2,'년')],const SizedBox(height:8),
+      num(km,'최대 주행거리','km'),const Divider(height:24),
+      option('배터리',bf,ba1,ba2,'Ah',(v)=>bf=v),
+      option('태양광',sf,so1,so2,'W',(v)=>sf=v),
+      option('인버터',inf,inv1,inv2,'W',(v)=>inf=v),
+      option('주행충전기',af,alt1,alt2,'A',(v)=>af=v),
+      DropdownButtonFormField<bool?>(initialValue:sh,decoration:const InputDecoration(labelText:'한전충전',border:OutlineInputBorder()),items:const [DropdownMenuItem(value:null,child:Text('전체')),DropdownMenuItem(value:true,child:Text('있음')),DropdownMenuItem(value:false,child:Text('없음'))],onChanged:(v)=>ss(()=>sh=v)),const SizedBox(height:8),
+      Row(children:[Expanded(child:select('청수',ff,const ['전체','없음','있음'],(v)=>ss(()=>ff=v))),if(ff=='있음')...[const SizedBox(width:6),Expanded(child:TextField(controller:fr,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'용량',suffixText:'리터 이상',border:OutlineInputBorder())))]]),const SizedBox(height:8),
+      Row(children:[Expanded(child:select('오수',gf,const ['전체','없음','있음'],(v)=>ss(()=>gf=v))),if(gf=='있음')...[const SizedBox(width:6),Expanded(child:TextField(controller:gr,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'용량',suffixText:'리터 이상',border:OutlineInputBorder())))]]),const SizedBox(height:8),
       Row(children:[Expanded(child:DropdownButtonFormField<String>(initialValue:tt,decoration:const InputDecoration(labelText:'화장실타입',border:OutlineInputBorder()),items:const [DropdownMenuItem(value:'전체',child:Text('전체')),DropdownMenuItem(value:'none',child:Text('없음')),DropdownMenuItem(value:'cassette',child:Text('카트리지')),DropdownMenuItem(value:'black',child:Text('블랙'))],onChanged:(v)=>ss(()=>tt=v!))),if(tt=='cassette'||tt=='black')...[const SizedBox(width:6),Expanded(child:TextField(controller:tc,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'용량',suffixText:'리터 이상',border:OutlineInputBorder())))]]),const SizedBox(height:12),
-      FilledButton(onPressed:(){setState((){status=st;toilet=tt;freshFilter=ff;greyFilter=gf;shore=sh;region=rg.text.trim();minPrice=int.tryParse(a.text);maxPrice=int.tryParse(b.text);minYear=int.tryParse(y1.text);maxYear=int.tryParse(y2.text);maxKm=int.tryParse(km.text);minBattery=int.tryParse(ba.text);minSolar=int.tryParse(so.text);minInverter=int.tryParse(inv.text);minAlternator=int.tryParse(alt.text);minFresh=ff=='있음'?int.tryParse(fr.text):null;minGrey=gf=='있음'?int.tryParse(gr.text):null;minToilet=(tt=='cassette'||tt=='black')?int.tryParse(tc.text):null;});Navigator.pop(ctx);},child:const Text('적용'))
-    ]))))));
+      FilledButton(onPressed:(){setState((){status=st;region=reg;priceFilter=pf;yearFilter=yf;batteryFilter=bf;solarFilter=sf;inverterFilter=inf;alternatorFilter=af;toilet=tt;freshFilter=ff;greyFilter=gf;shore=sh;minPrice=pf=='금액설정'?int.tryParse(a.text):null;maxPrice=pf=='금액설정'?int.tryParse(b.text):null;minYear=yf=='연식설정'?int.tryParse(y1.text):null;maxYear=yf=='연식설정'?int.tryParse(y2.text):null;maxKm=int.tryParse(km.text);minBattery=bf=='있음'?int.tryParse(ba1.text):null;maxBattery=bf=='있음'?int.tryParse(ba2.text):null;minSolar=sf=='있음'?int.tryParse(so1.text):null;maxSolar=sf=='있음'?int.tryParse(so2.text):null;minInverter=inf=='있음'?int.tryParse(inv1.text):null;maxInverter=inf=='있음'?int.tryParse(inv2.text):null;minAlternator=af=='있음'?int.tryParse(alt1.text):null;maxAlternator=af=='있음'?int.tryParse(alt2.text):null;minFresh=ff=='있음'?int.tryParse(fr.text):null;minGrey=gf=='있음'?int.tryParse(gr.text):null;minToilet=(tt=='cassette'||tt=='black')?int.tryParse(tc.text):null;});Navigator.pop(ctx);},child:const Text('적용'))
+    ])))));}));
   }
 
   Future<void> edit([Map<String,dynamic>? x]) async {
