@@ -67,12 +67,18 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   bool updateRequired = false;
   String updateUrl = 'https://play.google.com/store/apps/details?id=kr.co.campingcarroadmap.app';
   static const int currentVersionCode = 123;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+  Map<String,dynamic>? _pendingNotification;
+  void _handleNotification(Map<String,dynamic> event){_pendingNotification=event;_openNotification();}
+  void _openNotification(){if(!mounted||!ready||user==null||_pendingNotification==null)return;final event=_pendingNotification!;final id='${event['reference_id']??''}';if(id.isEmpty)return;_pendingNotification=null;final kind='${event['kind']??''}'.toLowerCase();final navigator=_navigatorKey.currentState;if(navigator==null){_pendingNotification=event;return;}if(kind.contains('place')||kind.contains('location')){navigator.push(MaterialPageRoute(builder:(_)=>HomeScreen(user:user!,auth:auth,data:data,onUserChanged:(u)=>setState(()=>user=u),onLogout:_logout,focusPlaceId:id)));}else if(user!.isAdministrator){navigator.push(MaterialPageRoute(builder:(_)=>AdminHomeScreen(user:user!,auth:auth,data:data,onUserChanged:(u)=>setState(()=>user=u),onLogout:_logout)));}}
+
 
   @override
   void initState() {
     super.initState();
     auth = AuthRepository(local, client: widget.client);
     data = widget.client == null ? local : SupabaseRepository(widget.client!);
+    PushNotificationService.instance.onOpened=_handleNotification;
     _startup();
   }
 
@@ -100,7 +106,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
       debugPrintStack(stackTrace: stackTrace);
       user = null;
     } finally {
-      if (mounted) setState(() => ready = true);
+      if (mounted) {setState(() => ready = true);WidgetsBinding.instance.addPostFrameCallback((_)=>_openNotification());}
     }
   }
 
@@ -164,6 +170,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
         auth: auth,
         onLoggedIn: (u) {
           setState(() => user = u);
+          WidgetsBinding.instance.addPostFrameCallback((_)=>_openNotification());
           PushNotificationService.instance.syncForSignedInUser();
         },
       );
@@ -185,7 +192,9 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
       );
     }
 
+    WidgetsBinding.instance.addPostFrameCallback((_)=>_openNotification());
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       title: AppConfig.appName,
       theme: ThemeData(
