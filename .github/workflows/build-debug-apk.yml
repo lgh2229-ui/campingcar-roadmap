@@ -1,5 +1,5 @@
 name: Build Android Debug APK
-# fix immediate range filter refresh
+# notification deep link and admin badge refresh
 
 on:
   push:
