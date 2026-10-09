@@ -288,24 +288,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 final pending = group.any((x) => x.isPending && _isMine(x));
                 return Marker(
                   point: _groupPoint(group),
-                  width: 68,
-                  height: 68,
+                  width: 48,
+                  height: 48,
                   child: GestureDetector(
                     onTap: () => _showPlaceGroup(group),
                     child: Container(
-                      padding: const EdgeInsets.all(5),
+                      padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
                         color: pending ? Theme.of(context).colorScheme.tertiaryContainer : Colors.white,
                         border: Border.all(width: 2),
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(7),
                         boxShadow: const [BoxShadow(blurRadius: 5, color: Colors.black26)],
                       ),
                       child: group.length > 1
                           ? Stack(alignment: Alignment.center, children: [
-                              const Icon(Icons.location_on, size: 34),
+                              const Icon(Icons.location_on, size: 26),
                               Positioned(right: 0, top: 0, child: Text('${group.length}', style: const TextStyle(fontWeight: FontWeight.bold))),
                             ])
-                          : Center(child: Text(_icons(p).take(3).join(), style: const TextStyle(fontSize: 18))),
+                          : Center(child: Text(_icons(p).take(3).join(), style: const TextStyle(fontSize: 17))),
                     ),
                   ),
                 );
