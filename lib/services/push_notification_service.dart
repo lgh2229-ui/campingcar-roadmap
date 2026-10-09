@@ -16,6 +16,11 @@ class PushNotificationService {
   final _local = FlutterLocalNotificationsPlugin();
   SupabaseClient? _client;
   StreamSubscription<String>? _tokenSub;
+  final StreamController<Map<String, dynamic>> _events = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get events => _events.stream;
+  Map<String, dynamic>? lastOpened;
+  void Function(Map<String, dynamic>)? onOpened;
+  void _emit(Map<String, dynamic> data, {bool opened=false}) { if(opened){lastOpened=data;onOpened?.call(data);} _events.add(data); }
 
   Future<void> initialize(SupabaseClient? client) async {
     _client = client;
@@ -23,7 +28,7 @@ class PushNotificationService {
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
       const channel = AndroidNotificationChannel('campingcar_alerts','캠핑카족 알림',description:'장소 승인, 신고, 의견 및 서비스 알림',importance:Importance.high);
-      await _local.initialize(const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')));
+      await _local.initialize(const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')), onDidReceiveNotificationResponse: (response) { final payload=response.payload; if(payload!=null&&payload.isNotEmpty){final parts=payload.split('|');_emit({'kind':parts.first,'reference_id':parts.length>1?parts[1]:''},opened:true);} });
       await _local.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
       await FirebaseMessaging.instance.requestPermission(alert:true,badge:true,sound:true);
       await _registerToken();
@@ -34,13 +39,15 @@ class PushNotificationService {
       _tokenSub = FirebaseMessaging.instance.onTokenRefresh.listen(_saveToken);
       FirebaseMessaging.onMessage.listen((m) async {
         final n=m.notification; if(n==null)return;
-        await _local.show(m.hashCode,n.title,n.body,const NotificationDetails(android:AndroidNotificationDetails('campingcar_alerts','캠핑카족 알림',channelDescription:'장소 승인, 신고, 의견 및 서비스 알림',importance:Importance.high,priority:Priority.high)));
+        _emit(m.data);
+        await _local.show(m.hashCode,n.title,n.body,const NotificationDetails(android:AndroidNotificationDetails('campingcar_alerts','캠핑카족 알림',channelDescription:'장소 승인, 신고, 의견 및 서비스 알림',importance:Importance.high,priority:Priority.high)),payload:'${m.data['kind']??''}|${m.data['reference_id']??''}');
       });
     } catch (e) { debugPrint('Push init failed: $e'); }
   }
 
   void _handleTap(RemoteMessage message) {
     debugPrint('Push opened: kind=${message.data['kind']} reference_id=${message.data['reference_id']}');
+    _emit(message.data,opened:true);
   }
 
   Future<void> syncForSignedInUser() => _registerToken();
