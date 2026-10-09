@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../services/push_notification_service.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,7 +19,10 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
   bool busy=false; int pendingCount=0, reportCount=0, feedbackCount=0, marketReportCount=0, mapRefreshSignal=0;
-  @override void initState(){super.initState();_refreshCounts();}
+  StreamSubscription<Map<String,dynamic>>? _pushSub;
+  Timer? _refreshTimer;
+  @override void initState(){super.initState();_refreshCounts();_pushSub=PushNotificationService.instance.events.listen((_){_refreshCounts();});_refreshTimer=Timer.periodic(const Duration(seconds:20),(_)=>_refreshCounts());}
+  @override void dispose(){_pushSub?.cancel();_refreshTimer?.cancel();super.dispose();}
   void _msg(String text){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(text)));}
   String _dt(DateTime? d)=>d==null?'-':d.toLocal().toString().substring(0,16);
   String _owner(Place p)=>p.ownerNickname.trim().isEmpty?'닉네임 없음':p.ownerNickname.trim();
