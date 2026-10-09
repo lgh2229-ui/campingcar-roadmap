@@ -66,7 +66,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   bool versionChecked = false;
   bool updateRequired = false;
   String updateUrl = 'https://play.google.com/store/apps/details?id=kr.co.campingcarroadmap.app';
-  static const int currentVersionCode = 122;
+  static const int currentVersionCode = 123;
 
   @override
   void initState() {
