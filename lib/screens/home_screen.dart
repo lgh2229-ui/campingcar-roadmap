@@ -54,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String savedFilter = '전체';
   LatLng center = const LatLng(37.5665, 126.9780);
   LatLng? selectedSpot;
+  LatLng? currentLocation;
   Place? editingLocationPlace;
   bool locationPickMode = false;
   bool loading = false;
@@ -93,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
       final p = await Geolocator.getCurrentPosition();
       center = LatLng(p.latitude, p.longitude);
+      currentLocation = center;
       map.move(center, 15);
       if (mounted) setState(() {});
     } catch (_) {}
@@ -308,6 +310,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
               }),
+              if (currentLocation != null)
+                Marker(point: currentLocation!, width: 34, height: 34, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: Colors.blue, width: 3), boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black38)]), child: const Center(child: Icon(Icons.circle, color: Colors.blue, size: 14)))),
               if (selectedSpot != null)
                 Marker(point: selectedSpot!, width: 100, height: 75, alignment: Alignment.topCenter, child: Column(children: [Text(locationPickMode?'수정 위치':'등록 위치', style: TextStyle(fontWeight: FontWeight.bold)), Icon(Icons.location_pin, color: Colors.red, size: 48)])),
             ]),
