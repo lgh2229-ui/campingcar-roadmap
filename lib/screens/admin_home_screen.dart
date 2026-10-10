@@ -12,8 +12,8 @@ import 'admin_management_screen.dart';
 import 'home_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
-  const AdminHomeScreen({super.key,required this.user,required this.auth,required this.data,required this.onUserChanged,required this.onLogout});
-  final AppUser user; final AuthRepository auth; final AppDataRepository data; final ValueChanged<AppUser> onUserChanged; final Future<void> Function() onLogout;
+  const AdminHomeScreen({super.key,required this.user,required this.auth,required this.data,required this.onUserChanged,required this.onLogout,this.focusPlaceId});
+  final String? focusPlaceId; final AppUser user; final AuthRepository auth; final AppDataRepository data; final ValueChanged<AppUser> onUserChanged; final Future<void> Function() onLogout;
   @override State<AdminHomeScreen> createState()=>_AdminHomeScreenState();
 }
 
@@ -30,7 +30,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   Widget _badge(Widget child,int count)=>Stack(clipBehavior:Clip.none,children:[child,if(count>0)Positioned(right:-7,top:-8,child:Container(padding:const EdgeInsets.symmetric(horizontal:6,vertical:2),decoration:BoxDecoration(color:Colors.red,borderRadius:BorderRadius.circular(12)),constraints:const BoxConstraints(minWidth:20),child:Text(count>99?'99+':'$count',textAlign:TextAlign.center,style:const TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.bold))))]);
 
   @override Widget build(BuildContext context)=>Stack(children:[
-    HomeScreen(user:widget.user,auth:widget.auth,data:widget.data,onUserChanged:widget.onUserChanged,onLogout:widget.onLogout,refreshSignal:mapRefreshSignal),
+    HomeScreen(user:widget.user,auth:widget.auth,data:widget.data,onUserChanged:widget.onUserChanged,onLogout:widget.onLogout,refreshSignal:mapRefreshSignal,focusPlaceId:widget.focusPlaceId),
     Positioned(top:MediaQuery.of(context).padding.top+12,right:12,child:SafeArea(child:
       _badge(FloatingActionButton(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){if(mounted)setState(()=>mapRefreshSignal++);_refreshCounts();}),child:const Icon(Icons.admin_panel_settings_outlined)),pendingCount+reportCount+feedbackCount+marketReportCount)
     )),
