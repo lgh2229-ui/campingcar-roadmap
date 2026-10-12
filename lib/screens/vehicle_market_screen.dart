@@ -130,7 +130,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
               items: values.map((v) => DropdownMenuItem<String>(
                 value: v,
-                child: Text(v, overflow: TextOverflow.ellipsis),
+                child: Text(v == 'none' ? '없음' : v == 'cassette' ? '카트리지' : v == 'black' ? '블랙' : v, overflow: TextOverflow.ellipsis),
               )).toList(),
               onChanged: (next) {
                 if (next != null) onChanged(next);
