@@ -206,6 +206,18 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
+      final addresses=await _koreanAddressSearch(q);
+      if(addresses.isEmpty){
+        final uri=Uri.https('nominatim.openstreetmap.org','/search',{'q':q,'format':'json','limit':'10','countrycodes':'kr'});
+        final res=await http.get(uri,headers:{'User-Agent':'CampingcarRoadmap/1.9'}).timeout(const Duration(seconds:12));
+        if(res.statusCode!=200)throw Exception('장소 검색 실패');
+        final hits=jsonDecode(res.body) as List;
+        if(hits.isEmpty){_msg('검색 결과가 없습니다.');return;}
+        if(!mounted)return;
+        final hit=await showModalBottomSheet<Map<String,dynamic>>(context:context,builder:(ctx)=>SafeArea(child:ListView(shrinkWrap:true,children:hits.map((e){final x=Map<String,dynamic>.from(e);return ListTile(title:Text('${x['display_name']}'),onTap:()=>Navigator.pop(ctx,x));}).toList())));
+        if(hit==null)return;
+        final point=LatLng(double.parse('${hit['lat']}'),double.parse('${hit['lon']}'));center=point;map.move(point,16);if(mounted)setState((){});return;
+      }
       final picked=await _pickKoreanAddress(q);if(picked==null)return;
       final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
       if(lat==null||lon==null){_msg('주소는 찾았지만 좌표를 확인하지 못했습니다.');return;}
