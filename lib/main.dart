@@ -92,8 +92,8 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
     try {
       final client=widget.client;
       if(client==null){if(mounted)setState(()=>versionChecked=true);return;}
-      final row=await client.from('app_version_control').select('min_version_code,update_url').eq('id',1).maybeSingle();
-      final min=(row?['min_version_code'] as num?)?.toInt()??currentVersionCode;
+      final row=await client.from('app_version_control').select('latest_version_code,update_url').eq('id',1).maybeSingle();
+      final min=(row?['latest_version_code'] as num?)?.toInt()??currentVersionCode;
       updateUrl='${row?['update_url']??updateUrl}';
       final installedCode=int.tryParse((await PackageInfo.fromPlatform()).buildNumber)??currentVersionCode;
       if(mounted)setState((){updateRequired=installedCode<min;versionChecked=true;});
@@ -137,13 +137,13 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
                     const Icon(Icons.system_update, size: 72),
                     const SizedBox(height: 20),
                     const Text(
-                      '최신 버전 업데이트가 필요합니다',
+                      '새 버전이 있습니다',
                       style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      '캠핑카족 로드맵을 계속 사용하려면 최신 버전으로 업데이트해주세요.',
+                      '새 버전이 출시되었습니다. 업데이트가 아직 제공되지 않으면 나중에 다시 확인해주세요.',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
@@ -158,6 +158,8 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
                         label: const Text('업데이트하기'),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    TextButton(onPressed: () async {setState(() => updateRequired=false);await _restore();}, child: const Text('나중에 · 앱 계속 사용')),
                   ],
                 ),
               ),
