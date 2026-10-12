@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'config/app_config.dart';
@@ -94,7 +95,8 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
       final row=await client.from('app_version_control').select('min_version_code,update_url').eq('id',1).maybeSingle();
       final min=(row?['min_version_code'] as num?)?.toInt()??currentVersionCode;
       updateUrl='${row?['update_url']??updateUrl}';
-      if(mounted)setState((){updateRequired=currentVersionCode<min;versionChecked=true;});
+      final installedCode=int.tryParse((await PackageInfo.fromPlatform()).buildNumber)??currentVersionCode;
+      if(mounted)setState((){updateRequired=installedCode<min;versionChecked=true;});
     } catch(e){debugPrint('Version check failed: $e');if(mounted)setState(()=>versionChecked=true);}
   }
 
