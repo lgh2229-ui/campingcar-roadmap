@@ -13,6 +13,8 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   final db = Supabase.instance.client;
   final search = TextEditingController();
   bool loading = true;
+  bool isAdministrator = false;
+  Map<String, String> sellerLabels = {};
   List<Map<String, dynamic>> rows = [];
   String q = '', status = '전체', toilet = '전체', freshFilter = '전체', greyFilter = '전체', region = '전체', priceFilter = '전체', yearFilter = '전체', batteryFilter = '전체', solarFilter = '전체', inverterFilter = '전체', alternatorFilter = '전체';
   int? minPrice, maxPrice, minYear, maxYear, maxKm, minBattery, maxBattery, minSolar, maxSolar, minInverter, maxInverter, minAlternator, maxAlternator, minFresh, maxFresh, minGrey, maxGrey, minToilet;
@@ -26,7 +28,53 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   String money(dynamic v) { final n=int.tryParse('$v'); if(n==null)return '가격 협의'; return '${n.toString().replaceAllMapped(RegExp(r'(?=(\d{3})+(?!\d))'),(_)=>',')}원'; }
   Widget num(TextEditingController c,String label,String unit) => TextField(controller:c,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:'$label ($unit)',border:const OutlineInputBorder()));
 
-  Future<void> load() async { try { final d=await db.from('vehicle_market_listings').select().order('created_at',ascending:false); if(mounted)setState((){rows=List<Map<String,dynamic>>.from(d);loading=false;}); } catch(e){if(mounted){setState(()=>loading=false);msg('매물을 불러오지 못했습니다: $e');}} }
+  String _registrationDate(dynamic raw) {
+    final parsed = DateTime.tryParse('${raw ?? ''}')?.toLocal();
+    if (parsed == null) return '날짜 정보 없음';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${parsed.year}.${two(parsed.month)}.${two(parsed.day)} ${two(parsed.hour)}:${two(parsed.minute)}';
+  }
+
+  String _sellerName(Map<String, dynamic> x) =>
+      sellerLabels['${x['id']}'] ?? '등록자 정보 없음';
+
+  Future<void> load() async {
+    try {
+      final data = await db.from('vehicle_market_listings')
+          .select().order('created_at', ascending: false);
+      bool admin = false;
+      try {
+        final profile = await db.from('profiles')
+            .select('username,role').eq('id', uid).maybeSingle();
+        admin = profile != null &&
+            '${profile['role']}' == 'admin' &&
+            '${profile['username']}'.toLowerCase() == 'administrator';
+      } catch (_) {
+        // A failed permission lookup must never grant administrator access.
+      }
+      final labels = <String, String>{};
+      try {
+        final result = await db.rpc('vehicle_market_seller_labels');
+        for (final entry in (result as List)) {
+          final row = Map<String, dynamic>.from(entry as Map);
+          labels['${row['listing_id']}'] = '${row['seller_name']}';
+        }
+      } catch (_) {
+        // Listing results must still be shown if seller metadata is unavailable.
+      }
+      if (!mounted) return;
+      setState(() {
+        rows = List<Map<String, dynamic>>.from(data);
+        sellerLabels = labels;
+        isAdministrator = admin;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      msg('매물을 불러오지 못했습니다: $e');
+    }
+  }
 
   List<Map<String,dynamic>> get filtered => rows.where((x){
     if(status!='전체' && '${x['status']}'!=(status=='판매중'?'active':'sold')) return false;
@@ -375,7 +423,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
                   )),
                   const Divider(height: 1, color: outline),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+                    padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(ctx).viewPadding.bottom + 28),
                     child: Row(children: [
                       Expanded(child: OutlinedButton.icon(
                         onPressed: reset,
@@ -430,7 +478,53 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   }
 
   Widget _optionRow(String label,bool enabled,ValueChanged<bool> changed,Widget? field)=>Padding(padding:const EdgeInsets.only(bottom:8),child:Column(children:[SwitchListTile(contentPadding:EdgeInsets.zero,title:Text(label),subtitle:Text(enabled?'있음':'없음'),value:enabled,onChanged:changed),if(field!=null)field]));
-  Future<void> ownerAction(Map<String,dynamic>x,String v) async {if(v=='edit'){await edit(x);return;}if(v=='sold'){await db.from('vehicle_market_listings').update({'status':'sold'}).eq('id',x['id']);}else if(v=='active'){await db.from('vehicle_market_listings').update({'status':'active'}).eq('id',x['id']);}else if(v=='delete'){await db.from('vehicle_market_listings').delete().eq('id',x['id']);}await load();}
+  Future<void> ownerAction(Map<String,dynamic> x, String action) async {
+    final mine = '${x['owner_id']}' == uid;
+    if (action == 'delete') {
+      if (!mine && !isAdministrator) {
+        msg('이 매물을 삭제할 권한이 없습니다.');
+        return;
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('중고 캠핑카 매물 삭제'),
+          content: Text('「${x['title']}」 매물을 정말 삭제하시겠습니까?\n삭제한 매물은 복구할 수 없습니다.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+              child: const Text('삭제'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    } else if (!mine) {
+      msg('매물 수정 및 판매상태 변경은 등록자만 가능합니다.');
+      return;
+    }
+    try {
+      if (action == 'edit') {
+        await edit(x);
+        return;
+      } else if (action == 'sold' || action == 'active') {
+        await db.from('vehicle_market_listings')
+            .update({'status': action}).eq('id', x['id']);
+      } else if (action == 'delete') {
+        final removed = await db.from('vehicle_market_listings')
+            .delete().eq('id', x['id']).select('id');
+        if (removed.isEmpty) throw Exception('삭제 권한 또는 매물 상태를 확인해주세요.');
+      } else {
+        return;
+      }
+      await load();
+      if (mounted) msg(action == 'delete' ? '매물을 삭제했습니다.' : '판매상태를 변경했습니다.');
+    } catch (e) {
+      if (mounted) msg('매물 처리에 실패했습니다: $e');
+    }
+  }
   Future<void> report(Map<String,dynamic>x) async {final c=TextEditingController();final photos=<XFile>[];final ok=await showDialog<bool>(context:context,builder:(d)=>StatefulBuilder(builder:(d,ss)=>AlertDialog(title:const Text('매물 신고'),content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:c,maxLength:500,maxLines:4,decoration:const InputDecoration(labelText:'신고 사유',border:OutlineInputBorder())),const SizedBox(height:8),OutlinedButton.icon(onPressed:()async{final p=await ImagePicker().pickMultiImage(imageQuality:82,limit:10);ss((){photos.clear();photos.addAll(p.take(10));});},icon:const Icon(Icons.photo_library),label:Text('사진 첨부 ${photos.length}/10'))]))),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('신고'))])));if(ok==true&&c.text.trim().isNotEmpty){try{final urls=<String>[];for(var i=0;i<photos.length;i++){final path='$uid/report_${DateTime.now().microsecondsSinceEpoch}_$i.jpg';await db.storage.from('vehicle-market').upload(path,File(photos[i].path),fileOptions:const FileOptions(upsert:false));urls.add(db.storage.from('vehicle-market').getPublicUrl(path));}await db.from('vehicle_market_reports').insert({'listing_id':x['id'],'reporter_id':uid,'reason':c.text.trim(),'photo_urls':urls});msg('신고가 접수되었습니다.');}catch(e){msg('이미 신고했거나 접수에 실패했습니다.');}}}
   Widget adSlot()=>Card(margin:const EdgeInsets.all(12),child:Container(height:72,alignment:Alignment.center,child:const Text('광고 영역',style:TextStyle(fontWeight:FontWeight.bold))));
 
@@ -456,9 +550,20 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   Future<void> detail(Map<String,dynamic>x) async {
     final photos=List<String>.from(x['image_urls']??const []),mine=x['owner_id']==uid;
     await showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      if(photos.isNotEmpty)SizedBox(height:220,child:PageView.builder(itemCount:photos.length,itemBuilder:(_,i)=>GestureDetector(onTap:()=>_openMarketPhotos(photos,i),child:ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.network(photos[i],fit:BoxFit.cover))))),const SizedBox(height:10),Row(children:[Expanded(child:Text('${x['title']}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))),Chip(label:Text(x['status']=='sold'?'판매완료':'판매중'))]),Text('${x['manufacturer']} ${x['model']} · ${x['model_year']??'-'}년'),Text('주행거리 ${x['mileage_km']??'-'}km · ${x['region']}'),Text(money(x['price_krw']),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const Divider(),
+      if(photos.isNotEmpty)SizedBox(height:220,child:PageView.builder(itemCount:photos.length,itemBuilder:(_,i)=>GestureDetector(onTap:()=>_openMarketPhotos(photos,i),child:ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.network(photos[i],fit:BoxFit.cover))))),const SizedBox(height:10),Row(children:[Expanded(child:Text('${x['title']}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))),Chip(label:Text(x['status']=='sold'?'판매완료':'판매중'))]),Text('${x['manufacturer']} ${x['model']} · ${x['model_year']??'-'}년'),Text('주행거리 ${x['mileage_km']??'-'}km · ${x['region']}'),Text(money(x['price_krw']),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const SizedBox(height:8),Text('등록자: ${_sellerName(x)}',style:const TextStyle(fontWeight:FontWeight.w600)),Text('등록일시: ${_registrationDate(x['created_at'])}',style:TextStyle(fontSize:13,color:Colors.grey.shade700)),const Divider(),
       Text('배터리 ${x['battery_ah']??'없음'}Ah · 태양광 ${x['solar_w']??'없음'}W'),Text('인버터 ${x['inverter_w']??'없음'}W · 주행충전 ${x['alternator_charger_a']??'없음'}A'),Text('한전충전 ${x['shore_power']==true?'있음':'없음'} · 청수 ${x['fresh_water_l']??'없음'}L · 오수 ${x['grey_water_l']??'없음'}L'),Text('화장실 ${x['toilet_type']=='cassette'?'카트리지':x['toilet_type']=='black'?'블랙':'없음'} ${x['toilet_capacity_l']??''}${x['toilet_capacity_l']!=null?'L':''}'),if('${x['description']??''}'.isNotEmpty)Padding(padding:const EdgeInsets.only(top:10),child:Text('${x['description']}')),const SizedBox(height:10),Text('연락처: ${x['phone']}'),const SizedBox(height:12),
-      if(mine)Wrap(spacing:8,children:[OutlinedButton(onPressed:(){Navigator.pop(ctx);edit(x);},child:const Text('수정')),OutlinedButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,x['status']=='sold'?'active':'sold');},child:Text(x['status']=='sold'?'판매중으로 변경':'판매완료')),TextButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,'delete');},child:const Text('삭제'))]) else OutlinedButton.icon(onPressed:()=>report(x),icon:const Icon(Icons.report_outlined),label:const Text('매물 신고'))
+      Wrap(spacing:8,runSpacing:8,children:[
+        if(mine) ...[
+          OutlinedButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,'edit');},child:const Text('수정')),
+          OutlinedButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,x['status']=='sold'?'active':'sold');},child:Text(x['status']=='sold'?'판매중으로 변경':'판매완료')),
+        ],
+        if(!mine) OutlinedButton.icon(onPressed:()=>report(x),icon:const Icon(Icons.report_outlined),label:const Text('매물 신고')),
+        if(mine||isAdministrator) OutlinedButton.icon(
+          onPressed:(){Navigator.pop(ctx);ownerAction(x,'delete');},
+          icon:const Icon(Icons.delete_outline),label:Text(isAdministrator&&!mine?'관리자 삭제':'삭제'),
+          style:OutlinedButton.styleFrom(foregroundColor:Colors.red.shade700),
+        ),
+      ])
     ]))));
   }
 
@@ -489,8 +594,19 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
                               child:ListTile(
                                 leading:photos.isEmpty?const CircleAvatar(child:Icon(Icons.directions_car)):ClipRRect(borderRadius:BorderRadius.circular(7),child:Image.network(photos.first,width:64,height:64,fit:BoxFit.cover)),
                                 title:Row(children:[Expanded(child:Text('${x['title']}')),if(x['status']=='sold')const Chip(label:Text('판매완료'))]),
-                                subtitle:Text('${x['manufacturer']} ${x['model']} · ${x['model_year']??'-'}년\n${x['region']} · ${money(x['price_krw'])}'),
+                                subtitle:Column(
+                                  mainAxisSize:MainAxisSize.min,
+                                  crossAxisAlignment:CrossAxisAlignment.start,
+                                  children:[
+                                    Text('${x['manufacturer']} ${x['model']} · ${x['model_year']??'-'}년',maxLines:1,overflow:TextOverflow.ellipsis),
+                                    Text('${x['region']} · ${money(x['price_krw'])}',maxLines:1,overflow:TextOverflow.ellipsis),
+                                    const SizedBox(height:5),
+                                    Text('등록자: ${_sellerName(x)}',style:const TextStyle(fontSize:12,color:Color(0xFF657185)),maxLines:1,overflow:TextOverflow.ellipsis),
+                                    Text('등록일시: ${_registrationDate(x['created_at'])}',style:const TextStyle(fontSize:12,color:Color(0xFF657185))),
+                                  ],
+                                ),
                                 isThreeLine:true,
+                                contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:8),
                                 onTap:()=>detail(x),
                               ),
                             );
