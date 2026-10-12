@@ -186,6 +186,24 @@ class _HomeScreenState extends State<HomeScreen> {
     )));
   }
 
+  Future<void> _openExternalAddressSearch(String query) async {
+    final url=Uri.parse('https://map.kakao.com/?q=${Uri.encodeComponent(query)}');
+    if(!await launchUrl(url,mode:LaunchMode.externalApplication)){
+      _msg('외부 지도 검색을 열지 못했습니다.');
+    }
+  }
+
+  Future<void> _offerParcelSearch(String query) async {
+    if(!mounted)return;
+    final open=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('정확한 필지 위치 확인'),
+      content:Text('앱의 주소 데이터에서 "$query"의 정확한 좌표를 확인하지 못했습니다.\n\n산번지는 도로명주소 검색에서 누락될 수 있습니다. 임의 위치로 이동하지 않고 카카오맵에서 해당 지번을 검색할 수 있습니다.'),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),
+        FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('카카오맵에서 검색'))],
+    ));
+    if(open==true)await _openExternalAddressSearch(query);
+  }
+
   Future<void> _searchAddress() async {
     final q=search.text.trim();if(q.isEmpty)return;
     try{
@@ -213,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final res=await http.get(uri,headers:{'User-Agent':'CampingcarRoadmap/1.9'}).timeout(const Duration(seconds:12));
         if(res.statusCode!=200)throw Exception('장소 검색 실패');
         final hits=jsonDecode(res.body) as List;
-        if(hits.isEmpty){_msg('검색 결과가 없습니다.');return;}
+        if(hits.isEmpty){await _offerParcelSearch(q);return;}
         if(!mounted)return;
         final hit=await showModalBottomSheet<Map<String,dynamic>>(context:context,builder:(ctx)=>SafeArea(child:ListView(shrinkWrap:true,children:hits.map((e){final x=Map<String,dynamic>.from(e);return ListTile(title:Text('${x['display_name']}'),onTap:()=>Navigator.pop(ctx,x));}).toList())));
         if(hit==null)return;
@@ -223,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final picked=await showModalBottomSheet<Map<String,dynamic>>(context:context,showDragHandle:true,builder:(ctx)=>SafeArea(child:ListView.separated(shrinkWrap:true,itemCount:addresses.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final row=addresses[i];final road='${row['roadAddr']??''}',jibun='${row['jibunAddr']??''}';return ListTile(title:Text(road.isNotEmpty?road:jibun),subtitle:Text(jibun),onTap:()=>Navigator.pop(ctx,row));})));
       if(picked==null)return;
       final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
-      if(lat==null||lon==null){_msg('주소는 찾았지만 좌표를 확인하지 못했습니다.');return;}
+      if(lat==null||lon==null){await _offerParcelSearch(q);return;}
       final point=LatLng(lat,lon);center=point;map.move(point,16);if(mounted)setState((){});
     }catch(e){_msg('검색에 실패했습니다: $e');}
   }
