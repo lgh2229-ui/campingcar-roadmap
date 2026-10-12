@@ -45,32 +45,373 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   Future<List<String>> upload(List<XFile> photos) async { final out=<String>[]; for(var i=0;i<photos.length;i++){final f=photos[i],path='$uid/${DateTime.now().microsecondsSinceEpoch}_$i.jpg';await db.storage.from('vehicle-market').upload(path,File(f.path),fileOptions:const FileOptions(upsert:false));out.add(db.storage.from('vehicle-market').getPublicUrl(path));} return out; }
 
   Future<void> filters() async {
-    TextEditingController c(int? v)=>TextEditingController(text:v?.toString()??'');
-    final a=c(minPrice),b=c(maxPrice),y1=c(minYear),y2=c(maxYear),km=c(maxKm);
-    final ba1=c(minBattery),ba2=c(maxBattery),so1=c(minSolar),so2=c(maxSolar),inv1=c(minInverter),inv2=c(maxInverter),alt1=c(minAlternator),alt2=c(maxAlternator);
-    final fr1=c(minFresh),fr2=c(maxFresh),gr1=c(minGrey),gr2=c(maxGrey),tc=c(minToilet);
-    var st=status,tt=toilet,ff=freshFilter,gf=greyFilter,reg=region,pf=priceFilter,yf=yearFilter,bf=batteryFilter,sf=solarFilter,inf=inverterFilter,af=alternatorFilter; bool? sh=shore;
-    const regions=['전체','서울','경기','인천','부산','대구','대전','광주','울산','세종','강원','충북','충남','전북','전남','경북','경남','제주'];
-    Widget select(String label,String value,List<String> values,ValueChanged<String> onChanged)=>DropdownButtonFormField<String>(initialValue:value,decoration:InputDecoration(labelText:label,border:const OutlineInputBorder()),items:values.map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v){if(v!=null)onChanged(v);});
-    Widget rangeFields(TextEditingController lo,TextEditingController hi,String unit)=>Row(children:[Expanded(child:TextField(controller:lo,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:'최저',suffixText:unit,border:const OutlineInputBorder()))),const Padding(padding:EdgeInsets.symmetric(horizontal:6),child:Text('~')),Expanded(child:TextField(controller:hi,keyboardType:TextInputType.number,decoration:InputDecoration(labelText:'최고',suffixText:unit,border:const OutlineInputBorder())))]);
-    Widget option(String label,String mode,TextEditingController lo,TextEditingController hi,String unit,ValueChanged<String> change)=>Column(children:[select(label,mode,const ['전체','없음','있음','범위설정'],change),if(mode=='범위설정')...[const SizedBox(height:6),rangeFields(lo,hi,unit)],const SizedBox(height:8)]);
-    await showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,ss)=> SafeArea(child:Padding(padding:EdgeInsets.fromLTRB(16,0,16,MediaQuery.of(ctx).viewInsets.bottom+12),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      const Text('중고차 상세 필터',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:10),
-      select('판매상태',st,const ['전체','판매중','판매완료'],(v)=>ss(()=>st=v)),const SizedBox(height:8),
-      select('판매지역',reg,regions,(v)=>ss(()=>reg=v)),const SizedBox(height:8),
-      select('금액',pf,const ['전체','금액설정'],(v)=>ss(()=>pf=v)),if(pf=='금액설정')...[const SizedBox(height:6),rangeFields(a,b,'원')],const SizedBox(height:8),
-      select('연식',yf,const ['전체','연식설정'],(v)=>ss(()=>yf=v)),if(yf=='연식설정')...[const SizedBox(height:6),rangeFields(y1,y2,'년')],const SizedBox(height:8),
-      num(km,'최대 주행거리','km'),const Divider(height:24),
-      option('배터리',bf,ba1,ba2,'Ah',(v)=>ss(()=>bf=v)),
-      option('태양광',sf,so1,so2,'W',(v)=>ss(()=>sf=v)),
-      option('인버터',inf,inv1,inv2,'W',(v)=>ss(()=>inf=v)),
-      option('주행충전기',af,alt1,alt2,'A',(v)=>ss(()=>af=v)),
-      DropdownButtonFormField<bool?>(initialValue:sh,decoration:const InputDecoration(labelText:'한전충전',border:OutlineInputBorder()),items:const [DropdownMenuItem(value:null,child:Text('전체')),DropdownMenuItem(value:true,child:Text('있음')),DropdownMenuItem(value:false,child:Text('없음'))],onChanged:(v)=>ss(()=>sh=v)),const SizedBox(height:8),
-      option('청수',ff,fr1,fr2,'L',(v)=>ss(()=>ff=v)),
-      option('오수',gf,gr1,gr2,'L',(v)=>ss(()=>gf=v)),
-      Row(children:[Expanded(child:DropdownButtonFormField<String>(initialValue:tt,decoration:const InputDecoration(labelText:'화장실타입',border:OutlineInputBorder()),items:const [DropdownMenuItem(value:'전체',child:Text('전체')),DropdownMenuItem(value:'none',child:Text('없음')),DropdownMenuItem(value:'cassette',child:Text('카트리지')),DropdownMenuItem(value:'black',child:Text('블랙'))],onChanged:(v)=>ss(()=>tt=v!))),if(tt=='cassette'||tt=='black')...[const SizedBox(width:6),Expanded(child:TextField(controller:tc,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'용량',suffixText:'리터 이상',border:OutlineInputBorder())))]]),const SizedBox(height:12),
-      FilledButton(onPressed:(){setState((){status=st;region=reg;priceFilter=pf;yearFilter=yf;batteryFilter=bf;solarFilter=sf;inverterFilter=inf;alternatorFilter=af;toilet=tt;freshFilter=ff;greyFilter=gf;shore=sh;minPrice=pf=='금액설정'?int.tryParse(a.text):null;maxPrice=pf=='금액설정'?int.tryParse(b.text):null;minYear=yf=='연식설정'?int.tryParse(y1.text):null;maxYear=yf=='연식설정'?int.tryParse(y2.text):null;maxKm=int.tryParse(km.text);minBattery=bf=='범위설정'?int.tryParse(ba1.text):null;maxBattery=bf=='범위설정'?int.tryParse(ba2.text):null;minSolar=sf=='범위설정'?int.tryParse(so1.text):null;maxSolar=sf=='범위설정'?int.tryParse(so2.text):null;minInverter=inf=='범위설정'?int.tryParse(inv1.text):null;maxInverter=inf=='범위설정'?int.tryParse(inv2.text):null;minAlternator=af=='범위설정'?int.tryParse(alt1.text):null;maxAlternator=af=='범위설정'?int.tryParse(alt2.text):null;minFresh=ff=='범위설정'?int.tryParse(fr1.text):null;maxFresh=ff=='범위설정'?int.tryParse(fr2.text):null;minGrey=gf=='범위설정'?int.tryParse(gr1.text):null;maxGrey=gf=='범위설정'?int.tryParse(gr2.text):null;minToilet=(tt=='cassette'||tt=='black')?int.tryParse(tc.text):null;});Navigator.pop(ctx);},child:const Text('적용'))
-    ]))))));
+    TextEditingController c(int? value) =>
+        TextEditingController(text: value?.toString() ?? '');
+
+    final a = c(minPrice), b = c(maxPrice), y1 = c(minYear), y2 = c(maxYear), km = c(maxKm);
+    final ba1 = c(minBattery), ba2 = c(maxBattery), so1 = c(minSolar), so2 = c(maxSolar);
+    final inv1 = c(minInverter), inv2 = c(maxInverter), alt1 = c(minAlternator), alt2 = c(maxAlternator);
+    final fr1 = c(minFresh), fr2 = c(maxFresh), gr1 = c(minGrey), gr2 = c(maxGrey), tc = c(minToilet);
+    final controllers = [a, b, y1, y2, km, ba1, ba2, so1, so2, inv1, inv2, alt1, alt2, fr1, fr2, gr1, gr2, tc];
+
+    var st = status, tt = toilet, ff = freshFilter, gf = greyFilter, reg = region;
+    var pf = priceFilter, yf = yearFilter, bf = batteryFilter, sf = solarFilter;
+    var inf = inverterFilter, af = alternatorFilter;
+    bool? sh = shore;
+
+    const blue = Color(0xFF2859A5);
+    const ink = Color(0xFF202B3A);
+    const muted = Color(0xFF657185);
+    const fieldBg = Color(0xFFF7F9FC);
+    const outline = Color(0xFFE1E7EF);
+    const regions = ['전체','서울','경기','인천','부산','대구','대전','광주','울산','세종','강원','충북','충남','전북','전남','경북','경남','제주'];
+
+    Widget label(String title) => Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(title, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: muted)),
+    );
+
+    InputDecoration numericDecoration(String hint, String unit) => InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(fontSize: 13, color: muted),
+      suffixText: unit,
+      suffixStyle: const TextStyle(fontSize: 12, color: muted),
+      isDense: true,
+      filled: true,
+      fillColor: fieldBg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: outline),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: blue, width: 1.4),
+      ),
+    );
+
+    Widget numeric(String title, TextEditingController controller, String unit,
+        {String hint = '제한 없음'}) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        label(title),
+        SizedBox(
+          height: 49,
+          child: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
+            decoration: numericDecoration(hint, unit),
+          ),
+        ),
+      ],
+    );
+
+    Widget select(String title, String value, List<String> values,
+        ValueChanged<String> onChanged) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        label(title),
+        Container(
+          height: 49,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: fieldBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: outline),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: muted, size: 20),
+              borderRadius: BorderRadius.circular(12),
+              dropdownColor: Colors.white,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ink),
+              items: values.map((v) => DropdownMenuItem<String>(
+                value: v,
+                child: Text(v, overflow: TextOverflow.ellipsis),
+              )).toList(),
+              onChanged: (next) {
+                if (next != null) onChanged(next);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+
+    Widget pair(Widget left, Widget right) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 10),
+          Expanded(child: right),
+        ],
+      ),
+    );
+
+    Widget range(String title, TextEditingController lo, TextEditingController hi,
+        String unit) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF2F6FD),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: blue)),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: SizedBox(height: 46, child: TextField(
+                controller: lo,
+                keyboardType: TextInputType.number,
+                decoration: numericDecoration('최소', unit),
+              ))),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 9),
+                child: Text('~', style: TextStyle(color: muted)),
+              ),
+              Expanded(child: SizedBox(height: 46, child: TextField(
+                controller: hi,
+                keyboardType: TextInputType.number,
+                decoration: numericDecoration('최대', unit),
+              ))),
+            ]),
+          ],
+        ),
+      ),
+    );
+
+    Widget section(String title, String caption, IconData icon) => Padding(
+      padding: const EdgeInsets.only(top: 23, bottom: 13),
+      child: Row(children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEDF3FD),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 19, color: blue),
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ink)),
+            Text(caption, style: const TextStyle(fontSize: 11.5, color: muted)),
+          ],
+        )),
+      ]),
+    );
+
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (ctx, sheetSetState) {
+            void reset() {
+              sheetSetState(() {
+                st = '전체';
+                tt = '전체';
+                ff = '전체';
+                gf = '전체';
+                reg = '전체';
+                pf = '전체';
+                yf = '전체';
+                bf = '전체';
+                sf = '전체';
+                inf = '전체';
+                af = '전체';
+                sh = null;
+                for (final controller in controllers) {
+                  controller.clear();
+                }
+              });
+            }
+
+            void apply() {
+              setState(() {
+                status = st;
+                region = reg;
+                priceFilter = pf;
+                yearFilter = yf;
+                batteryFilter = bf;
+                solarFilter = sf;
+                inverterFilter = inf;
+                alternatorFilter = af;
+                toilet = tt;
+                freshFilter = ff;
+                greyFilter = gf;
+                shore = sh;
+                minPrice = pf == '금액설정' ? int.tryParse(a.text) : null;
+                maxPrice = pf == '금액설정' ? int.tryParse(b.text) : null;
+                minYear = yf == '연식설정' ? int.tryParse(y1.text) : null;
+                maxYear = yf == '연식설정' ? int.tryParse(y2.text) : null;
+                maxKm = int.tryParse(km.text);
+                minBattery = bf == '범위설정' ? int.tryParse(ba1.text) : null;
+                maxBattery = bf == '범위설정' ? int.tryParse(ba2.text) : null;
+                minSolar = sf == '범위설정' ? int.tryParse(so1.text) : null;
+                maxSolar = sf == '범위설정' ? int.tryParse(so2.text) : null;
+                minInverter = inf == '범위설정' ? int.tryParse(inv1.text) : null;
+                maxInverter = inf == '범위설정' ? int.tryParse(inv2.text) : null;
+                minAlternator = af == '범위설정' ? int.tryParse(alt1.text) : null;
+                maxAlternator = af == '범위설정' ? int.tryParse(alt2.text) : null;
+                minFresh = ff == '범위설정' ? int.tryParse(fr1.text) : null;
+                maxFresh = ff == '범위설정' ? int.tryParse(fr2.text) : null;
+                minGrey = gf == '범위설정' ? int.tryParse(gr1.text) : null;
+                maxGrey = gf == '범위설정' ? int.tryParse(gr2.text) : null;
+                minToilet = (tt == 'cassette' || tt == 'black')
+                    ? int.tryParse(tc.text)
+                    : null;
+              });
+              Navigator.of(ctx).pop();
+            }
+
+            final keyboard = MediaQuery.of(ctx).viewInsets.bottom;
+            final height = (MediaQuery.of(ctx).size.height - keyboard) * .88;
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: keyboard),
+              child: SizedBox(
+                height: height,
+                child: Column(children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 12, 16),
+                    child: Row(children: [
+                      const Expanded(child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('중고 캠핑카 필터', style: TextStyle(
+                            fontSize: 21, fontWeight: FontWeight.w800, color: ink,
+                          )),
+                          SizedBox(height: 4),
+                          Text('원하는 조건만 선택해 보세요', style: TextStyle(
+                            fontSize: 12.5, color: muted,
+                          )),
+                        ],
+                      )),
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close_rounded, color: muted),
+                      ),
+                    ]),
+                  ),
+                  const Divider(height: 1, color: outline),
+                  Expanded(child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    children: [
+                      section('기본 조건', '판매 정보 및 차량 상태', Icons.directions_car_outlined),
+                      pair(
+                        select('판매 상태', st, const ['전체','판매중','판매완료'],
+                            (v) => sheetSetState(() => st = v)),
+                        select('판매 지역', reg, regions,
+                            (v) => sheetSetState(() => reg = v)),
+                      ),
+                      pair(
+                        select('판매 금액', pf, const ['전체','금액설정'],
+                            (v) => sheetSetState(() => pf = v)),
+                        select('연식', yf, const ['전체','연식설정'],
+                            (v) => sheetSetState(() => yf = v)),
+                      ),
+                      if (pf == '금액설정') range('판매 금액 범위', a, b, '원'),
+                      if (yf == '연식설정') range('연식 범위', y1, y2, '년'),
+                      numeric('최대 주행거리', km, 'km'),
+                      section('전기 · 충전 설비', '배터리, 태양광, 충전 옵션', Icons.bolt_outlined),
+                      pair(
+                        select('배터리', bf, const ['전체','없음','있음','범위설정'],
+                            (v) => sheetSetState(() => bf = v)),
+                        select('태양광', sf, const ['전체','없음','있음','범위설정'],
+                            (v) => sheetSetState(() => sf = v)),
+                      ),
+                      if (bf == '범위설정') range('배터리 용량 범위', ba1, ba2, 'Ah'),
+                      if (sf == '범위설정') range('태양광 용량 범위', so1, so2, 'W'),
+                      pair(
+                        select('인버터', inf, const ['전체','없음','있음','범위설정'],
+                            (v) => sheetSetState(() => inf = v)),
+                        select('주행충전기', af, const ['전체','없음','있음','범위설정'],
+                            (v) => sheetSetState(() => af = v)),
+                      ),
+                      if (inf == '범위설정') range('인버터 용량 범위', inv1, inv2, 'W'),
+                      if (af == '범위설정') range('주행충전기 범위', alt1, alt2, 'A'),
+                      select('한전충전', sh == null ? '전체' : (sh! ? '있음' : '없음'),
+                          const ['전체','있음','없음'],
+                          (v) => sheetSetState(() => sh = v == '전체' ? null : v == '있음')),
+                      section('생활 설비', '청수, 오수, 화장실', Icons.water_drop_outlined),
+                      pair(
+                        select('청수', ff, const ['전체','없음','있음','범위설정'],
+                            (v) => sheetSetState(() => ff = v)),
+                        select('오수', gf, const ['전체','없음','있음','범위설정'],
+                            (v) => sheetSetState(() => gf = v)),
+                      ),
+                      if (ff == '범위설정') range('청수 탱크 범위', fr1, fr2, 'L'),
+                      if (gf == '범위설정') range('오수 탱크 범위', gr1, gr2, 'L'),
+                      if (tt == 'cassette' || tt == 'black')
+                        pair(
+                          select('화장실 타입', tt, const ['전체','none','cassette','black'],
+                              (v) => sheetSetState(() => tt = v)),
+                          numeric('최소 화장실 용량', tc, 'L', hint: '최소'),
+                        )
+                      else
+                        select('화장실 타입', tt, const ['전체','none','cassette','black'],
+                            (v) => sheetSetState(() => tt = v)),
+                      const SizedBox(height: 8),
+                    ],
+                  )),
+                  const Divider(height: 1, color: outline),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+                    child: Row(children: [
+                      Expanded(child: OutlinedButton.icon(
+                        onPressed: reset,
+                        icon: const Icon(Icons.refresh_rounded, size: 19),
+                        label: const Text('초기화'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: ink,
+                          side: const BorderSide(color: outline),
+                          minimumSize: const Size(0, 50),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      )),
+                      const SizedBox(width: 10),
+                      Expanded(flex: 2, child: FilledButton.icon(
+                        onPressed: apply,
+                        icon: const Icon(Icons.search_rounded, size: 20),
+                        label: const Text('매물 검색'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: blue,
+                          minimumSize: const Size(0, 50),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      )),
+                    ]),
+                  ),
+                ]),
+              ),
+            );
+          },
+        ),
+      );
+    } finally {
+      for (final controller in controllers) {
+        controller.dispose();
+      }
+    }
   }
 
   Future<void> edit([Map<String,dynamic>? x]) async {
