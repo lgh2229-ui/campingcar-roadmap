@@ -420,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: _approvalColor(p, context), child: Icon(p.isApproved ? Icons.check : p.isPending ? Icons.hourglass_top : Icons.close)),
                   title: Text(p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'), '')),
                   subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(p.address), Text(_approvalLabel(p), style: const TextStyle(fontWeight: FontWeight.bold))]),
-                  onTap: () => _showPlace(p),
+                  onTap: () { setState(() => tab = 0); final point=LatLng(p.latitude,p.longitude);center=point;map.move(point,17); Future.delayed(const Duration(milliseconds: 150), () { if(mounted)_showPlace(p); }); },
                 ));
               }),
       ),
