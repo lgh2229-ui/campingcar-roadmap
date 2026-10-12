@@ -468,7 +468,62 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
         TextEditingController(text: '${x?[key] ?? ''}');
     final t = c('title'), maker = c('manufacturer'), model = c('model');
     final year = c('model_year'), km = c('mileage_km');
-    final price = c('price_krw'), rg = c('region'), phone = c('phone');
+    final price = c('price_krw'), phone = c('phone');
+    // Keep the saved city/district text when editing an older listing.
+    // The first part is a selectable province/metropolitan city.
+    const saleRegions = <String>[
+      '서울', '경기', '인천', '부산', '대구', '대전', '광주', '울산',
+      '세종', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주', '기타',
+    ];
+    const regionPrefixes = <String, String>{
+      '서울특별시': '서울',
+      '부산광역시': '부산',
+      '대구광역시': '대구',
+      '인천광역시': '인천',
+      '광주광역시': '광주',
+      '대전광역시': '대전',
+      '울산광역시': '울산',
+      '세종특별자치시': '세종',
+      '경기도': '경기',
+      '강원특별자치도': '강원',
+      '강원도': '강원',
+      '충청북도': '충북',
+      '충청남도': '충남',
+      '전북특별자치도': '전북',
+      '전라북도': '전북',
+      '전라남도': '전남',
+      '경상북도': '경북',
+      '경상남도': '경남',
+      '제주특별자치도': '제주',
+      '제주도': '제주',
+      for (final region in saleRegions) region: region,
+    };
+    final savedRegion = '${x?['region'] ?? ''}'.trim();
+    String? selectedSaleRegion;
+    var regionDetails = '';
+    if (savedRegion.isNotEmpty) {
+      for (final entry in regionPrefixes.entries) {
+        if (entry.key == '기타') continue;
+        if (savedRegion == entry.key ||
+            savedRegion.startsWith('${entry.key} ')) {
+          selectedSaleRegion = entry.value;
+          regionDetails = savedRegion.substring(entry.key.length).trim();
+          break;
+        }
+      }
+      if (selectedSaleRegion == null) {
+        selectedSaleRegion = '기타';
+        regionDetails = savedRegion;
+      }
+    }
+    final rg = TextEditingController(text: regionDetails);
+    String currentRegionValue() {
+      if (selectedSaleRegion == null) return '';
+      final district = rg.text.trim();
+      if (selectedSaleRegion == '기타') return district;
+      return district.isEmpty ? selectedSaleRegion! : '$selectedSaleRegion $district';
+    }
+
     final desc = c('description'), battery = c('battery_ah');
     final solar = c('solar_w'), inverter = c('inverter_w');
     final alternator = c('alternator_charger_a');
@@ -705,7 +760,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
           void submit() {
             if (t.text.trim().isEmpty ||
                 model.text.trim().isEmpty ||
-                rg.text.trim().isEmpty ||
+                currentRegionValue().isEmpty ||
                 phone.text.trim().isEmpty) {
               ss(() => sheetError = '매물 제목, 모델명, 판매 지역, 연락처를 입력해 주세요.');
               return;
@@ -772,9 +827,64 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
                           unit: '원', number: true),
                     ),
                     pair(
-                      field('판매 지역', rg, required: true, hint: '예) 경기 오산'),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 7),
+                          child: Text('판매 지역 *', style: TextStyle(
+                            fontSize: 12.5, fontWeight: FontWeight.w600, color: muted,
+                          )),
+                        ),
+                        Container(
+                          height: 49,
+                          padding: const EdgeInsets.symmetric(horizontal: 13),
+                          decoration: BoxDecoration(
+                            color: fieldBg,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: outline),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: selectedSaleRegion,
+                              isExpanded: true,
+                              hint: const Text('시·도 선택', style: TextStyle(
+                                fontSize: 13, color: muted,
+                              )),
+                              icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                                  color: muted),
+                              borderRadius: BorderRadius.circular(12),
+                              style: const TextStyle(fontSize: 14,
+                                  fontWeight: FontWeight.w600, color: ink),
+                              items: saleRegions.map((region) => DropdownMenuItem<String>(
+                                value: region,
+                                child: Text(region == '기타' ? '기타(직접 입력)' : region,
+                                  overflow: TextOverflow.ellipsis),
+                              )).toList(),
+                              onChanged: (value) {
+                                ss(() {
+                                  if (value != selectedSaleRegion) {
+                                    selectedSaleRegion = value;
+                                    rg.clear();
+                                  }
+                                  sheetError = null;
+                                });
+                              },
+                            ),
+                          ),
+                        ),
+                      ]),
                       field('연락처', phone, required: true,
                           hint: '전화번호', keyboard: TextInputType.phone),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 13),
+                      child: field(
+                        selectedSaleRegion == '기타' ? '판매 지역 직접 입력' : '시·군·구 (선택)',
+                        rg,
+                        required: selectedSaleRegion == '기타',
+                        hint: selectedSaleRegion == '기타'
+                            ? '판매 지역을 입력해주세요'
+                            : '예) 오산시 (선택사항)',
+                      ),
                     ),
                     section('전기 · 충전 설비', '장착 여부를 켜면 용량을 입력할 수 있습니다', Icons.bolt_outlined),
                     pair(
@@ -1013,7 +1123,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
         'model_year': int.tryParse(year.text),
         'mileage_km': int.tryParse(km.text),
         'price_krw': int.tryParse(price.text),
-        'region': rg.text.trim(),
+        'region': currentRegionValue(),
         'phone': phone.text.trim(),
         'description': desc.text.trim(),
         'battery_ah': hasBattery ? int.tryParse(battery.text) : null,
