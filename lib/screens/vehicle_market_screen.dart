@@ -462,19 +462,583 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
     }
   }
 
-  Future<void> edit([Map<String,dynamic>? x]) async {
-    final isEdit=x!=null; TextEditingController c(String k)=>TextEditingController(text:'${x?[k]??''}');
-    final t=c('title'),maker=c('manufacturer'),model=c('model'),year=c('model_year'),km=c('mileage_km'),price=c('price_krw'),rg=c('region'),phone=c('phone'),desc=c('description'),battery=c('battery_ah'),solar=c('solar_w'),inverter=c('inverter_w'),alternator=c('alternator_charger_a'),fresh=c('fresh_water_l'),grey=c('grey_water_l'),tc=c('toilet_capacity_l');
-    bool hasBattery=x?['battery_ah']!=null,hasSolar=x?['solar_w']!=null,hasInverter=x?['inverter_w']!=null,hasAlternator=x?['alternator_charger_a']!=null,hasFresh=x?['fresh_water_l']!=null,hasGrey=x?['grey_water_l']!=null,shorePower=x?['shore_power']==true; String tt='${x?['toilet_type']??'none'}'; final photos=<XFile>[];
-    final ok=await showModalBottomSheet<bool>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>StatefulBuilder(builder:(ctx,ss)=>SafeArea(child:Padding(padding:EdgeInsets.fromLTRB(16,0,16,MediaQuery.of(ctx).viewInsets.bottom+12),child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      Text(isEdit?'중고 캠핑카 수정':'중고 캠핑카 등록',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:10),TextField(controller:t,decoration:const InputDecoration(labelText:'매물 제목 *',border:OutlineInputBorder())),const SizedBox(height:8),Row(children:[Expanded(child:TextField(controller:maker,decoration:const InputDecoration(labelText:'제조사',border:OutlineInputBorder()))),const SizedBox(width:6),Expanded(child:TextField(controller:model,decoration:const InputDecoration(labelText:'모델명 *',border:OutlineInputBorder())))]),const SizedBox(height:8),
-      Row(children:[Expanded(child:num(year,'연식','년')),const SizedBox(width:6),Expanded(child:num(km,'주행거리','km'))]),const SizedBox(height:8),num(price,'판매가격','원'),const SizedBox(height:8),TextField(controller:rg,decoration:const InputDecoration(labelText:'판매지역 *',border:OutlineInputBorder())),const SizedBox(height:8),TextField(controller:phone,decoration:const InputDecoration(labelText:'연락처 *',border:OutlineInputBorder())),const Divider(),
-      _optionRow('배터리',hasBattery,(v)=>ss(()=>hasBattery=v),hasBattery?num(battery,'배터리','Ah'):null),_optionRow('태양광',hasSolar,(v)=>ss(()=>hasSolar=v),hasSolar?num(solar,'태양광','W'):null),_optionRow('인버터',hasInverter,(v)=>ss(()=>hasInverter=v),hasInverter?num(inverter,'인버터','W'):null),_optionRow('주행충전기',hasAlternator,(v)=>ss(()=>hasAlternator=v),hasAlternator?num(alternator,'주행충전기','A'):null),SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('한전충전'),value:shorePower,onChanged:(v)=>ss(()=>shorePower=v)),_optionRow('청수',hasFresh,(v)=>ss(()=>hasFresh=v),hasFresh?TextField(controller:fresh,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'청수 용량',suffixText:'리터',border:OutlineInputBorder())):null),_optionRow('오수',hasGrey,(v)=>ss(()=>hasGrey=v),hasGrey?TextField(controller:grey,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'오수 용량',suffixText:'리터',border:OutlineInputBorder())):null),
-      Row(children:[const Expanded(child:Text('화장실타입',style:TextStyle(fontWeight:FontWeight.w600))),Expanded(child:DropdownButtonFormField<String>(initialValue:tt,items:const [DropdownMenuItem(value:'none',child:Text('없음')),DropdownMenuItem(value:'cassette',child:Text('카트리지')),DropdownMenuItem(value:'black',child:Text('블랙'))],onChanged:(v)=>ss(()=>tt=v!)))]),if(tt=='cassette'||tt=='black')Padding(padding:const EdgeInsets.only(top:8),child:TextField(controller:tc,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'화장실 용량',suffixText:'리터',border:OutlineInputBorder()))),const SizedBox(height:8),TextField(controller:desc,maxLines:4,decoration:const InputDecoration(labelText:'기타 옵션 / 차량 설명',border:OutlineInputBorder())),const SizedBox(height:8),
-      OutlinedButton.icon(onPressed:()async{final p=await ImagePicker().pickMultiImage(imageQuality:82,limit:20);ss((){photos.clear();photos.addAll(p.take(20));});},icon:const Icon(Icons.photo_library),label:Text('사진 첨부 ${photos.length}/20')),if(isEdit)const Text('새 사진을 선택하면 기존 사진에 추가됩니다.',style:TextStyle(fontSize:12)),const SizedBox(height:12),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:Text(isEdit?'수정 저장':'매물 등록'))
-    ]))))));
-    if(ok!=true)return; if(t.text.trim().isEmpty||model.text.trim().isEmpty||rg.text.trim().isEmpty||phone.text.trim().isEmpty){msg('필수 항목을 입력해주세요.');return;}
-    try{final old=List<String>.from(x?['image_urls']??const []),urls=photos.isEmpty?old:[...old,...await upload(photos)];if(urls.length>20){msg('사진은 최대 20장입니다.');return;}final data={'title':t.text.trim(),'manufacturer':maker.text.trim(),'model':model.text.trim(),'model_year':int.tryParse(year.text),'mileage_km':int.tryParse(km.text),'price_krw':int.tryParse(price.text),'region':rg.text.trim(),'phone':phone.text.trim(),'description':desc.text.trim(),'battery_ah':hasBattery?int.tryParse(battery.text):null,'solar_w':hasSolar?int.tryParse(solar.text):null,'inverter_w':hasInverter?int.tryParse(inverter.text):null,'alternator_charger_a':hasAlternator?int.tryParse(alternator.text):null,'fresh_water_l':hasFresh?int.tryParse(fresh.text):null,'grey_water_l':hasGrey?int.tryParse(grey.text):null,'toilet_type':tt,'toilet_capacity_l':tt=='none'?null:int.tryParse(tc.text),'shore_power':shorePower,'image_urls':urls};if(isEdit){await db.from('vehicle_market_listings').update(data).eq('id',x['id']);}else{await db.from('vehicle_market_listings').insert({...data,'owner_id':uid,'status':'active'});}await load();msg(isEdit?'수정했습니다.':'등록했습니다.');}catch(e){msg('저장 실패: $e');}
+  Future<void> edit([Map<String, dynamic>? x]) async {
+    final isEdit = x != null;
+    TextEditingController c(String key) =>
+        TextEditingController(text: '${x?[key] ?? ''}');
+    final t = c('title'), maker = c('manufacturer'), model = c('model');
+    final year = c('model_year'), km = c('mileage_km');
+    final price = c('price_krw'), rg = c('region'), phone = c('phone');
+    final desc = c('description'), battery = c('battery_ah');
+    final solar = c('solar_w'), inverter = c('inverter_w');
+    final alternator = c('alternator_charger_a');
+    final fresh = c('fresh_water_l'), grey = c('grey_water_l');
+    final tc = c('toilet_capacity_l');
+
+    bool hasBattery = x?['battery_ah'] != null;
+    bool hasSolar = x?['solar_w'] != null;
+    bool hasInverter = x?['inverter_w'] != null;
+    bool hasAlternator = x?['alternator_charger_a'] != null;
+    bool hasFresh = x?['fresh_water_l'] != null;
+    bool hasGrey = x?['grey_water_l'] != null;
+    bool shorePower = x?['shore_power'] == true;
+    String tt = '${x?['toilet_type'] ?? 'none'}';
+    final photos = <XFile>[];
+    final existingPhotos = List<String>.from(x?['image_urls'] ?? const []);
+    String? sheetError;
+
+    const blue = Color(0xFF2859A5);
+    const ink = Color(0xFF202B3A);
+    const muted = Color(0xFF657185);
+    const outline = Color(0xFFE1E7EF);
+    const fieldBg = Color(0xFFF7F9FC);
+
+    InputDecoration inputDecoration(String hint, {String? unit}) =>
+        InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(fontSize: 13, color: muted),
+          suffixText: unit,
+          suffixStyle: const TextStyle(fontSize: 12, color: muted),
+          isDense: true,
+          filled: true,
+          fillColor: fieldBg,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 13, vertical: 15,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: outline),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: blue, width: 1.5),
+          ),
+        );
+
+    Widget field(
+      String label,
+      TextEditingController controller, {
+      String hint = '',
+      String? unit,
+      bool required = false,
+      bool number = false,
+      TextInputType? keyboard,
+    }) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 7),
+          child: Text(
+            required ? '$label *' : label,
+            style: const TextStyle(
+              fontSize: 12.5, fontWeight: FontWeight.w600, color: muted,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 49,
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboard ?? (number ? TextInputType.number : TextInputType.text),
+            textInputAction: TextInputAction.next,
+            style: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w600, color: ink,
+            ),
+            decoration: inputDecoration(hint, unit: unit),
+          ),
+        ),
+      ],
+    );
+
+    Widget pair(Widget left, Widget right) => Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 10),
+          Expanded(child: right),
+        ],
+      ),
+    );
+
+    Widget section(String title, String subtitle, IconData icon) => Padding(
+      padding: const EdgeInsets.only(top: 23, bottom: 14),
+      child: Row(children: [
+        Container(
+          height: 36, width: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFEDF3FD),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: Icon(icon, size: 20, color: blue),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w700, color: ink,
+              )),
+              const SizedBox(height: 2),
+              Text(subtitle, style: const TextStyle(
+                fontSize: 11.5, color: muted,
+              )),
+            ],
+          ),
+        ),
+      ]),
+    );
+
+    Widget equipment(
+      String title, String unit, bool enabled,
+      ValueChanged<bool> change, TextEditingController controller,
+    ) => Container(
+      constraints: const BoxConstraints(minHeight: 134),
+      padding: const EdgeInsets.fromLTRB(11, 9, 11, 12),
+      decoration: BoxDecoration(
+        color: enabled ? const Color(0xFFF4F8FF) : Colors.white,
+        border: Border.all(color: enabled ? const Color(0xFFC8D9F4) : outline),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(child: Text(
+              title, maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: ink),
+            )),
+            SizedBox(
+              width: 42, height: 35,
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: Switch.adaptive(
+                  value: enabled,
+                  activeTrackColor: blue,
+                  onChanged: change,
+                ),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 9),
+          if (enabled)
+            SizedBox(
+              height: 46,
+              child: TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration: inputDecoration('용량 입력', unit: unit),
+              ),
+            )
+          else
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('미장착', style: TextStyle(fontSize: 12, color: muted)),
+            ),
+        ],
+      ),
+    );
+
+    Widget toggleTile(String title, String subtitle, bool value,
+        ValueChanged<bool> change) => Container(
+      decoration: BoxDecoration(
+        color: fieldBg,
+        border: Border.all(color: outline),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: SwitchListTile.adaptive(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        title: Text(title, style: const TextStyle(
+          fontSize: 14, fontWeight: FontWeight.w700, color: ink,
+        )),
+        subtitle: Text(subtitle, style: const TextStyle(
+          fontSize: 12, color: muted,
+        )),
+        value: value,
+        activeTrackColor: blue,
+        onChanged: change,
+      ),
+    );
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, ss) {
+          final keyboard = MediaQuery.of(ctx).viewInsets.bottom;
+          final bottomSafe = MediaQuery.of(ctx).viewPadding.bottom;
+          final height = (MediaQuery.of(ctx).size.height - keyboard) * 0.90;
+
+          Future<void> choosePhotos() async {
+            final available = 20 - existingPhotos.length - photos.length;
+            if (available <= 0) {
+              ss(() => sheetError = '사진은 기존 사진을 포함하여 최대 20장까지 등록할 수 있습니다.');
+              return;
+            }
+            try {
+              final chosen = await ImagePicker().pickMultiImage(
+                imageQuality: 82, limit: available,
+              );
+              if (!ctx.mounted || chosen.isEmpty) return;
+              final paths = photos.map((p) => p.path).toSet();
+              final added = chosen.where((p) => !paths.contains(p.path))
+                  .take(available).toList();
+              ss(() {
+                photos.addAll(added);
+                sheetError = null;
+              });
+            } catch (e) {
+              if (ctx.mounted) {
+                ss(() => sheetError = '사진을 선택하지 못했습니다. 다시 시도해 주세요.');
+              }
+            }
+          }
+
+          void submit() {
+            if (t.text.trim().isEmpty ||
+                model.text.trim().isEmpty ||
+                rg.text.trim().isEmpty ||
+                phone.text.trim().isEmpty) {
+              ss(() => sheetError = '매물 제목, 모델명, 판매 지역, 연락처를 입력해 주세요.');
+              return;
+            }
+            if (existingPhotos.length + photos.length > 20) {
+              ss(() => sheetError = '사진은 최대 20장까지 등록할 수 있습니다.');
+              return;
+            }
+            FocusScope.of(ctx).unfocus();
+            Navigator.pop(ctx, true);
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: keyboard),
+            child: SizedBox(
+              height: height,
+              child: Column(children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 5, 12, 14),
+                  child: Row(children: [
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isEdit ? '중고 캠핑카 수정' : '중고 캠핑카 등록',
+                          style: const TextStyle(
+                            fontSize: 21, fontWeight: FontWeight.w800, color: ink,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        const Text('차량 정보를 항목별로 편하게 입력하세요',
+                          style: TextStyle(fontSize: 12.5, color: muted)),
+                      ],
+                    )),
+                    IconButton(
+                      tooltip: '닫기',
+                      onPressed: () => Navigator.pop(ctx, false),
+                      icon: const Icon(Icons.close_rounded, color: muted),
+                    ),
+                  ]),
+                ),
+                const Divider(height: 1, color: outline),
+                Expanded(child: ListView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                  children: [
+                    section('차량 기본정보', '매물 제목, 차량 사양 및 판매 정보', Icons.directions_car_outlined),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 13),
+                      child: field('매물 제목', t, required: true,
+                          hint: '예) 렉스턴 스포츠 칸 캠핑카 판매'),
+                    ),
+                    pair(
+                      field('제조사', maker, hint: '제조사'),
+                      field('모델명', model, required: true, hint: '모델명'),
+                    ),
+                    pair(
+                      field('연식', year, hint: '예) 2022', unit: '년', number: true),
+                      field('주행거리', km, hint: 'km 입력', unit: 'km', number: true),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 13),
+                      child: field('판매 가격', price, hint: '판매가격 입력',
+                          unit: '원', number: true),
+                    ),
+                    pair(
+                      field('판매 지역', rg, required: true, hint: '예) 경기 오산'),
+                      field('연락처', phone, required: true,
+                          hint: '전화번호', keyboard: TextInputType.phone),
+                    ),
+                    section('전기 · 충전 설비', '장착 여부를 켜면 용량을 입력할 수 있습니다', Icons.bolt_outlined),
+                    pair(
+                      equipment('배터리', 'Ah', hasBattery,
+                          (v) => ss(() => hasBattery = v), battery),
+                      equipment('태양광', 'W', hasSolar,
+                          (v) => ss(() => hasSolar = v), solar),
+                    ),
+                    pair(
+                      equipment('인버터', 'W', hasInverter,
+                          (v) => ss(() => hasInverter = v), inverter),
+                      equipment('주행충전기', 'A', hasAlternator,
+                          (v) => ss(() => hasAlternator = v), alternator),
+                    ),
+                    toggleTile(
+                      '한전충전',
+                      '외부 전원 연결 가능 여부',
+                      shorePower,
+                      (v) => ss(() => shorePower = v),
+                    ),
+                    section('생활 설비', '물탱크와 화장실 옵션', Icons.water_drop_outlined),
+                    pair(
+                      equipment('청수 탱크', 'L', hasFresh,
+                          (v) => ss(() => hasFresh = v), fresh),
+                      equipment('오수 탱크', 'L', hasGrey,
+                          (v) => ss(() => hasGrey = v), grey),
+                    ),
+                    const Text('화장실 타입', style: TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w600, color: muted,
+                    )),
+                    const SizedBox(height: 7),
+                    Container(
+                      height: 49,
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
+                      decoration: BoxDecoration(
+                        color: fieldBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: outline),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: tt,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                              color: muted),
+                          style: const TextStyle(fontSize: 14,
+                              fontWeight: FontWeight.w600, color: ink),
+                          items: const [
+                            DropdownMenuItem(value: 'none', child: Text('없음')),
+                            DropdownMenuItem(value: 'cassette', child: Text('카트리지 화장실')),
+                            DropdownMenuItem(value: 'black', child: Text('블랙탱크 화장실')),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) ss(() => tt = v);
+                          },
+                        ),
+                      ),
+                    ),
+                    if (tt != 'none') Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: field('화장실 용량', tc, hint: '용량 입력',
+                          unit: 'L', number: true),
+                    ),
+                    section('사진 · 차량 설명', '차량 상태와 주요 특징을 알려주세요', Icons.photo_library_outlined),
+                    Container(
+                      padding: const EdgeInsets.all(13),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: outline),
+                        borderRadius: BorderRadius.circular(14),
+                        color: fieldBg,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Expanded(child: Text('차량 사진', style: TextStyle(
+                              fontWeight: FontWeight.w700, color: ink,
+                            ))),
+                            Text('${existingPhotos.length + photos.length}/20',
+                              style: const TextStyle(fontSize: 12, color: muted)),
+                          ]),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: choosePhotos,
+                            icon: const Icon(Icons.add_photo_alternate_outlined),
+                            label: const Text('사진 추가하기'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(double.infinity, 45),
+                              foregroundColor: blue,
+                              side: const BorderSide(color: outline),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                            ),
+                          ),
+                          if (existingPhotos.isNotEmpty) ...[
+                            const SizedBox(height: 9),
+                            const Text('기존 등록 사진', style: TextStyle(
+                              fontSize: 12, color: muted)),
+                            const SizedBox(height: 7),
+                            SizedBox(height: 76, child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: existingPhotos.length,
+                              separatorBuilder: (_, _) => const SizedBox(width: 7),
+                              itemBuilder: (_, i) => ClipRRect(
+                                borderRadius: BorderRadius.circular(9),
+                                child: Image.network(existingPhotos[i],
+                                  width: 76, height: 76, fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const SizedBox(
+                                    width: 76, child: Icon(Icons.broken_image_outlined)),
+                                ),
+                              ),
+                            )),
+                          ],
+                          if (photos.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            const Text('새로 추가할 사진 · X를 누르면 제외됩니다',
+                              style: TextStyle(fontSize: 12, color: muted)),
+                            const SizedBox(height: 8),
+                            SizedBox(height: 82, child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: photos.length,
+                              separatorBuilder: (_, _) => const SizedBox(width: 7),
+                              itemBuilder: (_, i) => SizedBox(
+                                width: 83, height: 82,
+                                child: Stack(children: [
+                                  Positioned.fill(child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(9),
+                                    child: Image.file(File(photos[i].path), fit: BoxFit.cover),
+                                  )),
+                                  Positioned(top: 0, right: 0,
+                                    child: InkWell(
+                                      onTap: () => ss(() => photos.removeAt(i)),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black87,
+                                          borderRadius: BorderRadius.circular(9),
+                                        ),
+                                        child: const Icon(Icons.close, size: 17,
+                                            color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ]),
+                              ),
+                            )),
+                          ],
+                          if (isEdit) const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text('기존 사진은 유지되며 새 사진이 추가됩니다.',
+                              style: TextStyle(fontSize: 12, color: muted)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    const Text('차량 설명 및 추가 옵션', style: TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w600, color: muted,
+                    )),
+                    const SizedBox(height: 7),
+                    TextField(
+                      controller: desc, maxLines: 5,
+                      minLines: 4,
+                      decoration: inputDecoration('차량 상태, 옵션, 특이사항 등을 입력해 주세요'),
+                    ),
+                  ],
+                )),
+                const Divider(height: 1, color: outline),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    20, 12, 20, bottomSafe + 24,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (sheetError != null) Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(sheetError!,
+                          style: const TextStyle(fontSize: 12.5,
+                              color: Colors.red)),
+                      ),
+                      Row(children: [
+                        Expanded(child: OutlinedButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: ink,
+                            minimumSize: const Size(0, 50),
+                            side: const BorderSide(color: outline),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('취소'),
+                        )),
+                        const SizedBox(width: 10),
+                        Expanded(flex: 2, child: FilledButton.icon(
+                          onPressed: submit,
+                          icon: Icon(isEdit ? Icons.save_outlined : Icons.check_rounded,
+                              size: 20),
+                          label: Text(isEdit ? '수정 저장' : '매물 등록'),
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 50),
+                            backgroundColor: blue,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        )),
+                      ]),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+
+    if (ok != true) return;
+    try {
+      final urls = [
+        ...existingPhotos,
+        if (photos.isNotEmpty) ...await upload(photos),
+      ];
+      if (urls.length > 20) {
+        msg('사진은 최대 20장입니다.');
+        return;
+      }
+      final data = <String, dynamic>{
+        'title': t.text.trim(),
+        'manufacturer': maker.text.trim(),
+        'model': model.text.trim(),
+        'model_year': int.tryParse(year.text),
+        'mileage_km': int.tryParse(km.text),
+        'price_krw': int.tryParse(price.text),
+        'region': rg.text.trim(),
+        'phone': phone.text.trim(),
+        'description': desc.text.trim(),
+        'battery_ah': hasBattery ? int.tryParse(battery.text) : null,
+        'solar_w': hasSolar ? int.tryParse(solar.text) : null,
+        'inverter_w': hasInverter ? int.tryParse(inverter.text) : null,
+        'alternator_charger_a': hasAlternator ? int.tryParse(alternator.text) : null,
+        'fresh_water_l': hasFresh ? int.tryParse(fresh.text) : null,
+        'grey_water_l': hasGrey ? int.tryParse(grey.text) : null,
+        'toilet_type': tt,
+        'toilet_capacity_l': tt == 'none' ? null : int.tryParse(tc.text),
+        'shore_power': shorePower,
+        'image_urls': urls,
+      };
+      if (isEdit) {
+        await db.from('vehicle_market_listings')
+            .update(data).eq('id', x['id']);
+      } else {
+        await db.from('vehicle_market_listings')
+            .insert({...data, 'owner_id': uid, 'status': 'active'});
+      }
+      await load();
+      if (mounted) msg(isEdit ? '수정했습니다.' : '등록했습니다.');
+    } catch (e) {
+      if (mounted) msg('저장 실패: $e');
+    }
   }
 
   Widget _optionRow(String label,bool enabled,ValueChanged<bool> changed,Widget? field)=>Padding(padding:const EdgeInsets.only(bottom:8),child:Column(children:[SwitchListTile(contentPadding:EdgeInsets.zero,title:Text(label),subtitle:Text(enabled?'있음':'없음'),value:enabled,onChanged:changed),if(field!=null)field]));
