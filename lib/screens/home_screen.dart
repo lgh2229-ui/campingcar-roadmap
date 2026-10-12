@@ -206,7 +206,8 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
       }
-      final addresses=await _koreanAddressSearch(q);
+      List<Map<String,dynamic>> addresses=[];
+      try{addresses=await _koreanAddressSearch(q);}catch(_){}
       if(addresses.isEmpty){
         final uri=Uri.https('nominatim.openstreetmap.org','/search',{'q':q,'format':'json','limit':'10','countrycodes':'kr'});
         final res=await http.get(uri,headers:{'User-Agent':'CampingcarRoadmap/1.9'}).timeout(const Duration(seconds:12));
@@ -218,7 +219,9 @@ class _HomeScreenState extends State<HomeScreen> {
         if(hit==null)return;
         final point=LatLng(double.parse('${hit['lat']}'),double.parse('${hit['lon']}'));center=point;map.move(point,16);if(mounted)setState((){});return;
       }
-      final picked=await _pickKoreanAddress(q);if(picked==null)return;
+      if(!mounted)return;
+      final picked=await showModalBottomSheet<Map<String,dynamic>>(context:context,showDragHandle:true,builder:(ctx)=>SafeArea(child:ListView.separated(shrinkWrap:true,itemCount:addresses.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final row=addresses[i];final road='${row['roadAddr']??''}',jibun='${row['jibunAddr']??''}';return ListTile(title:Text(road.isNotEmpty?road:jibun),subtitle:Text(jibun),onTap:()=>Navigator.pop(ctx,row));})));
+      if(picked==null)return;
       final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
       if(lat==null||lon==null){_msg('주소는 찾았지만 좌표를 확인하지 못했습니다.');return;}
       final point=LatLng(lat,lon);center=point;map.move(point,16);if(mounted)setState((){});
