@@ -878,12 +878,12 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
                             SizedBox(height: 76, child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: existingPhotos.length,
-                              separatorBuilder: (_, _) => const SizedBox(width: 7),
+                              separatorBuilder: (context, index) => const SizedBox(width: 7),
                               itemBuilder: (_, i) => ClipRRect(
                                 borderRadius: BorderRadius.circular(9),
                                 child: Image.network(existingPhotos[i],
                                   width: 76, height: 76, fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => const SizedBox(
+                                  errorBuilder: (context, error, stackTrace) => const SizedBox(
                                     width: 76, child: Icon(Icons.broken_image_outlined)),
                                 ),
                               ),
@@ -897,7 +897,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
                             SizedBox(height: 82, child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: photos.length,
-                              separatorBuilder: (_, _) => const SizedBox(width: 7),
+                              separatorBuilder: (context, index) => const SizedBox(width: 7),
                               itemBuilder: (_, i) => SizedBox(
                                 width: 83, height: 82,
                                 child: Stack(children: [
@@ -1041,7 +1041,6 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
     }
   }
 
-  Widget _optionRow(String label,bool enabled,ValueChanged<bool> changed,Widget? field)=>Padding(padding:const EdgeInsets.only(bottom:8),child:Column(children:[SwitchListTile(contentPadding:EdgeInsets.zero,title:Text(label),subtitle:Text(enabled?'있음':'없음'),value:enabled,onChanged:changed),if(field!=null)field]));
   Future<void> ownerAction(Map<String,dynamic> x, String action) async {
     final mine = '${x['owner_id']}' == uid;
     if (action == 'delete') {
