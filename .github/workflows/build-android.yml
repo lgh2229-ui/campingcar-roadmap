@@ -1,4 +1,4 @@
-name: Build Android AAB 122
+name: Build Android AAB 127
 on:
   workflow_dispatch:
   push:
@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/build-android.yml'
       - 'pubspec.yaml'
+      - 'assets/brand/**'
+      - 'tool/apply_app_icon.py'
 
 jobs:
   build:
@@ -56,6 +58,10 @@ jobs:
         run: rm -f test/widget_test.dart
       - name: Prepare Android permissions, AdMob, and API 36
         run: python tool/prepare_android.py
+      - name: Install Pillow for branded launcher icon
+        run: python -m pip install --disable-pip-version-check 'Pillow>=10,<12'
+      - name: Apply Campingcar Roadmap signature app icon
+        run: python tool/apply_app_icon.py
       - name: Configure Firebase Android
         env:
           GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
@@ -118,3 +124,9 @@ jobs:
         with:
           name: campingcar-roadmap-aab
           path: build/app/outputs/bundle/release/app-release.aab
+
+      - name: Upload Play Store signature icon
+        uses: actions/upload-artifact@v4
+        with:
+          name: campingcar-roadmap-playstore-icon-512
+          path: play_store/campingcar_signature_512.png
