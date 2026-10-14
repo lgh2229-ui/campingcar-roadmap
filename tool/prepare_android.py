@@ -10,7 +10,6 @@ required_permissions = [
     'android.permission.ACCESS_FINE_LOCATION',
     'android.permission.ACCESS_COARSE_LOCATION',
     'android.permission.CAMERA',
-    'android.permission.READ_MEDIA_IMAGES',
     'com.google.android.gms.permission.AD_ID',
     'android.permission.POST_NOTIFICATIONS',
 ]
@@ -38,6 +37,21 @@ if 'google_mobile_ads:' in Path('pubspec.yaml').read_text(encoding='utf-8') and 
 # through manifest merging, so explicitly remove that service and its FGS permissions.
 if 'xmlns:tools=' not in s:
     s = s.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">', 1)
+# Google Play Photos and Videos policy: image_picker uses the Android system
+# Photo Picker for user-selected images. No broad media-library permission is
+# needed. Remove permissions possibly contributed by transitive plugins too.
+# 'tools:node=remove' acts during Gradle manifest merging, not at runtime.
+for permission in [
+    'android.permission.READ_MEDIA_IMAGES',
+    'android.permission.READ_MEDIA_VIDEO',
+    'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+    'android.permission.READ_EXTERNAL_STORAGE',
+    'android.permission.WRITE_EXTERNAL_STORAGE',
+]:
+    remove_permission = f'    <uses-permission android:name="{permission}" tools:node="remove" />'
+    if remove_permission not in s:
+        s = s.replace('<application', remove_permission + '\n    <application', 1)
+
 for permission in ['android.permission.FOREGROUND_SERVICE_LOCATION', 'android.permission.FOREGROUND_SERVICE']:
     remove_permission = f'    <uses-permission android:name="{permission}" tools:node="remove" />'
     if remove_permission not in s:

@@ -1,4 +1,4 @@
-name: Build Android AAB 128
+name: Build Android AAB 129
 on:
   workflow_dispatch:
   push:
@@ -8,6 +8,8 @@ on:
       - 'pubspec.yaml'
       - 'assets/brand/**'
       - 'tool/apply_app_icon.py'
+      - 'tool/prepare_android.py'
+      - 'tool/check_release_media_permissions.py'
 
 jobs:
   build:
@@ -119,6 +121,8 @@ jobs:
           flutter build appbundle --release
           --dart-define=SUPABASE_URL="$SUPABASE_URL"
           --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+      - name: Verify final merged release manifest excludes broad media permissions
+        run: python tool/check_release_media_permissions.py
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
