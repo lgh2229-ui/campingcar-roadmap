@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
     paths:
-      - '.github/workflows/build-android.yml'
       - 'pubspec.yaml'
       - 'assets/brand/**'
       - 'tool/apply_app_icon.py'
@@ -128,9 +127,11 @@ jobs:
         with:
           name: campingcar-roadmap-aab
           path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 14
 
       - name: Upload Play Store signature icon
         uses: actions/upload-artifact@v4
         with:
           name: campingcar-roadmap-playstore-icon-512
           path: play_store/campingcar_signature_512.png
+          retention-days: 14

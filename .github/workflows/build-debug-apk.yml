@@ -5,6 +5,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'pubspec.yaml'
+      - 'lib/**'
+      - 'tool/**'
+      - 'assets/**'
+      - 'test/**'
   workflow_dispatch:
 
 jobs:
@@ -155,11 +161,13 @@ jobs:
         with:
           name: campingcar-crash-log-collector-windows
           path: collect-crash-log.bat
+          retention-days: 3
       - name: Upload release APK for device validation
         uses: actions/upload-artifact@v4
         with:
           name: campingcar-roadmap-1.9.33-127-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 3
       - name: Verify final APK signer
         run: |
           EXPECTED_SHA256="E2BD19B77B905D522D57FC9DB1D9FBD7A1BEA9E04990A9DDEDF89D2C3A8B0361"
@@ -172,3 +180,4 @@ jobs:
         with:
           name: campingcar-roadmap-1.9.33-127-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 3

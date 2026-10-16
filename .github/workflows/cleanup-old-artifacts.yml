@@ -1,0 +1,72 @@
+name: Clean up old Android build artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/cleanup-old-artifacts.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cleanup:
+    name: Remove obsolete APK and AAB artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep newest AAB, debug APK, release APK, and icon
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            // Only delete artifacts produced by this app's build workflows.
+            const ours = name =>
+              name.startsWith('campingcar-roadmap-') ||
+              name === 'campingcar-roadmap-aab' ||
+              name === 'campingcar-crash-log-collector-windows';
+            function keepCategory(name) {
+              if (name === 'campingcar-roadmap-aab') return 'latest-play-aab';
+              if (name === 'campingcar-roadmap-playstore-icon-512') return 'latest-play-icon';
+              if (name.startsWith('campingcar-roadmap-') && name.endsWith('-debug-apk')) return 'latest-debug-apk';
+              if (name.startsWith('campingcar-roadmap-') && name.endsWith('-release-apk')) return 'latest-release-apk';
+              return null;
+            }
+            const artifacts = (await github.paginate(
+              github.rest.actions.listArtifactsForRepo, { owner, repo, per_page: 100 }
+            )).filter(a => !a.expired && ours(a.name));
+            artifacts.sort((a, b) =>
+              Date.parse(b.created_at) - Date.parse(a.created_at) || b.id - a.id
+            );
+            const retained = new Map();
+            // Always preserve the user-requested Play-ready policy-fixed version 129.
+            const protectedId = 11882105651;
+            const keep = new Set([protectedId]);
+            for (const item of artifacts) {
+              const category = keepCategory(item.name);
+              if (category && !retained.has(category)) {
+                retained.set(category, item);
+                keep.add(item.id);
+              }
+            }
+            for (const item of artifacts.filter(a => keep.has(a.id))) {
+              core.info(`KEEP ${item.name} (#${item.id}), ${(item.size_in_bytes/1048576).toFixed(1)} MiB`);
+            }
+            let removed = 0, reclaimedBytes = 0;
+            for (const item of artifacts.filter(a => !keep.has(a.id))) {
+              try {
+                await github.rest.actions.deleteArtifact({ owner, repo, artifact_id: item.id });
+                removed++;
+                reclaimedBytes += item.size_in_bytes;
+                core.info(`DELETE ${item.name} (#${item.id}), ${(item.size_in_bytes/1048576).toFixed(1)} MiB`);
+              } catch (e) {
+                core.warning(`Could not delete artifact #${item.id}: ${e.message}`);
+              }
+            }
+            await core.summary
+              .addHeading('Campingcar Roadmap artifact cleanup')
+              .addRaw(`Deleted ${removed} obsolete artifacts, totaling ${(reclaimedBytes/1048576).toFixed(1)} MiB. Kept latest Play AAB, icon and test APKs.`)
+              .write();
+            core.info(`Finished: deleted ${removed} artifacts, ${(reclaimedBytes/1048576).toFixed(1)} MiB`);
