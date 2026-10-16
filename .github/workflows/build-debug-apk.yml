@@ -64,6 +64,8 @@ jobs:
         run: rm -f test/widget_test.dart
       - name: Prepare Android permissions, AdMob, and API 36
         run: python tool/prepare_android.py
+      - name: Enable release R8 code and optimized resource shrinking
+        run: python tool/enable_android_release_optimizations.py
       - name: Verify AdMob manifest wiring
         run: |
           echo "=== pubspec AdMob ==="
