@@ -1,4 +1,4 @@
-name: Build Android AAB 129
+name: Build Android AAB 130
 on:
   workflow_dispatch:
   push:
@@ -8,6 +8,7 @@ on:
       - 'assets/brand/**'
       - 'tool/apply_app_icon.py'
       - 'tool/prepare_android.py'
+      - 'tool/enable_android_release_optimizations.py'
       - 'tool/check_release_media_permissions.py'
 
 jobs:
@@ -59,6 +60,8 @@ jobs:
         run: rm -f test/widget_test.dart
       - name: Prepare Android permissions, AdMob, and API 36
         run: python tool/prepare_android.py
+      - name: Enable release R8 code and optimized resource shrinking
+        run: python tool/enable_android_release_optimizations.py
       - name: Install Pillow for branded launcher icon
         run: python -m pip install --disable-pip-version-check 'Pillow>=10,<12'
       - name: Apply Campingcar Roadmap signature app icon
@@ -99,7 +102,7 @@ jobs:
         run: |
           CODE=$(sed -n 's/^version: .*+\([0-9][0-9]*\)$/\1/p' pubspec.yaml)
           test -n "$CODE" || (echo "Cannot read versionCode" && exit 1)
-          if [ "$CODE" -le 114 ]; then echo "versionCode $CODE was already used; must be > 114"; exit 1; fi
+          if [ "$CODE" -le 129 ]; then echo "versionCode $CODE was already used; must be > 129"; exit 1; fi
           echo "Building Play versionCode $CODE"
       - name: Verify Supabase build configuration
         env:
