@@ -83,7 +83,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   bool versionChecked = false;
   bool updateRequired = false;
   String updateUrl = 'https://play.google.com/store/apps/details?id=kr.co.campingcarroadmap.app';
-  static const int currentVersionCode = 125;
+  static const int currentVersionCode = 130;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   Map<String,dynamic>? _pendingNotification;
   void _handleNotification(Map<String,dynamic> event){_pendingNotification=event;_openNotification();}
