@@ -1,14 +1,7 @@
 name: Build Android AAB 130
+# Run Play AAB only after the owner asks for it. APK testing happens first.
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'pubspec.yaml'
-      - 'assets/brand/**'
-      - 'tool/apply_app_icon.py'
-      - 'tool/prepare_android.py'
-      - 'tool/enable_android_release_optimizations.py'
       - 'tool/check_release_media_permissions.py'
 
 jobs:
