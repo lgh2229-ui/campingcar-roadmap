@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -47,6 +48,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final map = MapController();
   final search = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  Timer? _searchSuggestionTimer;
+  bool _showSearchSuggestions = false;
+  bool _loadingAddressSuggestions = false;
+  int _searchRequestId = 0;
+  List<Map<String, dynamic>> _addressSuggestions = [];
   List<Place> places = [];
   Set<String> saved = {};
   int tab = 0;
@@ -74,6 +81,15 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _load();
     _locate();
+  }
+
+  @override
+  void dispose() {
+    _searchSuggestionTimer?.cancel();
+    _searchRequestId++;
+    _searchFocus.dispose();
+    search.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -203,11 +219,184 @@ class _HomeScreenState extends State<HomeScreen> {
     if(open==true)await _openExternalAddressSearch(query);
   }
 
+
+  // Suggestions match both registered place names and their addresses.
+  // Prefer a name prefix so a user typing "죽도" finds 죽도야영장 first.
+  List<Place> _matchingSearchPlaces(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return [];
+    final matches = places.where((p) =>
+        (p.isApproved || _isMine(p)) &&
+        (p.name.toLowerCase().contains(q) || p.address.toLowerCase().contains(q))).toList();
+    int score(Place p) {
+      final name = p.name.toLowerCase();
+      final address = p.address.toLowerCase();
+      if (name.startsWith(q)) return 0;
+      if (name.contains(q)) return 1;
+      if (address.startsWith(q)) return 2;
+      return 3;
+    }
+    matches.sort((a, b) {
+      final byRelevance = score(a).compareTo(score(b));
+      return byRelevance != 0 ? byRelevance : a.name.compareTo(b.name);
+    });
+    return matches;
+  }
+
+  void _searchTextChanged(String value) {
+    _searchSuggestionTimer?.cancel();
+    final requestId = ++_searchRequestId;
+    final q = value.trim();
+    setState(() {
+      _showSearchSuggestions = q.isNotEmpty;
+      _loadingAddressSuggestions = q.runes.length >= 3;
+      _addressSuggestions = [];
+    });
+    // Registered places are suggested instantly. Remote Korean addresses
+    // are debounced so typing does not send a request for every keystroke.
+    if (q.runes.length < 3) return;
+    _searchSuggestionTimer = Timer(const Duration(milliseconds: 650), () async {
+      try {
+        final results = await _koreanAddressSearch(q);
+        if (!mounted || requestId != _searchRequestId || search.text.trim() != q) return;
+        setState(() {
+          _addressSuggestions = results.take(6).toList();
+          _loadingAddressSuggestions = false;
+        });
+      } catch (_) {
+        if (!mounted || requestId != _searchRequestId || search.text.trim() != q) return;
+        setState(() => _loadingAddressSuggestions = false);
+      }
+    });
+  }
+
+  void _hideSearchSuggestions() {
+    _searchSuggestionTimer?.cancel();
+    _searchRequestId++;
+    _searchFocus.unfocus();
+    if (mounted) {
+      setState(() {
+        _showSearchSuggestions = false;
+        _loadingAddressSuggestions = false;
+        _addressSuggestions = [];
+      });
+    }
+  }
+
+  void _clearSearch() {
+    search.clear();
+    _searchTextChanged('');
+    _searchFocus.requestFocus();
+  }
+
+  void _chooseSuggestedPlace(Place place) {
+    search.text = place.name;
+    _hideSearchSuggestions();
+    final point = LatLng(place.latitude, place.longitude);
+    center = point;
+    map.move(point, 17);
+    if (!mounted) return;
+    setState(() {});
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (mounted) _showPlace(place);
+    });
+  }
+
+  Future<void> _chooseSuggestedAddress(Map<String, dynamic> row) async {
+    final road = '${row['roadAddr'] ?? ''}'.trim();
+    final parcel = '${row['jibunAddr'] ?? ''}'.trim();
+    search.text = road.isNotEmpty ? road : parcel;
+    _hideSearchSuggestions();
+    final lat = (row['lat'] as num?)?.toDouble();
+    final lon = (row['lon'] as num?)?.toDouble();
+    if (lat == null || lon == null) {
+      await _offerParcelSearch(search.text);
+      return;
+    }
+    final point = LatLng(lat, lon);
+    center = point;
+    map.move(point, 17);
+    if (mounted) setState(() {});
+  }
+
+  Widget _searchSuggestionPanel() {
+    final q = search.text.trim();
+    if (!_showSearchSuggestions || q.isEmpty) return const SizedBox.shrink();
+    final placesFound = _matchingSearchPlaces(q).take(7).toList();
+    final addresses = _addressSuggestions;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Material(
+        elevation: 8,
+        color: Theme.of(context).colorScheme.surface,
+        clipBehavior: Clip.antiAlias,
+        borderRadius: BorderRadius.circular(12),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 300),
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            shrinkWrap: true,
+            children: [
+              if (placesFound.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 6, 16, 4),
+                  child: Text('등록된 장소', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ...placesFound.map((p) => ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                    leading: const Icon(Icons.place_outlined, size: 22),
+                    title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    subtitle: Text(p.address, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    onTap: () => _chooseSuggestedPlace(p),
+                  )),
+              if (addresses.isNotEmpty)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+                  child: Text('주소 검색 결과', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ...addresses.map((a) {
+                final road = '${a['roadAddr'] ?? ''}'.trim();
+                final parcel = '${a['jibunAddr'] ?? ''}'.trim();
+                return ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                  leading: const Icon(Icons.location_on_outlined, size: 22),
+                  title: Text(road.isNotEmpty ? road : parcel,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                  subtitle: parcel.isNotEmpty && parcel != road
+                      ? Text(parcel, maxLines: 1, overflow: TextOverflow.ellipsis)
+                      : null,
+                  onTap: () => _chooseSuggestedAddress(a),
+                );
+              }),
+              if (_loadingAddressSuggestions)
+                const ListTile(
+                  dense: true,
+                  leading: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  title: Text('주소를 검색하고 있습니다...'),
+                ),
+              if (placesFound.isEmpty && addresses.isEmpty && !_loadingAddressSuggestions)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('일치하는 장소가 없습니다. 주소 검색은 3글자 이상 입력하거나 검색 버튼을 눌러주세요.'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _searchAddress() async {
     final q=search.text.trim();if(q.isEmpty)return;
+    _hideSearchSuggestions();
     try{
-      final needle=q.toLowerCase();
-      final local=places.where((p)=>p.name.toLowerCase().contains(needle)).toList();
+      final local=_matchingSearchPlaces(q);
       if(local.isNotEmpty){
         Place? picked;
         if(local.length==1){
@@ -219,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
           )));
         }
         if(picked!=null){
-          final point=LatLng(picked.latitude,picked.longitude);center=point;map.move(point,17);if(mounted)setState((){});
+          _chooseSuggestedPlace(picked);
           return;
         }
       }
@@ -311,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _mapPage() => Stack(children: [
         FlutterMap(
           mapController: map,
-          options: MapOptions(initialCenter: center, initialZoom: 14, interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate), onLongPress: (_, p) => _selectSpot(p),onPositionChanged:(camera,hasGesture){if(locationPickMode&&hasGesture&&mounted)setState(()=>selectedSpot=camera.center);}),
+          options: MapOptions(initialCenter: center, initialZoom: 14, interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate), onTap: (_, __) { if (_showSearchSuggestions) _hideSearchSuggestions(); }, onLongPress: (_, p) => _selectSpot(p),onPositionChanged:(camera,hasGesture){if(locationPickMode&&hasGesture&&mounted)setState(()=>selectedSpot=camera.center);}),
           children: [
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'kr.co.campingcarroadmap.app'),
             MarkerLayer(markers: [
@@ -350,7 +539,25 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         Positioned(top: 10, left: 10, right: 10, child: Column(children: [
-          Material(elevation: 3, borderRadius: BorderRadius.circular(12), child: Row(children: [Expanded(child: TextField(controller: search, onSubmitted: (_) => _searchAddress(), decoration: const InputDecoration(hintText: '등록 장소명 또는 주소 검색', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 14)))), IconButton(onPressed: _searchAddress, icon: const Icon(Icons.search))])),
+          Material(elevation: 3, borderRadius: BorderRadius.circular(12), child: Row(children: [
+            Expanded(child: TextField(
+              controller: search,
+              focusNode: _searchFocus,
+              onChanged: _searchTextChanged,
+              onTap: () { if (search.text.trim().isNotEmpty) setState(() => _showSearchSuggestions = true); },
+              onSubmitted: (_) => _searchAddress(),
+              textInputAction: TextInputAction.search,
+              decoration: const InputDecoration(
+                hintText: '장소명 또는 주소를 입력하세요',
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 14),
+              ),
+            )),
+            if (search.text.isNotEmpty)
+              IconButton(tooltip: '검색어 지우기', onPressed: _clearSearch, icon: const Icon(Icons.close)),
+            IconButton(tooltip: '검색', onPressed: _searchAddress, icon: const Icon(Icons.search)),
+          ])),
+          _searchSuggestionPanel(),
           const SizedBox(height: 8),
           SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),
         ])),
