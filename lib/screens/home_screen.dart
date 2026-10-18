@@ -16,6 +16,7 @@ import '../models/place_review.dart';
 import '../models/review_comment.dart';
 import '../repositories/app_data_repository.dart';
 import '../repositories/auth_repository.dart';
+import '../widgets/place_detail_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -835,59 +836,72 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showPlace(Place p) async {
     final reviews = p.isApproved ? await widget.data.reviews(p.id) : <PlaceReview>[];
     if (!mounted) return;
-    await showModalBottomSheet(context: context, showDragHandle: true, isScrollControlled: true, builder: (ctx) => DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: .72,
-      minChildSize: .42,
-      maxChildSize: .94,
-      builder: (_, scroll) => ListView(controller: scroll, padding: const EdgeInsets.fromLTRB(20, 0, 20, 28), children: [
-        Row(children: [Expanded(child: Text(p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'), ''), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), if (!p.isApproved && _isMine(p)) Chip(label: Text(_approvalLabel(p)), backgroundColor: _approvalColor(p, context))]),
-        const SizedBox(height: 6),
-        Text(p.services.join(' · ')),
-        if (p.address.isNotEmpty) Text(p.address),
-        if (p.ownerNickname.trim().isNotEmpty || p.createdAt != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              '등록자: ${p.ownerNickname.trim().isEmpty ? '닉네임 없음' : p.ownerNickname} · 등록일자: ${p.createdAt == null ? '-' : '${p.createdAt!.toLocal().year.toString().padLeft(4, '0')}.${p.createdAt!.toLocal().month.toString().padLeft(2, '0')}.${p.createdAt!.toLocal().day.toString().padLeft(2, '0')} ${p.createdAt!.toLocal().hour.toString().padLeft(2, '0')}:${p.createdAt!.toLocal().minute.toString().padLeft(2, '0')}'}',
-              style: Theme.of(ctx).textTheme.bodySmall,
-            ),
-          ),
-        if (p.photoUrls.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          SizedBox(height: 150, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: p.photoUrls.length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (_, i) => InkWell(onTap: () => _showPhotoViewer(p.photoUrls, i), child: ClipRRect(borderRadius: BorderRadius.circular(10), child: _placePhoto(p.photoUrls[i]))))),
-        ],
-        const SizedBox(height: 12),
-        if (p.hours.isNotEmpty) Text('운영시간: ${p.hours}'),
-        if (p.reservation.isNotEmpty) Text('예약: ${p.reservation}'),
-        if(p.reservation=='예약필수'&&_reservationUrl(p.note).isNotEmpty) OutlinedButton.icon(onPressed:()async{final raw=_reservationUrl(p.note);final u=Uri.tryParse(raw.startsWith('http')?raw:'https://$raw');if(u==null||!await launchUrl(u,mode:LaunchMode.externalApplication))_msg('예약 링크를 열 수 없습니다.');},icon:const Icon(Icons.open_in_new),label:const Text('예약 페이지 열기')),
-        if (p.phone.isNotEmpty) Text('문의연락처: ${p.phone}'),
-        if (p.maxHeightMm != null) Text('진입 최대 높이: ${_meters(p.maxHeightMm!)}m'),
-        if (p.maxHeightMm != null && widget.user.vehicleHeightMm != null) _heightCompatibility(p),
-        if (_visibleNote(p.note).isNotEmpty) Text('이용방법/주의사항: ${_visibleNote(p.note)}'),
-        if (!p.isApproved && _isMine(p)) ...[
-          const SizedBox(height: 16),
-          Card(color: _approvalColor(p, context), child: Padding(padding: const EdgeInsets.all(14), child: Text(p.isPending ? '관리자가 등록 내용을 확인 중입니다. 승인되면 전체 사용자 지도에 공개됩니다.' : '등록이 반려되었습니다. 관리자 검토 결과를 확인해 주세요.'))),
-        ],
-        if (p.isApproved) ...[
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: FilledButton.tonalIcon(onPressed: () async {
-              final wasSaved = saved.contains(p.id);
-              if (wasSaved) { saved.remove(p.id); } else { saved.add(p.id); }
-              try { await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg(wasSaved ? '저장에서 해제했습니다.' : '저장한 장소에 추가했습니다.'); } catch (e) { _msg('저장 처리에 실패했습니다: $e'); }
-            }, icon: Icon(saved.contains(p.id) ? Icons.star : Icons.star_border), label: Text(saved.contains(p.id) ? '저장됨' : '저장'))),
-            const SizedBox(width: 8),
-            Expanded(child: FilledButton.tonal(onPressed: () { Navigator.pop(ctx); _openReview(p); }, child: const Text('검증리뷰'))),
-          ]),
-          if(widget.user.isAdministrator)...[const SizedBox(height:8),Row(children:[Expanded(child:FilledButton.tonalIcon(onPressed:(){Navigator.pop(ctx);_adminEditPlace(p);},icon:const Icon(Icons.edit_outlined),label:const Text('장소 수정'))),const SizedBox(width:8),Expanded(child:OutlinedButton.icon(onPressed:(){Navigator.pop(ctx);_adminDeletePlace(p);},icon:const Icon(Icons.delete_outline),label:const Text('장소 삭제')))])],
-          const Divider(height: 28),
-          const Text('검증 리뷰', style: TextStyle(fontWeight: FontWeight.bold)),
-          if (reviews.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('아직 검증 리뷰가 없습니다.')),
-          ...reviews.map((r) => _reviewTile(p, r)),
-        ],
-      ]),
-    ));
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .76,
+        minChildSize: .42,
+        maxChildSize: .96,
+        builder: (_, scroll) => PlaceDetailSheet(
+          place: p,
+          scrollController: scroll,
+          reviews: reviews,
+          initiallySaved: saved.contains(p.id),
+          isAdministrator: widget.user.isAdministrator,
+          reservationUrl: _reservationUrl(p.note),
+          heightCompatibility: p.maxHeightMm != null &&
+                  widget.user.vehicleHeightMm != null
+              ? _heightCompatibility(p)
+              : null,
+          photoBuilder: _placePhoto,
+          onPhotoTap: (i) => _showPhotoViewer(p.photoUrls, i),
+          reviewBuilder: (r) => _reviewTile(p, r),
+          onOpenAddress: () => _openExternalAddressSearch(p.address),
+          onReview: () {
+            Navigator.pop(ctx);
+            _openReview(p);
+          },
+          onEdit: () {
+            Navigator.pop(ctx);
+            _adminEditPlace(p);
+          },
+          onDelete: () {
+            Navigator.pop(ctx);
+            _adminDeletePlace(p);
+          },
+          onSetSaved: (next) async {
+            final before = saved.contains(p.id);
+            if (next == before) return true;
+            setState(() {
+              if (next) {
+                saved.add(p.id);
+              } else {
+                saved.remove(p.id);
+              }
+            });
+            try {
+              await widget.data.saveSavedIds(saved);
+              _msg(next ? '저장한 장소에 추가했습니다.' : '저장에서 해제했습니다.');
+              return true;
+            } catch (e) {
+              if (mounted) setState(() {
+                if (before) {
+                  saved.add(p.id);
+                } else {
+                  saved.remove(p.id);
+                }
+              });
+              _msg('저장 처리에 실패했습니다.');
+              return false;
+            }
+          },
+        ),
+      ),
+    );
   }
 
   Widget _heightCompatibility(Place p) {
