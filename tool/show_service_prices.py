@@ -29,7 +29,9 @@ service_ui = """        const SizedBox(height: 8),
         }),
 """
 
-if "const Text('이용가능 서비스'" in s:
+if 'PlaceDetailSheet(' in s:
+    print('service prices are shown by modern PlaceDetailSheet')
+elif "const Text('이용가능 서비스'" in s:
     print('service availability/price display already present')
 elif anchor in s:
     p.write_text(s.replace(anchor, service_ui, 1), encoding='utf-8')
