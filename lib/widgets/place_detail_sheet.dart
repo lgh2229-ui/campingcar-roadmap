@@ -9,6 +9,7 @@ class PlaceDetailSheet extends StatefulWidget {
   const PlaceDetailSheet({
     super.key,
     required this.place,
+    required this.scrollController,
     required this.reviews,
     required this.initiallySaved,
     required this.isAdministrator,
@@ -25,6 +26,7 @@ class PlaceDetailSheet extends StatefulWidget {
   });
 
   final Place place;
+  final ScrollController scrollController;
   final List<PlaceReview> reviews;
   final bool initiallySaved;
   final bool isAdministrator;
@@ -219,6 +221,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         created.day.toString().padLeft(2, '0');
 
     return ListView(
+      controller: widget.scrollController,
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 34),
       children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
