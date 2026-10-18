@@ -1,8 +1,7 @@
-name: Build Android AAB 130
+name: Build Android AAB (manual)
 # Run Play AAB only after the owner asks for it. APK testing happens first.
 on:
   workflow_dispatch:
-      - 'tool/check_release_media_permissions.py'
 
 jobs:
   build:
