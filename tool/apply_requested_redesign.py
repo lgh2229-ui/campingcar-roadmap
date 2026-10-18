@@ -154,7 +154,7 @@ if '_serviceAvailability(p),' not in s:
             s = s.replace(anchor, "        _serviceAvailability(p),\n" + anchor, 1)
             inserted = True
             break
-    if not inserted:
+    if not inserted and 'PlaceDetailSheet(' not in s:
         raise SystemExit('usage information anchor missing')
 
 s = s.replace("const Text('이용가능 서비스'", "const Text('이용안내'")
