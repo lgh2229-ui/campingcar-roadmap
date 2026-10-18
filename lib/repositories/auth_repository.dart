@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/app_user.dart';
@@ -7,7 +9,100 @@ class AuthRepository {
   AuthRepository(this.local,{this.client}); final LocalRepository local; final SupabaseClient? client; final Map<String,String> _smsCodes={};
   bool get serverEnabled=>client!=null; String normalizePhone(String v)=>v.replaceAll(RegExp(r'[^0-9]'),''); String toE164(String v){final n=normalizePhone(v);if(n.startsWith('82'))return '+$n';if(n.startsWith('0'))return '+82${n.substring(1)}';return '+82$n';} String loginEmail(String id)=>'${id.trim().toLowerCase()}@login.campingcarroadmap.invalid'; bool validPassword(String v)=>v.length>=8&&v.length<=20&&RegExp(r'[A-Za-z]').hasMatch(v)&&RegExp(r'[0-9]').hasMatch(v)&&RegExp(r'[^A-Za-z0-9]').hasMatch(v);
   Future<String> sendMockSms(String p)async{final c=(100000+Random().nextInt(900000)).toString();_smsCodes[normalizePhone(p)]=c;return c;} bool verifySms(String p,String c)=>_smsCodes[normalizePhone(p)]==c.trim();
-  Future<AppUser?> login(String userId,String password,{bool administratorMode=false})async{AppUser? u;if(!serverEnabled){for(final x in await local.users()){if(x.userId.toLowerCase()==userId.toLowerCase()&&x.password==password){u=x;break;}}if(u!=null)await local.setSession(u.userId);}else{try{final res=await client!.functions.invoke('login-by-username',body:{'username':userId.trim(),'password':password}),data=res.data;if(data is! Map||data['ok']!=true||'${data['refresh_token']??''}'.isEmpty)return null;await client!.auth.setSession('${data['refresh_token']}');u=await currentUser();if(u==null)return null;final au=client!.auth.currentUser;if(au!=null){try{await client!.from('profiles').update({'last_seen_at':DateTime.now().toIso8601String()}).eq('id',au.id);}catch(_){/* last-seen tracking must never block a valid login */}}}catch(_){return null;}}if(u==null)return null;if(administratorMode&&!u.isAdministrator){await logout();return null;}if(!administratorMode&&u.isAdministrator){await logout();return null;}return u;}
+  String? lastLoginError;
+
+  Future<AppUser?> login(String userId, String password,
+      {bool administratorMode = false}) async {
+    lastLoginError = null;
+    AppUser? user;
+    if (!serverEnabled) {
+      for (final candidate in await local.users()) {
+        if (candidate.userId.toLowerCase() == userId.toLowerCase() &&
+            candidate.password == password) {
+          user = candidate;
+          break;
+        }
+      }
+      if (user != null) {
+        await local.setSession(user.userId);
+      } else {
+        lastLoginError = '인증 서버가 초기화되지 않았습니다. 연결 상태와 앱 버전을 확인해주세요.';
+      }
+    } else {
+      try {
+        final response = await client!.functions.invoke(
+          'login-by-username',
+          body: {'username': userId.trim(), 'password': password},
+        ).timeout(const Duration(seconds: 18));
+        final result = response.data;
+        if (result is! Map || result['ok'] != true) {
+          lastLoginError = result is Map &&
+              (result['error'] ?? '').toString() == 'invalid_credentials'
+              ? '아이디 또는 비밀번호를 확인해주세요.'
+              : '인증 서버에서 로그인 요청을 처리하지 못했습니다.';
+          return null;
+        }
+        final refreshToken = (result['refresh_token'] ?? '').toString();
+        if (refreshToken.isEmpty) {
+          lastLoginError = '로그인 응답에 세션 정보가 없습니다. 잠시 후 다시 시도해주세요.';
+          return null;
+        }
+        await client!.auth.setSession(refreshToken)
+            .timeout(const Duration(seconds: 18));
+        user = await currentUser().timeout(const Duration(seconds: 18));
+        if (user == null) {
+          lastLoginError = '인증은 성공했지만 회원정보를 확인하지 못했습니다.';
+          return null;
+        }
+        final authUser = client!.auth.currentUser;
+        if (authUser != null) {
+          try {
+            await client!.from('profiles')
+                .update({'last_seen_at': DateTime.now().toIso8601String()})
+                .eq('id', authUser.id);
+          } catch (_) {
+            // Last seen statistics must not cause a login failure.
+          }
+        }
+      } on FunctionException catch (e) {
+        final status = e.status.toString();
+        if (status == '401' || status == '400') {
+          lastLoginError = '아이디 또는 비밀번호를 확인해주세요.';
+        } else if (status == '429') {
+          lastLoginError = '로그인 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.';
+        } else {
+          lastLoginError = '인증 서버 응답 오류 (' + status + '). 잠시 후 다시 시도해주세요.';
+        }
+        return null;
+      } on TimeoutException {
+        lastLoginError = '인증 서버 응답 시간이 초과되었습니다. 인터넷 연결을 확인해주세요.';
+        return null;
+      } on SocketException {
+        lastLoginError = '인터넷 연결을 확인해주세요. 인증 서버에 연결할 수 없습니다.';
+        return null;
+      } on AuthException {
+        lastLoginError = '서버 인증 세션을 설정하지 못했습니다. 잠시 후 다시 시도해주세요.';
+        return null;
+      } catch (error) {
+        lastLoginError = '로그인 중 통신 오류가 발생했습니다 (' +
+            error.runtimeType.toString() + ').';
+        return null;
+      }
+    }
+    if (user == null) return null;
+    if (administratorMode && !user.isAdministrator) {
+      await logout();
+      lastLoginError = '관리자 권한이 없는 계정입니다.';
+      return null;
+    }
+    if (!administratorMode && user.isAdministrator) {
+      await logout();
+      lastLoginError = '관리자 계정은 관리자 로그인에서 접속해주세요.';
+      return null;
+    }
+    return user;
+  }
+
   Future<void> logout()async{if(serverEnabled){await client!.auth.signOut();}else{await local.setSession(null);}}
   Future<void> signup(AppUser u)async{if(serverEnabled)throw UnsupportedError('서버 모드에서는 SMS 인증 회원가입을 사용합니다.');final users=await local.users();if(users.any((x)=>x.userId.toLowerCase()==u.userId.toLowerCase()))throw Exception('이미 사용 중인 아이디입니다.');if(u.nickname.trim().isEmpty)throw Exception('닉네임은 필수입니다.');users.add(u);await local.saveUsers(users);}
   String _smsError(Object? c){switch('$c'){case'too_many_requests':return'인증번호는 1분 후 다시 요청할 수 있습니다.';case'sms_send_failed':return'문자 발송에 실패했습니다. 잠시 후 다시 시도해주세요.';case'sms_not_configured':return'문자 발송 설정을 확인해주세요.';case'invalid_phone':return'휴대폰 번호를 확인해주세요.';case'invalid_otp':return'인증번호가 일치하지 않습니다.';case'otp_expired':return'인증번호 유효시간이 지났습니다. 다시 받아주세요.';case'too_many_attempts':return'인증번호 입력 횟수를 초과했습니다. 새 인증번호를 받아주세요.';case'username_taken':return'이미 사용 중인 아이디입니다.';case'phone_taken':return'이미 가입된 휴대폰 번호입니다.';case'account_not_found':return'등록된 휴대폰 번호를 찾을 수 없습니다.';case'account_mismatch':return'아이디와 등록된 휴대폰 번호가 일치하지 않습니다.';default:return'처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';}}
