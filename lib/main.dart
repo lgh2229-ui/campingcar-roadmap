@@ -38,6 +38,7 @@ Future<void> main() async {
   // If Supabase initialization fails for any reason, start with the local
   // repository instead of terminating before runApp().
   SupabaseClient? client;
+  String? startupError;
   if (AppConfig.serverEnabled) {
     try {
       await Supabase.initialize(
@@ -46,12 +47,13 @@ Future<void> main() async {
       );
       client = Supabase.instance.client;
     } catch (error, stackTrace) {
-      debugPrint('Supabase startup failed; continuing locally: $error');
+      startupError = '인증 서버 초기화에 실패했습니다 (' + error.runtimeType.toString() + ').';
+      debugPrint('Supabase startup failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
   }
 
-  runApp(CampingCarRoadmapApp(client: client));
+  runApp(CampingCarRoadmapApp(client: client, startupError: startupError));
 
   // Start optional push services only after Flutter has rendered the app.
   // A native Firebase/FCM failure must never block the first app frame.
@@ -68,8 +70,9 @@ Future<void> main() async {
 }
 
 class CampingCarRoadmapApp extends StatefulWidget {
-  const CampingCarRoadmapApp({super.key, this.client});
+  const CampingCarRoadmapApp({super.key, this.client, this.startupError});
   final SupabaseClient? client;
+  final String? startupError;
   @override
   State<CampingCarRoadmapApp> createState() => _CampingCarRoadmapAppState();
 }
@@ -83,7 +86,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   bool versionChecked = false;
   bool updateRequired = false;
   String updateUrl = 'https://play.google.com/store/apps/details?id=kr.co.campingcarroadmap.app';
-  static const int currentVersionCode = 130;
+  static const int currentVersionCode = 132;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   Map<String,dynamic>? _pendingNotification;
   void _handleNotification(Map<String,dynamic> event){_pendingNotification=event;_openNotification();}
@@ -137,7 +140,20 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   @override
   Widget build(BuildContext context) {
     Widget home;
-    if (!versionChecked) {
+    if (widget.startupError != null) {
+      home = Scaffold(body: SafeArea(child: Center(child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.cloud_off_outlined, size: 58),
+          const SizedBox(height: 16),
+          const Text('로그인 서버 연결 오류', style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Text(widget.startupError!, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          const Text('앱을 완전히 종료한 후 다시 실행해주세요. 계속 발생하면 이 화면을 보내주세요.', textAlign: TextAlign.center),
+        ]),
+      ))));
+    } else if (!versionChecked) {
       home = const Scaffold(body: Center(child: CircularProgressIndicator()));
     } else if (updateRequired) {
       home = PopScope(
