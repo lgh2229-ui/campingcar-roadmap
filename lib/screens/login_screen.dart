@@ -15,14 +15,35 @@ class _LoginScreenState extends State<LoginScreen> {
   final id = TextEditingController();
   final pw = TextEditingController();
   bool administratorMode = false;
+  bool loginInProgress = false;
+  String? loginError;
 
   Future<void> _login() async {
-    final u = await widget.auth.login(id.text.trim(), pw.text, administratorMode: administratorMode);
-    if (!mounted) return;
-    if (u == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(administratorMode ? '관리자 계정 또는 비밀번호를 확인해주세요.' : '아이디 또는 비밀번호를 확인해주세요.')));
-    } else {
-      widget.onLoggedIn(u);
+    if (loginInProgress) return;
+    setState(() {
+      loginInProgress = true;
+      loginError = null;
+    });
+    try {
+      final u = await widget.auth.login(
+        id.text.trim(), pw.text, administratorMode: administratorMode,
+      );
+      if (!mounted) return;
+      if (u == null) {
+        final message = widget.auth.lastLoginError ?? '로그인을 완료하지 못했습니다. 잠시 후 다시 시도해주세요.';
+        setState(() => loginError = message);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      } else {
+        widget.onLoggedIn(u);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loginError = '로그인 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loginError!)),
+      );
+    } finally {
+      if (mounted) setState(() => loginInProgress = false);
     }
   }
 
@@ -45,7 +66,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(controller: pw, obscureText: true, onSubmitted: (_) => _login(), decoration: const InputDecoration(labelText: '비밀번호', border: OutlineInputBorder())),
                 CheckboxListTile(value: administratorMode, onChanged: (v) => setState(() => administratorMode = v == true), contentPadding: EdgeInsets.zero, title: const Text('관리자 모드로 로그인'), subtitle: const Text('관리자 계정만 사용할 수 있습니다.')),
                 const SizedBox(height: 8),
-                FilledButton(onPressed: _login, child: const Padding(padding: EdgeInsets.all(14), child: Text('로그인'))),
+                if (loginError != null) Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(loginError!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13),
+                  ),
+                ),
+                FilledButton(
+                  onPressed: loginInProgress ? null : _login,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: loginInProgress
+                        ? const SizedBox(width: 20, height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('로그인'),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   TextButton(onPressed: () => Navigator.pushNamed(context, '/find-id'), child: const Text('아이디 찾기')),
