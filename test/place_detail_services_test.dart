@@ -5,6 +5,24 @@ import 'package:campingcar_roadmap/models/place_review.dart';
 import 'package:campingcar_roadmap/widgets/place_detail_sheet.dart';
 
 void main() {
+  test('Selected facilities with unknown fees remain available', () {
+    final p = Place(id: 'sample', name: 'sample', latitude: 0, longitude: 0,
+      address: 'sample',
+      services: ['노지/차박', '공중화장실', '블랙탱크 비움'],
+      prices: {
+        '노지/차박': '요금 확인 필요',
+        '공중화장실': '캠핑장 이용료 포함',
+        '블랙탱크 비움': '캠핑장 숙박 이용료 포함 / 외부 단독이용 요금 확인 필요',
+      });
+    expect(placeServiceShowsAvailable(p, '노지/차박'), true);
+    expect(placeServiceShowsAvailable(p, '공중화장실'), true);
+    expect(placeServiceShowsAvailable(p, '블랙탱크 비움'), true);
+    expect(placeServiceShowsAvailable(p, '급수'), false);
+    final u = Place(id: 'unknown', name: 'parking', latitude: 0, longitude: 0,
+      address: 'parking', services: ['노지/차박'],
+      prices: {'노지/차박': '주차 무료 / 차박 허용 여부 미확인'});
+    expect(placeServiceShowsAvailable(u, '노지/차박'), false);
+  });
   testWidgets('Facility and camper business cards stay visible with correct status',
       (tester) async {
     final controller = ScrollController();
