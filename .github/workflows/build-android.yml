@@ -52,8 +52,6 @@ jobs:
         run: rm -f test/widget_test.dart
       - name: Prepare Android permissions, AdMob, and API 36
         run: python tool/prepare_android.py
-      - name: Enable release R8 code and optimized resource shrinking
-        run: python tool/enable_android_release_optimizations.py
       - name: Install Pillow for branded launcher icon
         run: python -m pip install --disable-pip-version-check 'Pillow>=10,<12'
       - name: Apply Campingcar Roadmap signature app icon
