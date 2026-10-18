@@ -87,23 +87,26 @@ if '_showPhotoViewer(List<String> photos, int initial)' not in s:
     detail_start=s.find('  Future<void> _showPlace(Place p) async {')
     detail_end=s.find('  Widget _heightCompatibility(Place p)', detail_start)
     detail=s[detail_start:detail_end]
-old_builder="builder: (ctx) => DraggableScrollableSheet("
-new_builder="builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => DraggableScrollableSheet("
-changed_builder=False
-if old_builder in detail:
-    detail=detail.replace(old_builder,new_builder,1); changed_builder=True
-elif new_builder not in detail: raise SystemExit('FAILED: place detail sheet builder missing')
-needle='await widget.data.saveSavedIds(saved);'
-if needle not in detail: raise SystemExit('FAILED: favorite save call missing')
-if 'setSheetState(() {});' not in detail: detail=detail.replace(needle, needle+' if (ctx.mounted) setSheetState(() {});',1)
-if changed_builder:
-    close='    ));\n  }\n\n'; idx=detail.rfind(close)
-    if idx<0: raise SystemExit('FAILED: detail close anchor missing')
-    detail=detail[:idx]+'    )));\n  }\n\n'+detail[idx+len(close):]
-required_detail=['saveSavedIds(saved)',"'저장됨'",'saved.contains(p.id)','setSheetState(() {})']
-missing_detail=[x for x in required_detail if x not in detail]
-if missing_detail: raise SystemExit('FAILED: favorite detail validation: '+','.join(missing_detail))
-s=s[:detail_start]+detail+s[detail_end:]
+if 'PlaceDetailSheet(' in detail:
+    print('Modern detail sheet detected: preserve component and callbacks')
+else:
+    old_builder="builder: (ctx) => DraggableScrollableSheet("
+    new_builder="builder: (ctx) => StatefulBuilder(builder: (ctx, setSheetState) => DraggableScrollableSheet("
+    changed_builder=False
+    if old_builder in detail:
+        detail=detail.replace(old_builder,new_builder,1); changed_builder=True
+    elif new_builder not in detail: raise SystemExit('FAILED: place detail sheet builder missing')
+    needle='await widget.data.saveSavedIds(saved);'
+    if needle not in detail: raise SystemExit('FAILED: favorite save call missing')
+    if 'setSheetState(() {});' not in detail: detail=detail.replace(needle, needle+' if (ctx.mounted) setSheetState(() {});',1)
+    if changed_builder:
+        close='    ));\n  }\n\n'; idx=detail.rfind(close)
+        if idx<0: raise SystemExit('FAILED: detail close anchor missing')
+        detail=detail[:idx]+'    )));\n  }\n\n'+detail[idx+len(close):]
+    required_detail=['saveSavedIds(saved)',"'저장됨'",'saved.contains(p.id)','setSheetState(() {})']
+    missing_detail=[x for x in required_detail if x not in detail]
+    if missing_detail: raise SystemExit('FAILED: favorite detail validation: '+','.join(missing_detail))
+    s=s[:detail_start]+detail+s[detail_end:]
 p.write_text(s,encoding='utf-8')
 
 p=Path('lib/screens/vehicle_market_screen.dart')
