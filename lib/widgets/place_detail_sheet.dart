@@ -49,8 +49,15 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   late bool saved = widget.initiallySaved;
   bool saving = false;
 
+  // Canonical options currently supported by the map and registration flow.
   static const coreServices = <String>[
     '노지/차박', '공중화장실', '급수', '블랙탱크 비움',
+  ];
+  static const businessServices = <String>[
+    '매매', 'A/S', '제작', '부품·용품',
+  ];
+  static const extraBusinessAliases = <String>[
+    '수리', '정비', '장착', '상담',
   ];
   static const serviceTitles = <String, String>{
     '노지/차박': '노지 / 차박',
@@ -60,6 +67,11 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     '전기': '전기',
     '캠핑장': '캠핑장',
     '부품·용품': '부품 / 용품',
+    'A/S': 'A/S · 수리',
+    '수리': '수리',
+    '정비': '정비',
+    '장착': '장착',
+    '상담': '상담',
   };
   static const serviceIcons = <String, IconData>{
     '노지/차박': Icons.directions_car_outlined,
@@ -96,42 +108,99 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         child: content,
       );
 
-  Widget serviceCard(String service) {
+  /// A selected service is not necessarily verified: some public parking lots
+  /// store "차박 허용 미확인" in their price/description field.
+  /// Do not color those as confirmed facilities.
+  bool isConfirmedAvailable(String service) {
     final p = widget.place;
-    final isAvailable = p.services.contains(service);
+    if (!p.services.contains(service)) return false;
+    final value = (p.prices[service] ?? '').trim().replaceAll(' ', '');
+    const uncertain = <String>[
+      '미확인', '확인필요', '확인되지', '정보없음', '이용불가',
+      '사용불가', '서비스불가', '차박금지', '야영금지', '운영중단',
+    ];
+    return !uncertain.any(value.contains);
+  }
+
+  Widget serviceCard(String service, {bool business = false}) {
+    final p = widget.place;
+    final listed = p.services.contains(service);
+    final active = isConfirmedAvailable(service);
     final price = (p.prices[service] ?? '').trim();
-    final display = isAvailable
-        ? (price.isEmpty ? '요금 확인 필요' : price)
-        : '이용불가';
-    final free = isAvailable && (price == '무료' || price == '0원');
+    final uncertain = listed && !active;
+    final display = !listed
+        ? (business ? '정보 없음' : '이용불가')
+        : price.isNotEmpty
+            ? price
+            : business
+                ? '서비스 가능'
+                : '요금 확인 필요';
+
+    // Use exactly the same blue treatment for verified facilities and
+    // services, irrespective of whether there is a numeric price.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final blueBackground = isDark
+        ? const Color(0xFF173451)
+        : const Color(0xFFEAF4FF);
+    final blueBorder = isDark
+        ? const Color(0xFF4D86C1)
+        : const Color(0xFFB8D9FF);
+    final blueText = isDark
+        ? const Color(0xFF9BCBFF)
+        : const Color(0xFF205FA1);
+    final ink = active ? blueText : muted;
     return Container(
-      padding: const EdgeInsets.all(13),
+      constraints: const BoxConstraints(minHeight: 100),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
+        color: active ? blueBackground : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: stroke),
+        border: Border.all(color: active ? blueBorder : stroke),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(serviceIcons[service] ?? Icons.place_outlined, color: muted, size: 19),
+          Icon(serviceIcons[service] ?? Icons.miscellaneous_services_outlined,
+              color: ink, size: 19),
           const SizedBox(width: 7),
           Expanded(child: Text(
             serviceTitles[service] ?? service,
-            style: TextStyle(fontSize: 12.5, color: muted, fontWeight: FontWeight.w600),
-          )),
-        ]),
-        const SizedBox(height: 10),
-        Text(display,
             style: TextStyle(
-              fontSize: free ? 17 : 14,
-              height: 1.4,
-              fontWeight: isAvailable ? FontWeight.w700 : FontWeight.w500,
-              color: isAvailable
-                  ? (free ? Theme.of(context).colorScheme.primary : null)
-                  : muted,
-            )),
+              fontSize: 12.5, color: ink, fontWeight: FontWeight.w600,
+            ),
+          )),
+          if (active)
+            Icon(Icons.check_circle_rounded, size: 16, color: blueText),
+        ]),
+        const SizedBox(height: 11),
+        Text(
+          display,
+          style: TextStyle(
+            fontSize: 14,
+            height: 1.4,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active ? blueText : uncertain
+                ? Theme.of(context).colorScheme.onSurface
+                : muted,
+          ),
+        ),
       ]),
     );
   }
+
+  Widget serviceGrid(List<String> services, {bool business = false}) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - 10) / 2;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: services
+              .map((service) => SizedBox(
+                    width: itemWidth,
+                    child: serviceCard(service, business: business),
+                  ))
+              .toList(),
+        );
+      });
 
   Widget infoRow(IconData icon, String title, String detail,
       {VoidCallback? onTap}) {
@@ -210,8 +279,20 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         .join('\n')
         .replaceAll(r'\n', '\n')
         .trim();
-    final extras = p.services.where((service) => !coreServices.contains(service)).toList();
-    final services = <String>[...coreServices, ...extras];
+    // Always render the four main business services, even when not selected.
+    // Unknown future services are shown rather than silently dropped.
+    final otherServices = p.services.where((service) =>
+        !coreServices.contains(service) &&
+        !businessServices.contains(service) &&
+        !extraBusinessAliases.contains(service)).toList();
+    final businessExtras = p.services.where((service) =>
+        extraBusinessAliases.contains(service)).toList();
+    final facilities = <String>[...coreServices, ...otherServices.where(
+      (service) => service == '전기' || service == '캠핑장',
+    )];
+    final businesses = <String>[...businessServices, ...businessExtras];
+    final others = otherServices.where((service) =>
+        service != '전기' && service != '캠핑장').toList();
     final hasOperation = p.hours.isNotEmpty ||
         p.reservation.isNotEmpty || p.phone.isNotEmpty || p.maxHeightMm != null;
     final created = p.createdAt?.toLocal();
@@ -296,16 +377,15 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         ],
         const SizedBox(height: 24),
         heading(Icons.fact_check_outlined, '이용 가능 시설'),
-        LayoutBuilder(builder: (context, constraints) {
-          final itemWidth = (constraints.maxWidth - 10) / 2;
-          return Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: services.map((service) =>
-              SizedBox(width: itemWidth, child: serviceCard(service)),
-            ).toList(),
-          );
-        }),
+        serviceGrid(facilities),
+        const SizedBox(height: 24),
+        heading(Icons.handyman_outlined, '캠핑카 서비스'),
+        serviceGrid(businesses, business: true),
+        if (others.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          heading(Icons.grid_view_rounded, '기타 서비스'),
+          serviceGrid(others, business: true),
+        ],
         const SizedBox(height: 24),
         heading(Icons.schedule_outlined, '운영 정보'),
         panel(Column(
