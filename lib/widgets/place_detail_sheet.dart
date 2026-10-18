@@ -4,6 +4,33 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
 import '../models/place_review.dart';
 
+
+/// Light-blue means the service is listed as available, not that its price
+/// has been confirmed. A missing price or an unknown price cannot turn a
+/// registered service into "unavailable".
+///
+/// Explicitly unverified permissions/operation remain neutral to avoid
+/// presenting potentially prohibited overnight parking as permitted.
+bool placeServiceShowsAvailable(Place place, String service) {
+  if (!place.services.contains(service)) return false;
+  final value = (place.prices[service] ?? '')
+      .toLowerCase()
+      .replaceAll(RegExp(r'\s+'), '');
+
+  const unavailable = <String>[
+    '이용불가', '사용불가', '서비스불가', '제공불가',
+    '차박금지', '야영금지', '운영중단', '운영종료',
+    '이용금지', '폐쇄', '미운영',
+    '허용여부미확인', '허용미확인', '차박여부미확인',
+    '이용가능여부미확인', '이용여부미확인',
+    '사용가능여부미확인', '서비스가능여부미확인',
+    '운영여부미확인', '시설유무미확인',
+    '이용가능여부확인필요', '허용여부확인필요',
+    '차박여부확인필요',
+  ];
+  return !unavailable.any(value.contains);
+}
+
 /// Shared detail sheet for regular users and administrators.
 class PlaceDetailSheet extends StatefulWidget {
   const PlaceDetailSheet({
@@ -108,19 +135,8 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         child: content,
       );
 
-  /// A selected service is not necessarily verified: some public parking lots
-  /// store "차박 허용 미확인" in their price/description field.
-  /// Do not color those as confirmed facilities.
-  bool isConfirmedAvailable(String service) {
-    final p = widget.place;
-    if (!p.services.contains(service)) return false;
-    final value = (p.prices[service] ?? '').trim().replaceAll(' ', '');
-    const uncertain = <String>[
-      '미확인', '확인필요', '확인되지', '정보없음', '이용불가',
-      '사용불가', '서비스불가', '차박금지', '야영금지', '운영중단',
-    ];
-    return !uncertain.any(value.contains);
-  }
+  bool isConfirmedAvailable(String service) =>
+      placeServiceShowsAvailable(widget.place, service);
 
   Widget serviceCard(String service, {bool business = false}) {
     final p = widget.place;
