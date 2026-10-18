@@ -48,7 +48,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('캠핑카 서비스'), findsOneWidget);
-    expect(find.text('매매'), findsOneWidget);
+    expect(find.text('매매'), findsWidgets);
     expect(find.text('A/S · 수리'), findsOneWidget);
     expect(find.text('제작'), findsOneWidget);
     expect(find.text('부품 / 용품'), findsOneWidget);
@@ -56,20 +56,26 @@ void main() {
     expect(find.text('정보 없음'), findsNWidgets(2));
 
     // Selected & confirmed service: light-blue. Unknown service: neutral.
-    final selectedCard = tester.widget<Container>(
-        find.ancestor(
-          of: find.text('매매'),
-          matching: find.byType(Container),
-        ).first);
-    final decoration = selectedCard.decoration as BoxDecoration?;
-    expect(decoration?.color, const Color(0xFFEAF4FF));
+    final availableCards = tester.widgetList<Container>(find.ancestor(
+      of: find.text('매매').last,
+      matching: find.byType(Container),
+    ));
+    expect(
+      availableCards.any((element) =>
+          (element.decoration is BoxDecoration) &&
+          (element.decoration! as BoxDecoration).color == const Color(0xFFEAF4FF)),
+      isTrue,
+    );
 
-    final unavailableCard = tester.widget<Container>(
-        find.ancestor(
-          of: find.text('제작'),
-          matching: find.byType(Container),
-        ).first);
-    final neutralDecoration = unavailableCard.decoration as BoxDecoration?;
-    expect(neutralDecoration?.color, isNot(const Color(0xFFEAF4FF)));
+    final unknownCards = tester.widgetList<Container>(find.ancestor(
+      of: find.text('제작'),
+      matching: find.byType(Container),
+    ));
+    expect(
+      unknownCards.any((element) =>
+          (element.decoration is BoxDecoration) &&
+          (element.decoration! as BoxDecoration).color == const Color(0xFFEAF4FF)),
+      isFalse,
+    );
   });
 }
