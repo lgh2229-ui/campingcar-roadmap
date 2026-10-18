@@ -15,6 +15,7 @@ import 'screens/login_screen.dart';
 import 'screens/recovery_screen.dart';
 import 'screens/signup_screen.dart';
 import 'services/push_notification_service.dart';
+import 'services/resilient_auth_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,10 +45,24 @@ Future<void> main() async {
       await Supabase.initialize(
         url: AppConfig.supabaseUrl,
         publishableKey: AppConfig.supabaseKey,
+        authOptions: FlutterAuthClientOptions(
+          localStorage: ResilientAuthStorage(
+            persistSessionKey: 'sb-' +
+                Uri.parse(AppConfig.supabaseUrl).host.split('.').first +
+                '-auth-token',
+          ),
+          // This app uses server-side SMS verification, not OAuth callbacks.
+          // Do not initialize the native app-links plugin on first frame.
+          detectSessionInUri: false,
+        ),
       );
       client = Supabase.instance.client;
     } catch (error, stackTrace) {
-      startupError = '인증 서버 초기화에 실패했습니다 (' + error.runtimeType.toString() + ').';
+      final detail = error is PlatformException
+          ? error.code + ': ' + (error.message ?? '플랫폼 플러그인 오류')
+          : error.runtimeType.toString();
+      startupError = '인증 서버 초기화에 실패했습니다. (' +
+          (detail.length > 180 ? detail.substring(0, 180) : detail) + ')';
       debugPrint('Supabase startup failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
@@ -86,7 +101,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   bool versionChecked = false;
   bool updateRequired = false;
   String updateUrl = 'https://play.google.com/store/apps/details?id=kr.co.campingcarroadmap.app';
-  static const int currentVersionCode = 132;
+  static const int currentVersionCode = 133;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   Map<String,dynamic>? _pendingNotification;
   void _handleNotification(Map<String,dynamic> event){_pendingNotification=event;_openNotification();}
