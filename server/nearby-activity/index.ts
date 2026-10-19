@@ -245,7 +245,7 @@ async function onlineAISummary(
 
 
 function metaText(x:unknown):string {
- return String(x||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/\\s+/g,' ').trim().slice(0,180);
+ return String(x||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim().slice(0,180);
 }
 // Photos are never AI-generated or sourced from arbitrary copyrighted images.
 // Only Commons items with an actual CC/Public Domain licence may appear.
@@ -271,10 +271,10 @@ async function photoFor(spot:AnyObj):Promise<AnyObj|null>{
   const data=await r.json();
   for(const page of Object.values(data.query?.pages||{}) as AnyObj[]){
    const title=String(page.title||'');
-   if(!hint && !title.replace(/[\\s_-]+/g,'').toLowerCase().includes(name.replace(/[\\s_-]+/g,'').toLowerCase()))continue;
+   if(!hint && !title.replace(/[\s_-]+/g,'').toLowerCase().includes(name.replace(/[\s_-]+/g,'').toLowerCase()))continue;
    const info=page.imageinfo?.[0],meta=info?.extmetadata||{};
    const license=metaText(meta.LicenseShortName?.value);
-   if(!/(CC0|CC[-\\s]*BY|public domain)/i.test(license))continue;
+   if(!/(CC0|CC[-\s]*BY|public domain)/i.test(license))continue;
    const url=validHttp(info?.thumburl||info?.url);
    if(!url.startsWith('https://upload.wikimedia.org/'))continue;
    return {name:spot.name,url,thumbnail_url:url,source_url:'https://commons.wikimedia.org/wiki/'+encodeURIComponent(title.replace(/ /g,'_')),
@@ -359,8 +359,8 @@ async function verifyCandidate(place:AnyObj,activity:string,candidate:AnyObj):Pr
    if(r.ok){
     const data=await r.json();
     for(const p of data.documents||[]){
-     const actual=String(p.place_name||'').replace(/\\s/g,'');
-     const expected=name.replace(/\\s/g,'');
+     const actual=String(p.place_name||'').replace(/\s/g,'');
+     const expected=name.replace(/\s/g,'');
      if(actual.includes(expected)||expected.includes(actual)){
       const spot=normalizePlace({
        name:p.place_name,lat:p.y,lon:p.x,kind:activity,
@@ -383,8 +383,8 @@ async function verifyCandidate(place:AnyObj,activity:string,candidate:AnyObj):Pr
   if(!r.ok)return null;
   const list=await r.json();
   for(const p of Array.isArray(list)?list:[]){
-   const got=String(p.name||String(p.display_name||'').split(',')[0]).replace(/\\s/g,'');
-   const expected=name.replace(/\\s/g,'');
+   const got=String(p.name||String(p.display_name||'').split(',')[0]).replace(/\s/g,'');
+   const expected=name.replace(/\s/g,'');
    if(!got||(!got.includes(expected)&&!expected.includes(got)))continue;
    const type=String(p.osm_type||'').toLowerCase();
    const source=type&&p.osm_id?'https://www.openstreetmap.org/'+
@@ -550,7 +550,7 @@ Deno.serve(async (req:Request)=>{
        {placeId:place.id,reportId:verifiedReportId,adminId});
    }
   }catch(e){
-   if(force)return json({error:String(e).replace(/^Error:\\s*/,''),budget_blocked:true},429);
+   if(force)return json({error:String(e).replace(/^Error:\s*/,''),budget_blocked:true},429);
    console.warn('AI lookup skipped:',String(e).slice(0,100));
   }
   if(force && !ai?.summary)return json({error:'AI 검색 또는 출처 확인이 완료되지 않았습니다. 신고는 대기 상태로 유지됩니다.'},503);
