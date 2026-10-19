@@ -1,5 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.49.10";
-const HEADERS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info","Content-Type":"application/json; charset=utf-8"};
+const HEADERS={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info, x-internal-token","Content-Type":"application/json; charset=utf-8"};
 const send=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:HEADERS});
 function distance(a:number,b:number,c:number,d:number) {
  const r=Math.PI/180,d1=(c-a)*r,d2=(d-b)*r;
@@ -57,13 +57,20 @@ Deno.serve(async(req:Request)=>{
  if(req.method!=='POST')return send({error:'POST only'},405);
  try{
   const auth=req.headers.get('authorization')||'';
-  if(!/^Bearer\s+\S+/i.test(auth))return send({error:'인증 필요'},401);
   const url=Deno.env.get('SUPABASE_URL')||'';
   const adminKey=Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')||'';
-  const userDb=createClient(url,Deno.env.get('SUPABASE_ANON_KEY')||'',{global:{headers:{Authorization:auth}}});
-  const {data:isAdmin,error:authError}=await userDb.rpc('is_admin');
-  if(authError||isAdmin!==true)return send({error:'관리자 전용'},403);
   const db=createClient(url,adminKey);
+  const internalToken=req.headers.get('x-internal-token')||'';
+  let authorized=false;
+  if(internalToken) {
+    const {data:job}=await db.from('internal_scan_credentials').select('token').eq('task','activity_scan').maybeSingle();
+    authorized=Boolean(job?.token && internalToken===job.token);
+  } else if(/^Bearer\s+\S+/i.test(auth)){
+    const userDb=createClient(url,Deno.env.get('SUPABASE_ANON_KEY')||'',{global:{headers:{Authorization:auth}}});
+    const {data:isAdmin,error:authError}=await userDb.rpc('is_admin');
+    authorized=!authError && isAdmin===true;
+  }
+  if(!authorized)return send({error:'관리자 또는 서버 작업 인증 필요'},403);
   const input=await req.json().catch(()=>({}));
   const offset=Math.max(0,Math.min(100000,Number(input.offset)||0));
   const limit=3;
@@ -73,28 +80,57 @@ Deno.serve(async(req:Request)=>{
   const {count}=await db.from('places').select('id',{count:'exact',head:true}).eq('approval_status','approved');
   const results=[];
   for (const p of places||[]){
-   const elements=await lookup(Number(p.latitude),Number(p.longitude));
-   const candidates=new Map<string,{name:string,url:string,count:number}>();
-   for(const e of elements){
-    const tags=e.tags||{},name=String(tags['name:ko']||tags.name||'').trim();
-    const la=Number(e.lat??e.center?.lat),lo=Number(e.lon??e.center?.lon);
-    if(!name||!Number.isFinite(la)||!Number.isFinite(lo))continue;
-    if(distance(Number(p.latitude),Number(p.longitude),la,lo)>3000)continue;
-    for(const activity of classify(tags)){
-     const src='https://www.openstreetmap.org/'+e.type+'/'+e.id;
-     if(!candidates.has(activity))candidates.set(activity,{name,url:src,count:1});
-     else candidates.get(activity)!.count+=1;
+   try {
+    const elements=await lookup(Number(p.latitude),Number(p.longitude));
+    const grouped=new Map<string,Map<string,Record<string,any>>>();
+    for(const e of elements){
+     const tags=e.tags||{},name=String(tags['name:ko']||tags.name||'').trim();
+     const la=Number(e.lat??e.center?.lat),lo=Number(e.lon??e.center?.lon);
+     if(!name||!Number.isFinite(la)||!Number.isFinite(lo))continue;
+     const distance_m=Math.round(distance(Number(p.latitude),Number(p.longitude),la,lo));
+     if(distance_m>3000)continue;
+     const source_url='https://www.openstreetmap.org/'+e.type+'/'+e.id;
+     const phone=String(tags['contact:phone']||tags.phone||'').slice(0,80);
+     const website=String(tags['contact:website']||tags.website||'').slice(0,220);
+     const entry={name,lat:la,lon:lo,distance_m,kind:String(tags.tourism||tags.sport||tags.leisure||tags.shop||tags.amenity||'주변 활동'),
+      address:String(tags['addr:full']||tags['addr:street']||'').slice(0,160),
+      description:String(tags['description:ko']||tags.description||'').slice(0,300),
+      phone, website:/^https?:\\/\\//.test(website)?website:'',
+      fee:String(tags.fee||'').slice(0,60),opening_hours:String(tags.opening_hours||'').slice(0,100),source_url};
+     for(const activity of classify(tags)){
+      if(!grouped.has(activity))grouped.set(activity,new Map());
+      const bucket=grouped.get(activity)!;
+      if(!bucket.has(name))bucket.set(name,entry);
+     }
     }
+    const candidates=[];
+    const cache=[];
+    for(const [activity,poi] of grouped.entries()){
+      const sorted=[...poi.values()].sort((a,b)=>a.distance_m-b.distance_m).slice(0,20);
+      if(!sorted.length)continue;
+      const near=sorted.slice(0,3).map(x=>x.name).join(' · ');
+      candidates.push({place_id:p.id,activity,radius_m:3000,spot_count:poi.size,
+        example_spot:sorted[0].name,source_url:sorted[0].source_url,
+        updated_at:new Date().toISOString()});
+      cache.push({place_id:p.id,activity,radius_m:3000,
+        summary:p.name+' 반경 3km 이내에서 '+activity+' 관련 공개지도 장소 '+poi.size+'곳이 확인되었습니다. 가까운 장소: '+near+'. 실사용 및 운영 상태는 출발 전에 확인해주세요.',
+        spots:sorted,providers:sorted.filter(x=>x.phone||x.website),
+        tips:[activity==='낚시'?'낚시점은 선상낚시 출항 업체로 확인된 것이 아닙니다. 낚시 가능 장소와 금어기·출항 예약은 따로 확인해주세요.':activity==='해루질'?'해루질 허용 및 채취 권한 여부는 별도 확인이 필요합니다.':'운영시간·이용료·출입 허용 여부는 방문 전 실제 운영처에 확인하세요.'],
+        sources:sorted.map(x=>({name:x.name,url:x.source_url})),
+        fetched_at:new Date().toISOString(),
+        expires_at:new Date(Date.now()+7*86400000).toISOString(),
+        ai_generated:false});
+    }
+    if(candidates.length){
+     const {error:e}=await db.from('place_activity_candidates').upsert(candidates,{onConflict:'place_id,activity',ignoreDuplicates:true});
+     if(e)throw e;
+     const {error:c}=await db.from('place_activity_insights').upsert(cache,{onConflict:'place_id,activity'});
+     if(c)throw c;
+    }
+    results.push({place:p.name,found:candidates.length,status:'ok'});
+   } catch(e){
+    results.push({place:p.name,found:0,status:'error',message:String(e).slice(0,110)});
    }
-   const rows=[...candidates.entries()].map(([activity,x])=>({
-    place_id:p.id, activity, radius_m:3000,spot_count:x.count,
-    example_spot:x.name,source_url:x.url,updated_at:new Date().toISOString(),
-   }));
-   if(rows.length) {
-    const {error:saveError}=await db.from('place_activity_candidates').upsert(rows,{onConflict:'place_id,activity',ignoreDuplicates:true});
-    if(saveError)throw saveError;
-   }
-   results.push({place:p.name,found:rows.length});
   }
   return send({offset,next_offset:offset+(places?.length||0),total:count||0,has_more:offset+(places?.length||0)<(count||0),results});
  }catch(e){return send({error:String(e).slice(0,300)},503);}
