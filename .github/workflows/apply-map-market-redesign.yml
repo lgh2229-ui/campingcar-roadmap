@@ -1,9 +1,6 @@
 name: Apply map filter and market redesign
 on:
-  workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/apply-map-market-redesign.yml'
+  workflow_dispatch: # obsolete automatic patch; debug APK workflow is authoritative
 
 permissions:
   contents: write
