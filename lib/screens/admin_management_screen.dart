@@ -22,7 +22,145 @@ class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixi
  void msg(String s)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(s)));
  Future<void> _reply(Map<String,dynamic>x)async{final c=TextEditingController(text:'${x['admin_reply']??''}');final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:Text('${x['title']}'),content:TextField(controller:c,maxLines:6,decoration:const InputDecoration(labelText:'관리자 답변',border:OutlineInputBorder()),),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('답변 저장'))]));if(ok==true&&c.text.trim().isNotEmpty){await db.from('app_feedback').update({'admin_reply':c.text.trim(),'status':'answered','answered_at':DateTime.now().toIso8601String()}).eq('id',x['id']);await _load();}}
  Future<void> _member(Map<String,dynamic>x,String s)async{await db.from('profiles').update({'account_status':s}).eq('id',x['id']);await _load();}
- Future<void> _showMember(Map<String,dynamic>x)async{final f=<MapEntry<String,String>>[MapEntry('아이디',_userId(x)),MapEntry('닉네임',_nickname(x)),MapEntry('휴대폰','${x['phone']??''}'),MapEntry('휴대폰 인증',x['phone_verified']==true?'완료':'미인증'),MapEntry('회원상태','${x['account_status']??'active'}'),MapEntry('권한','${x['role']??'user'}'),MapEntry('차량상태','${x['vehicle_status']??''}'),MapEntry('차량명/모델','${x['vehicle_name']??''}'),MapEntry('차량높이',x['vehicle_height_mm']==null?'':'${(x['vehicle_height_mm']as num)/1000} m'),MapEntry('위생설비','${x['sanitation_type']??''}'),MapEntry('가입일',_dt(x['created_at'])),MapEntry('마지막접속일자 및 시간',_dt(x['last_seen_at']))];await showModalBottomSheet<void>(context:context,showDragHandle:true,isScrollControlled:true,builder:(c)=>SafeArea(child:SizedBox(height:MediaQuery.of(c).size.height*.78,child:Column(children:[Padding(padding:const EdgeInsets.all(16),child:Text(_memberTitle(x),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))),Expanded(child:ListView(children:f.map((e)=>ListTile(title:Text(e.key),subtitle:Text(e.value))).toList()))]))));}
+ Widget _memberDetailSection(String title, IconData icon, List<Widget> fields) {
+   final scheme=Theme.of(context).colorScheme;
+   return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+     Padding(padding:const EdgeInsets.fromLTRB(2,5,0,10),child:Row(children:[
+       Icon(icon,size:19,color:scheme.onSurfaceVariant),
+       const SizedBox(width:9),
+       Text(title,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w700)),
+     ])),
+     Container(
+       width:double.infinity,
+       padding:const EdgeInsets.symmetric(vertical:4,horizontal:15),
+       decoration:BoxDecoration(
+         borderRadius:BorderRadius.circular(16),
+         border:Border.all(color:scheme.outlineVariant),
+         color:scheme.surface,
+       ),
+       child:Column(children:[
+         for(var i=0;i<fields.length;i++) ...[
+           if(i>0) Divider(height:1,color:scheme.outlineVariant),
+           fields[i],
+         ],
+       ]),
+     ),
+   ]);
+ }
+
+ Widget _memberDetailRow(String title,String? raw,{bool prominent=false}){
+   final value=(raw??'').trim();
+   final scheme=Theme.of(context).colorScheme;
+   return Padding(
+     padding:const EdgeInsets.symmetric(vertical:12),
+     child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+       SizedBox(width:104,child:Text(title,
+         style:TextStyle(fontSize:13,color:scheme.onSurfaceVariant))),
+       const SizedBox(width:10),
+       Expanded(child:Text(value.isEmpty?'미등록':value,
+         style:TextStyle(fontSize:14,height:1.4,
+           fontWeight:prominent?FontWeight.w700:FontWeight.w500,
+           color:value.isEmpty?scheme.onSurfaceVariant:scheme.onSurface))),
+     ]),
+   );
+ }
+
+ Future<void> _showMember(Map<String,dynamic>x)async{
+   String readableStatus(String raw) {
+     switch(raw.toLowerCase()){
+       case 'active':return '정상 이용';
+       case 'suspended':return '이용 정지';
+       case 'blocked':return '이용 차단';
+       case 'inactive':return '비활성';
+       case 'admin':return '관리자';
+       case 'user':return '일반 회원';
+       case 'planned':return '구매 예정';
+       case 'owned':return '보유 중';
+       case 'have':return '보유 중';
+       default:return raw.isEmpty?'미등록':raw;
+     }
+   }
+   final scheme=Theme.of(context).colorScheme;
+   final nickname=_nickname(x),username=_userId(x);
+   final accountStatus=(x['account_status']??'active').toString();
+   final isActive=accountStatus=='active';
+   final height=x['vehicle_height_mm'] is num
+     ? ((x['vehicle_height_mm'] as num)/1000).toStringAsFixed(2)+'m'
+     : '';
+   await showModalBottomSheet<void>(
+     context:context,
+     showDragHandle:true,
+     isScrollControlled:true,
+     useSafeArea:true,
+     backgroundColor:scheme.surface,
+     builder:(c)=>DraggableScrollableSheet(
+       expand:false,initialChildSize:.84,minChildSize:.42,maxChildSize:.96,
+       builder:(_,scroll)=>ListView(
+         controller:scroll,
+         padding:const EdgeInsets.fromLTRB(20,0,20,36),
+         children:[
+           Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
+             Text('회원 상세정보',style:TextStyle(fontSize:12,
+               fontWeight:FontWeight.w600,color:scheme.onSurfaceVariant)),
+             IconButton(tooltip:'닫기',onPressed:()=>Navigator.pop(c),
+               icon:const Icon(Icons.close,size:20)),
+           ]),
+           const SizedBox(height:9),
+           Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
+             CircleAvatar(radius:28,backgroundColor:scheme.primaryContainer,
+               child:Icon(Icons.person_outline,color:scheme.onPrimaryContainer,size:29)),
+             const SizedBox(width:14),
+             Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+               Text(nickname.isNotEmpty?nickname:(username.isEmpty?'회원':username),
+                 style:const TextStyle(fontSize:22,fontWeight:FontWeight.w800)),
+               const SizedBox(height:4),
+               Text(username.isEmpty?'아이디 미등록':username,
+                 style:TextStyle(fontSize:13,color:scheme.onSurfaceVariant)),
+             ])),
+           ]),
+           const SizedBox(height:13),
+           Align(alignment:Alignment.centerLeft,
+             child:Container(
+               padding:const EdgeInsets.symmetric(horizontal:12,vertical:7),
+               decoration:BoxDecoration(
+                 color:isActive?scheme.primaryContainer:scheme.surfaceContainerHighest,
+                 borderRadius:BorderRadius.circular(40)),
+               child:Row(mainAxisSize:MainAxisSize.min,children:[
+                 Icon(isActive?Icons.check_circle_outline:Icons.info_outline,
+                   size:16,color:isActive?scheme.onPrimaryContainer:scheme.onSurfaceVariant),
+                 const SizedBox(width:5),
+                 Text(readableStatus(accountStatus),
+                   style:TextStyle(fontWeight:FontWeight.w700,fontSize:12,
+                     color:isActive?scheme.onPrimaryContainer:scheme.onSurfaceVariant)),
+               ]),
+             )),
+           const SizedBox(height:24),
+           _memberDetailSection('기본 정보',Icons.badge_outlined,[
+             _memberDetailRow('아이디',username),
+             _memberDetailRow('닉네임',nickname),
+             _memberDetailRow('휴대폰',(x['phone']??'').toString()),
+             _memberDetailRow('휴대폰 인증',x['phone_verified']==true?'인증 완료':'미인증',
+               prominent:true),
+           ]),
+           const SizedBox(height:22),
+           _memberDetailSection('계정 및 활동',Icons.manage_accounts_outlined,[
+             _memberDetailRow('회원상태',readableStatus(accountStatus)),
+             _memberDetailRow('권한',readableStatus((x['role']??'user').toString())),
+             _memberDetailRow('가입일',_dt(x['created_at'])),
+             _memberDetailRow('최근 접속',_dt(x['last_seen_at']),prominent:true),
+           ]),
+           const SizedBox(height:22),
+           _memberDetailSection('차량 정보',Icons.rv_hookup_outlined,[
+             _memberDetailRow('차량상태',readableStatus((x['vehicle_status']??'').toString())),
+             _memberDetailRow('차량명 / 모델',(x['vehicle_name']??'').toString()),
+             _memberDetailRow('차량높이',height),
+             _memberDetailRow('위생설비',(x['sanitation_type']??'').toString()),
+           ]),
+         ],
+       ),
+     ),
+   );
+ }
  Widget _photos(dynamic raw){final p=List<String>.from(raw??const[]);if(p.isEmpty)return const SizedBox.shrink();return SizedBox(height:74,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:p.length,separatorBuilder:(_,__)=>const SizedBox(width:6),itemBuilder:(_,i)=>ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network(p[i],width:92,height:74,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const SizedBox(width:92,child:Icon(Icons.broken_image_outlined))))));}
  Widget _approvalTab(){final pending=places.where((p)=>p.approvalStatus=='pending').toList(),done=places.where((p)=>p.approvalStatus!='pending').toList(),r=approvalCompleted?done:pending;return Column(children:[Padding(padding:const EdgeInsets.fromLTRB(12,12,12,4),child:SegmentedButton<bool>(segments:[ButtonSegment(value:false,label:Text('처리대기 (${pending.length})')),ButtonSegment(value:true,label:Text('처리완료 (${done.length})'))],selected:{approvalCompleted},onSelectionChanged:(v)=>setState(()=>approvalCompleted=v.first))),Expanded(child:_approvalList(r,approvalCompleted))]);}
  Widget _approvalList(List<Place> r,bool done)=>r.isEmpty?Center(child:Text(done?'처리 완료 내역이 없습니다.':'승인 대기 장소가 없습니다.')):ListView.builder(itemCount:r.length,itemBuilder:(_,i){final p=r[i];return ListTile(leading:Icon(done?Icons.check_circle:Icons.hourglass_top),title:Text(p.name.replaceFirst(RegExp(r'^\\[(승인 대기|승인 반려)\\]\\s*'),'')),subtitle:Text('${p.address}\n등록자: ${p.ownerNickname.trim().isEmpty?'닉네임 없음':p.ownerNickname} · ${_dt(p.createdAt)}'),isThreeLine:true,trailing:done?Text(p.approvalStatus=='approved'?'승인완료':'반려완료'):const Icon(Icons.chevron_right),onTap:done?null:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>AdminPlaceReviewScreen(place:p,data:SupabaseRepository(db)))).then((_)=>_load()));});
