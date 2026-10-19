@@ -165,7 +165,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     final price = (p.prices[service] ?? '').trim();
     final uncertain = listed && !active;
     final display = !listed
-        ? (business || activity ? '정보 없음' : '이용불가')
+        ? (activity ? '활동 정보 없음' : business ? '정보 없음' : '이용불가')
         : price.isNotEmpty
             ? price
             : activity
