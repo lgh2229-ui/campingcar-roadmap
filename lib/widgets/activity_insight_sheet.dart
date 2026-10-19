@@ -95,6 +95,59 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   Widget _heading(String text) => Padding(
     padding: const EdgeInsets.only(top: 20, bottom: 9),
     child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)));
+  Widget _photoGallery(List<Map<String,dynamic>> photos) {
+    if(photos.isEmpty) return Padding(
+      padding:const EdgeInsets.only(bottom:7),
+      child:Text('저작권과 장소 연결이 확인된 사진은 아직 없습니다.',
+        style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+    );
+    return SizedBox(height:235,child:ListView.separated(
+      scrollDirection:Axis.horizontal,
+      itemCount:photos.length,
+      separatorBuilder:(_,__)=>const SizedBox(width:10),
+      itemBuilder:(context,index){
+        final photo=photos[index],url=String(photo['url']??'');
+        final source=String(photo['source_url']??'');
+        final license=String(photo['license']??'');
+        final artist=String(photo['attribution']??'');
+        final name=String(photo['name']??'산책·관광 사진');
+        return SizedBox(width:MediaQuery.of(context).size.width*.76,
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            InkWell(onTap:(){
+              showDialog<void>(context:context,builder:(dialog)=>Dialog(
+                child:Column(mainAxisSize:MainAxisSize.min,children:[
+                  Image.network(url,fit:BoxFit.contain,
+                    errorBuilder:(_,__,___)=>const Padding(padding:EdgeInsets.all(24),
+                      child:Text('사진을 불러올 수 없습니다.'))),
+                  Padding(padding:const EdgeInsets.all(12),child:Text(
+                    '$name · $artist · $license',style:const TextStyle(fontSize:12))),
+                  TextButton(onPressed:source.startsWith('https://')?()=>_open(source):null,
+                    child:const Text('원본 사진·저작권 출처 열기')),
+                  TextButton(onPressed:()=>Navigator.pop(dialog),child:const Text('닫기')),
+                ]),
+              ));
+            },
+              child:ClipRRect(borderRadius:BorderRadius.circular(13),
+                child:SizedBox(height:170,width:double.infinity,
+                  child:Image.network(url,fit:BoxFit.cover,
+                    errorBuilder:(_,__,___)=>ColoredBox(
+                      color:Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child:const Center(child:Icon(Icons.broken_image_outlined)))))),
+            ),
+            const SizedBox(height:5),
+            Text(name,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:const TextStyle(fontSize:13,fontWeight:FontWeight.w700)),
+            Row(children:[
+              Expanded(child:Text(artist+' · '+license,
+                maxLines:1,overflow:TextOverflow.ellipsis,
+                style:TextStyle(fontSize:11,color:Theme.of(context).colorScheme.onSurfaceVariant))),
+              IconButton(tooltip:'사진 출처',onPressed:source.startsWith('https://')?()=>_open(source):null,
+                icon:const Icon(Icons.open_in_new,size:17),visualDensity:VisualDensity.compact),
+            ]),
+          ]));
+      },
+    ));
+  }
   Widget _spot(Map<String, dynamic> spot) {
     final name = (spot['name'] ?? '').toString();
     final kind = (spot['kind'] ?? '').toString();
@@ -141,6 +194,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     final spots = _rows(data['spots']);
     final contacts = _rows(data['providers']);
     final sources = _rows(data['sources']);
+    final photos = _rows(data['photos']);
     final tips = data['tips'] is List ? (data['tips'] as List).map((e) => e.toString()).toList() : <String>[];
     final ai = data['ai_generated'] == true;
     final when = DateTime.tryParse((data['fetched_at'] ?? '').toString())?.toLocal();
@@ -150,6 +204,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         + '.' + when.day.toString() + ' · OpenStreetMap 공개지도',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant))),
       if (data['stale'] == true) const Text('검색 서버가 일시적으로 느려 저장된 기존 정보를 보여드립니다.'),
+      if (data['research_status'] == 'not_confirmed') const Text('AI 재확인 완료 · 확인 가능한 장소 없음 (이용 불가를 뜻하지 않음)'),
       if (data['cached'] == true) Text('저장된 정보 · 자동 만료 없음 · 재검색은 신고 후 관리자만 가능',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
       if (data['temporarily_unavailable'] == true) const Padding(
@@ -160,6 +215,8 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       Text((data['summary'] ?? '').toString(),style:const TextStyle(height:1.5)),
       if (!ai && spots.isNotEmpty) Text('확인된 지도·관광자료를 자동으로 정리한 내용입니다. 실시간 AI 웹검색은 서버 설정 시 사용됩니다.',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+      _heading('주변 사진 · 출처 확인된 자료'),
+      _photoGallery(photos),
       _heading('3km 이내 관련 장소 · ' + spots.length.toString() + '곳'),
       if (spots.isEmpty) const Text('공개지도에서 확인되지 않았습니다. 실제 이용 불가를 의미하지 않습니다.'),
       ...spots.map(_spot),
