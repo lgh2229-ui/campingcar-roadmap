@@ -12,11 +12,13 @@ import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
+import '../models/recreation_activities.dart';
 import '../models/place_review.dart';
 import '../models/review_comment.dart';
 import '../repositories/app_data_repository.dart';
 import '../repositories/auth_repository.dart';
 import '../widgets/place_detail_sheet.dart';
+import '../widgets/recreation_picker.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -795,6 +797,12 @@ class _HomeScreenState extends State<HomeScreen> {
         TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)')),
         ...prices.entries.map((e) => Row(children: [Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })), Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
+        RecreationPicker(
+          selected: selected,
+          onToggle: (activity) => setS(() {
+            if (!selected.add(activity)) selected.remove(activity);
+          }),
+        ),
         TextField(controller: hours, decoration: const InputDecoration(labelText: '운영시간')),
         DropdownButtonFormField<String>(initialValue: reservation, items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setS(() => reservation = v ?? reservation), decoration: const InputDecoration(labelText: '예약 여부')),
         if(reservation=='예약필수') TextField(controller:reservationUrl,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'예약 링크',hintText:'https://...')),
@@ -809,7 +817,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')), FilledButton(onPressed: loading ? null : () async {
         if (name.text.trim().isEmpty || selected.isEmpty) return _msg('장소명과 서비스 항목을 입력해주세요.');
-        for (final s in selected) { if (prices[s]!.text.trim().isEmpty) return _msg('$s 금액을 입력해주세요. 무료면 "무료"라고 입력해주세요.'); }
+        for (final s in selected.where(prices.containsKey)) { if (prices[s]!.text.trim().isEmpty) return _msg('$s 금액을 입력해주세요. 무료면 "무료"라고 입력해주세요.'); }
         if (photos.isEmpty) return _msg('장소사진을 1장 이상 등록해주세요.');
         setState(() => loading = true);
         try {
@@ -820,7 +828,7 @@ class _HomeScreenState extends State<HomeScreen> {
             longitude: spot.longitude,
             address: address.text.trim(),
             services: selected.toList(),
-            prices: {for (final s in selected) s: prices[s]!.text.trim()},
+            prices: {for (final s in selected.where(prices.containsKey)) s: prices[s]!.text.trim()},
             hours: hours.text.trim(),
             reservation: reservation,
             maxHeightMm: maxHeight.text.trim().isEmpty ? null : _metersToMm(maxHeight.text),
@@ -1015,7 +1023,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ...businessServices,
       ...p.services.where((service) =>
           !pricedServices.contains(service) &&
-          !businessServices.contains(service)),
+          !businessServices.contains(service) &&
+          !recreationActivities.contains(service)),
     ];
     final selected=p.services.toSet();
     final prices={
@@ -1046,7 +1055,7 @@ class _HomeScreenState extends State<HomeScreen> {
             decoration:const InputDecoration(hintText:'금액 / 무료'),
           )),
       ]);
-    }),TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),DropdownButtonFormField<String>(initialValue:reservation,items:['예약불필요','예약필수','전화문의'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>setS(()=>reservation=v??reservation),decoration:const InputDecoration(labelText:'예약 여부')),if(reservation=='예약필수')TextField(controller:reservationUrl,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'예약 링크',hintText:'https://...')),TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'문의연락처')),TextField(controller:note,maxLines:3,decoration:const InputDecoration(labelText:'이용방법 / 주의사항')),const SizedBox(height:12),Align(alignment:Alignment.centerLeft,child:Text('장소 사진',style:TextStyle(fontWeight:FontWeight.bold))),if(existingPhotos.where((x)=>!removedPhotos.contains(x)).isNotEmpty)SizedBox(height:92,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:existingPhotos.where((x)=>!removedPhotos.contains(x)).length,separatorBuilder:(_,__)=>const SizedBox(width:6),itemBuilder:(_,i){final url=existingPhotos.where((x)=>!removedPhotos.contains(x)).elementAt(i);return Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:_placePhoto(url)),Positioned(right:0,top:0,child:InkWell(onTap:()=>setS(()=>removedPhotos.add(url)),child:const CircleAvatar(radius:12,child:Icon(Icons.close,size:15))))]);})),if(newPhotos.isNotEmpty)SizedBox(height:92,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:newPhotos.length,separatorBuilder:(_,__)=>const SizedBox(width:6),itemBuilder:(_,i)=>Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(newPhotos[i].path),width:120,height:92,fit:BoxFit.cover)),Positioned(right:0,top:0,child:InkWell(onTap:()=>setS(()=>newPhotos.removeAt(i)),child:const CircleAvatar(radius:12,child:Icon(Icons.close,size:15))))]))),Align(alignment:Alignment.centerLeft,child:OutlinedButton.icon(onPressed:()async{final picked=await ImagePicker().pickMultiImage(imageQuality:82,limit:10);if(picked.isNotEmpty)setS((){for(final x in picked){if(existingPhotos.length-removedPhotos.length+newPhotos.length<10&&!newPhotos.any((e)=>e.path==x.path))newPhotos.add(x);}});},icon:const Icon(Icons.add_photo_alternate_outlined),label:Text('사진 추가 ('+(existingPhotos.length-removedPhotos.length+newPhotos.length).toString()+'/10)')))]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('수정 저장'))])));if(ok!=true)return;if(address.text.trim()!=p.address.trim()&&!editLocationConfirmed){_msg('주소를 변경했다면 「주소로 위치 맞추기」를 이용해 정확한 좌표도 지정해주세요.');return;}if(name.text.trim().isEmpty||selected.isEmpty)return _msg('장소명과 서비스 항목을 입력해주세요.');for(final s in selected.where((item)=>!businessServices.contains(item))){if(prices[s]?.text.trim().isEmpty??true)return _msg(s+' 금액을 입력해주세요.');}p.name=name.text.trim();p.address=address.text.trim();p.latitude=editLat;p.longitude=editLon;p.services=selected.toList();p.prices={for(final s in selected)if(prices[s]?.text.trim().isNotEmpty??false)s:prices[s]!.text.trim()};p.hours=hours.text.trim();p.reservation=reservation;p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);p.phone=phone.text.trim();p.note=_noteWithReservation(note.text,reservation=='예약필수'?reservationUrl.text:'');try{await widget.data.updatePlace(p);for(final url in removedPhotos){await widget.data.deletePlacePhoto(p.id,url);}final kept=existingPhotos.where((x)=>!removedPhotos.contains(x)).toList();final added=newPhotos.isEmpty?<String>[]:await widget.data.uploadPlacePhotos(p.id,newPhotos.map((e)=>File(e.path)).toList());p.photoUrls=[...kept,...added];await _load();_msg('장소 정보를 수정했습니다.');}catch(e){_msg('장소 수정에 실패했습니다: '+e.toString());}
+    }),RecreationPicker(selected:selected,onToggle:(activity)=>setS((){if(!selected.add(activity))selected.remove(activity); })),TextField(controller:hours,decoration:const InputDecoration(labelText:'운영시간')),DropdownButtonFormField<String>(initialValue:reservation,items:['예약불필요','예약필수','전화문의'].map((e)=>DropdownMenuItem(value:e,child:Text(e))).toList(),onChanged:(v)=>setS(()=>reservation=v??reservation),decoration:const InputDecoration(labelText:'예약 여부')),if(reservation=='예약필수')TextField(controller:reservationUrl,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'예약 링크',hintText:'https://...')),TextField(controller:height,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'진입 최대 높이',suffixText:'m')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'문의연락처')),TextField(controller:note,maxLines:3,decoration:const InputDecoration(labelText:'이용방법 / 주의사항')),const SizedBox(height:12),Align(alignment:Alignment.centerLeft,child:Text('장소 사진',style:TextStyle(fontWeight:FontWeight.bold))),if(existingPhotos.where((x)=>!removedPhotos.contains(x)).isNotEmpty)SizedBox(height:92,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:existingPhotos.where((x)=>!removedPhotos.contains(x)).length,separatorBuilder:(_,__)=>const SizedBox(width:6),itemBuilder:(_,i){final url=existingPhotos.where((x)=>!removedPhotos.contains(x)).elementAt(i);return Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:_placePhoto(url)),Positioned(right:0,top:0,child:InkWell(onTap:()=>setS(()=>removedPhotos.add(url)),child:const CircleAvatar(radius:12,child:Icon(Icons.close,size:15))))]);})),if(newPhotos.isNotEmpty)SizedBox(height:92,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:newPhotos.length,separatorBuilder:(_,__)=>const SizedBox(width:6),itemBuilder:(_,i)=>Stack(children:[ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(newPhotos[i].path),width:120,height:92,fit:BoxFit.cover)),Positioned(right:0,top:0,child:InkWell(onTap:()=>setS(()=>newPhotos.removeAt(i)),child:const CircleAvatar(radius:12,child:Icon(Icons.close,size:15))))]))),Align(alignment:Alignment.centerLeft,child:OutlinedButton.icon(onPressed:()async{final picked=await ImagePicker().pickMultiImage(imageQuality:82,limit:10);if(picked.isNotEmpty)setS((){for(final x in picked){if(existingPhotos.length-removedPhotos.length+newPhotos.length<10&&!newPhotos.any((e)=>e.path==x.path))newPhotos.add(x);}});},icon:const Icon(Icons.add_photo_alternate_outlined),label:Text('사진 추가 ('+(existingPhotos.length-removedPhotos.length+newPhotos.length).toString()+'/10)')))]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('수정 저장'))])));if(ok!=true)return;if(address.text.trim()!=p.address.trim()&&!editLocationConfirmed){_msg('주소를 변경했다면 「주소로 위치 맞추기」를 이용해 정확한 좌표도 지정해주세요.');return;}if(name.text.trim().isEmpty||selected.isEmpty)return _msg('장소명과 서비스 항목을 입력해주세요.');for(final s in selected.where((item)=>!businessServices.contains(item) && !recreationActivities.contains(item))){if(prices[s]?.text.trim().isEmpty??true)return _msg(s+' 금액을 입력해주세요.');}p.name=name.text.trim();p.address=address.text.trim();p.latitude=editLat;p.longitude=editLon;p.services=selected.toList();p.prices={for(final s in selected)if(prices[s]?.text.trim().isNotEmpty??false)s:prices[s]!.text.trim()};p.hours=hours.text.trim();p.reservation=reservation;p.maxHeightMm=height.text.trim().isEmpty?null:_metersToMm(height.text);p.phone=phone.text.trim();p.note=_noteWithReservation(note.text,reservation=='예약필수'?reservationUrl.text:'');try{await widget.data.updatePlace(p);for(final url in removedPhotos){await widget.data.deletePlacePhoto(p.id,url);}final kept=existingPhotos.where((x)=>!removedPhotos.contains(x)).toList();final added=newPhotos.isEmpty?<String>[]:await widget.data.uploadPlacePhotos(p.id,newPhotos.map((e)=>File(e.path)).toList());p.photoUrls=[...kept,...added];await _load();_msg('장소 정보를 수정했습니다.');}catch(e){_msg('장소 수정에 실패했습니다: '+e.toString());}
   }
   Future<void> _adminDeletePlace(Place p) async {if(!widget.user.isAdministrator)return _msg('관리자만 삭제할 수 있습니다.');final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('장소 삭제'),content:Text('「'+p.name+'」 장소를 삭제할까요?\n삭제하면 복구할 수 없습니다.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('삭제'))]));if(ok!=true)return;try{await widget.data.deletePlace(p.id);await _load();_msg('장소를 삭제했습니다.');}catch(e){_msg('장소 삭제에 실패했습니다: '+e.toString());}}
 
