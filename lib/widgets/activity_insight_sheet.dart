@@ -106,11 +106,11 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       itemCount:photos.length,
       separatorBuilder:(_,__)=>const SizedBox(width:10),
       itemBuilder:(context,index){
-        final photo=photos[index],url=String(photo['url']??'');
-        final source=String(photo['source_url']??'');
-        final license=String(photo['license']??'');
-        final artist=String(photo['attribution']??'');
-        final name=String(photo['name']??'산책·관광 사진');
+        final photo=photos[index],url=(photo['url']??'').toString();
+        final source=(photo['source_url']??'').toString();
+        final license=(photo['license']??'').toString();
+        final artist=(photo['attribution']??'').toString();
+        final name=(photo['name']??'산책·관광 사진').toString();
         return SizedBox(width:MediaQuery.of(context).size.width*.76,
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             InkWell(onTap:(){
