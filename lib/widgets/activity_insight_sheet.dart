@@ -41,6 +41,8 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   Widget _spot(Map<String, dynamic> spot) {
     final name = (spot['name'] ?? '').toString();
     final kind = (spot['kind'] ?? '').toString();
+    final description = (spot['description'] ?? '').toString();
+    final address = (spot['address'] ?? '').toString();
     final phone = (spot['phone'] ?? '').toString();
     final hours = (spot['opening_hours'] ?? '').toString();
     final fee = (spot['fee'] ?? '').toString();
@@ -58,6 +60,8 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
           const SizedBox(height: 5),
           Text(kind + ' · 약 ' + dist.toString() + 'm',
             style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          if (description.isNotEmpty) Padding(padding:const EdgeInsets.only(top:6),child:Text(description)),
+          if (address.isNotEmpty) Text('등록 주소: ' + address,style:const TextStyle(fontSize:12)),
           if (hours.isNotEmpty) Text('공개지도 운영시간: ' + hours),
           if (fee.isNotEmpty) Text('공개지도 요금 표기: ' + fee),
           if (phone.isNotEmpty) Text('연락처: ' + phone),
