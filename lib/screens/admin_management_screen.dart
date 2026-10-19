@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'admin_home_screen.dart';
 import 'home_screen.dart';
 import 'activity_candidate_admin_screen.dart';
+import 'activity_report_admin_screen.dart';
 import '../models/place.dart';
 import '../repositories/supabase_repository.dart';
 import '../repositories/auth_repository.dart';
@@ -205,6 +206,13 @@ class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixi
 
  Widget _photos(dynamic raw){final p=List<String>.from(raw??const[]);if(p.isEmpty)return const SizedBox.shrink();return SizedBox(height:74,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:p.length,separatorBuilder:(_,__)=>const SizedBox(width:6),itemBuilder:(_,i)=>ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.network(p[i],width:92,height:74,fit:BoxFit.cover,errorBuilder:(_,__,___)=>const SizedBox(width:92,child:Icon(Icons.broken_image_outlined))))));}
  Widget _approvalTab(){final pending=places.where((p)=>p.approvalStatus=='pending').toList(),done=places.where((p)=>p.approvalStatus!='pending').toList(),r=approvalCompleted?done:pending;return Column(children:[
+Padding(padding:const EdgeInsets.fromLTRB(12,9,12,0),child:SizedBox(width:double.infinity,
+ child:FilledButton.tonalIcon(
+ onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+   builder:(_)=>const ActivityReportAdminScreen())),
+ icon:const Icon(Icons.report_gmailerrorred_outlined),
+ label:const Text('관광·레저 사용자 신고 / 관리자 AI 재검색')))),
+
 Padding(padding:const EdgeInsets.fromLTRB(12,12,12,0),child:SizedBox(width:double.infinity,child:FilledButton.tonalIcon(
  onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>const ActivityCandidateAdminScreen())),
  icon:const Icon(Icons.travel_explore_outlined),label:const Text('3km 주변 관광·레저 자동 조사 / 검토')))),
