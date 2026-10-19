@@ -542,8 +542,13 @@ Deno.serve(async (req:Request)=>{
    : (place.name+' 주변 3km 이내 공개지도에서 '+activity+' 관련 장소를 확인하지 못했습니다. 정보가 없다는 뜻이지 이용이 불가능하다는 뜻은 아닙니다.');
   let ai:{summary:string,sources:AnyObj[]}|null=null;
   try{
-   ai=await onlineAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY'),db,
-     {placeId:place.id,reportId:verifiedReportId,adminId});
+   if(researched && researched.summary && researched.sources?.length){
+     // The paid initial AI second-search already ran. Do not bill a second time.
+     ai={summary:researched.summary,sources:researched.sources};
+   }else if(!researched){
+     ai=await onlineAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY'),db,
+       {placeId:place.id,reportId:verifiedReportId,adminId});
+   }
   }catch(e){
    if(force)return json({error:String(e).replace(/^Error:\\s*/,''),budget_blocked:true},429);
    console.warn('AI lookup skipped:',String(e).slice(0,100));
