@@ -119,13 +119,13 @@ Deno.serve(async(req:Request)=>{
         tips:[activity==='낚시'?'낚시점은 선상낚시 출항 업체로 확인된 것이 아닙니다. 낚시 가능 장소와 금어기·출항 예약은 따로 확인해주세요.':activity==='해루질'?'해루질 허용 및 채취 권한 여부는 별도 확인이 필요합니다.':'운영시간·이용료·출입 허용 여부는 방문 전 실제 운영처에 확인하세요.'],
         sources:sorted.map(x=>({name:x.name,url:x.source_url})),
         fetched_at:new Date().toISOString(),
-        expires_at:new Date(Date.now()+7*86400000).toISOString(),
+        expires_at:null,
         ai_generated:false});
     }
     if(candidates.length){
      const {error:e}=await db.from('place_activity_candidates').upsert(candidates,{onConflict:'place_id,activity',ignoreDuplicates:true});
      if(e)throw e;
-     const {error:c}=await db.from('place_activity_insights').upsert(cache,{onConflict:'place_id,activity'});
+     const {error:c}=await db.from('place_activity_insights').upsert(cache,{onConflict:'place_id,activity',ignoreDuplicates:true});
      if(c)throw c;
     }
     results.push({place:p.name,found:candidates.length,status:'ok'});
