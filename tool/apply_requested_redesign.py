@@ -90,6 +90,10 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
             const Text('캠핑카 서비스', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Wrap(spacing: 6, runSpacing: 6, children: businessFilters.map((e) => FilterChip(label: Text(e == '부품·용품' ? '부품/용품' : e), selected: draft.contains(e), onSelected: (v) => setLocal(() { if (v) { draft.add(e); } else { draft.remove(e); draftPrices.remove(e); } }))).toList()),
+            const SizedBox(height: 16),
+            const Text('관광·레저', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: recreationActivities.map((activity) => FilterChip(label: Text(activity), selected: draft.contains(activity), onSelected: (v) => setLocal(() { if (v) { draft.add(activity); } else { draft.remove(activity); draftPrices.remove(activity); } }))).toList()),
           ]))),
           actions: [
             TextButton(onPressed: () => setLocal(() { draft.clear(); draftPrices.clear(); }), child: const Text('초기화')),
