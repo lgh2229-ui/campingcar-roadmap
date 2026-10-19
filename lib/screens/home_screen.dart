@@ -19,6 +19,7 @@ import '../repositories/app_data_repository.dart';
 import '../repositories/auth_repository.dart';
 import '../widgets/place_detail_sheet.dart';
 import '../widgets/recreation_picker.dart';
+import '../widgets/activity_insight_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -901,6 +902,14 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_, scroll) => PlaceDetailSheet(
           place: p,
           scrollController: scroll,
+          onActivityTap: (activity) {
+            showModalBottomSheet<void>(
+              context: context,
+              isScrollControlled: true,
+              showDragHandle: true,
+              builder: (_) => ActivityInsightSheet(place: p, activity: activity),
+            );
+          },
           reviews: reviews,
           initiallySaved: saved.contains(p.id),
           isAdministrator: widget.user.isAdministrator,
