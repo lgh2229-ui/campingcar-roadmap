@@ -1220,24 +1220,219 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
     }));
   }
 
-  Future<void> detail(Map<String,dynamic>x) async {
-    final photos=List<String>.from(x['image_urls']??const []),mine=x['owner_id']==uid;
-    await showModalBottomSheet<void>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>SafeArea(child:SingleChildScrollView(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      if(photos.isNotEmpty)SizedBox(height:220,child:PageView.builder(itemCount:photos.length,itemBuilder:(_,i)=>GestureDetector(onTap:()=>_openMarketPhotos(photos,i),child:ClipRRect(borderRadius:BorderRadius.circular(12),child:Image.network(photos[i],fit:BoxFit.cover))))),const SizedBox(height:10),Row(children:[Expanded(child:Text('${x['title']}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold))),Chip(label:Text(x['status']=='sold'?'판매완료':'판매중'))]),Text('${x['manufacturer']} ${x['model']} · ${x['model_year']??'-'}년'),Text('주행거리 ${x['mileage_km']??'-'}km · ${x['region']}'),Text(money(x['price_krw']),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const SizedBox(height:8),Text('등록자: ${_sellerName(x)}',style:const TextStyle(fontWeight:FontWeight.w600)),Text('등록일시: ${_registrationDate(x['created_at'])}',style:TextStyle(fontSize:13,color:Colors.grey.shade700)),const Divider(),
-      Text('배터리 ${x['battery_ah']??'없음'}Ah · 태양광 ${x['solar_w']??'없음'}W'),Text('인버터 ${x['inverter_w']??'없음'}W · 주행충전 ${x['alternator_charger_a']??'없음'}A'),Text('한전충전 ${x['shore_power']==true?'있음':'없음'} · 청수 ${x['fresh_water_l']??'없음'}L · 오수 ${x['grey_water_l']??'없음'}L'),Text('화장실 ${x['toilet_type']=='cassette'?'카트리지':x['toilet_type']=='black'?'블랙':'없음'} ${x['toilet_capacity_l']??''}${x['toilet_capacity_l']!=null?'L':''}'),if('${x['description']??''}'.isNotEmpty)Padding(padding:const EdgeInsets.only(top:10),child:Text('${x['description']}')),const SizedBox(height:10),Text('연락처: ${x['phone']}'),const SizedBox(height:12),
-      Wrap(spacing:8,runSpacing:8,children:[
-        if(mine) ...[
-          OutlinedButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,'edit');},child:const Text('수정')),
-          OutlinedButton(onPressed:(){Navigator.pop(ctx);ownerAction(x,x['status']=='sold'?'active':'sold');},child:Text(x['status']=='sold'?'판매중으로 변경':'판매완료')),
-        ],
-        if(!mine) OutlinedButton.icon(onPressed:()=>report(x),icon:const Icon(Icons.report_outlined),label:const Text('매물 신고')),
-        if(mine||isAdministrator) OutlinedButton.icon(
-          onPressed:(){Navigator.pop(ctx);ownerAction(x,'delete');},
-          icon:const Icon(Icons.delete_outline),label:Text(isAdministrator&&!mine?'관리자 삭제':'삭제'),
-          style:OutlinedButton.styleFrom(foregroundColor:Colors.red.shade700),
+
+  Widget _detailHeading(IconData icon, String label) => Padding(
+    padding: const EdgeInsets.fromLTRB(0, 22, 0, 11),
+    child: Row(children: [
+      Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
+      const SizedBox(width: 9),
+      Text(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+    ]),
+  );
+
+  Widget _detailPanel(Widget body) => Container(
+    width: double.infinity, padding: const EdgeInsets.all(15),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+    ), child: body,
+  );
+
+  Widget _detailFeature(String label, String value, IconData icon, bool present) {
+    final c = Theme.of(context).colorScheme;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 90),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: present ? c.primaryContainer.withValues(alpha: .35) : c.surface,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: present ? c.primary.withValues(alpha: .25) : c.outlineVariant),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(icon, size: 18, color: present ? c.primary : c.onSurfaceVariant),
+          const SizedBox(width: 7),
+          Expanded(child: Text(label, style: TextStyle(
+              color: c.onSurfaceVariant, fontWeight: FontWeight.w600, fontSize: 12))),
+        ]),
+        const SizedBox(height: 10),
+        Text(value, style: TextStyle(
+            color: present ? c.onSurface : c.onSurfaceVariant,
+            fontWeight: FontWeight.w700, fontSize: 14, height: 1.4)),
+      ]),
+    );
+  }
+
+  Widget _detailFeatureGrid(List<Widget> children) => LayoutBuilder(
+    builder: (context, constraints) => Wrap(
+      spacing: 10, runSpacing: 10,
+      children: children.map((child) => SizedBox(
+        width: (constraints.maxWidth - 10) / 2, child: child,
+      )).toList(),
+    ),
+  );
+
+  Future<void> detail(Map<String,dynamic> x) async {
+    final photos = List<String>.from(x['image_urls'] ?? const []);
+    final mine = x['owner_id'] == uid;
+    final sold = x['status'] == 'sold';
+    final scheme = Theme.of(context).colorScheme;
+    String spec(String key, String unit) {
+      final value = iv(x, key);
+      return value == null ? '미장착 / 정보 없음' : value.toString() + unit;
+    }
+    String field(String key) => (x[key] ?? '').toString();
+    final bathroom = field('toilet_type') == 'cassette' ? '카트리지'
+        : field('toilet_type') == 'black' ? '블랙탱크' : '없음';
+    final bathCapacity = iv(x, 'toilet_capacity_l');
+    final description = field('description').trim();
+    await showModalBottomSheet<void>(
+      context: context, isScrollControlled: true,
+      showDragHandle: true, useSafeArea: true,
+      builder: (sheetCtx) => DraggableScrollableSheet(
+        expand: false, initialChildSize: .88,
+        minChildSize: .4, maxChildSize: .96,
+        builder: (ctx, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+          children: [
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('중고 캠핑카 상세정보', style: TextStyle(
+                  color: scheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w600)),
+              IconButton(tooltip: '닫기', onPressed: () => Navigator.pop(sheetCtx),
+                icon: const Icon(Icons.close_rounded)),
+            ]),
+            if (photos.isNotEmpty) ...[
+              ClipRRect(borderRadius: BorderRadius.circular(16),
+                child: SizedBox(height: 230, child: PageView.builder(
+                  itemCount: photos.length,
+                  itemBuilder: (_, index) => Stack(fit: StackFit.expand, children: [
+                    GestureDetector(
+                      onTap: () => _openMarketPhotos(photos, index),
+                      child: Image.network(photos[index], fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.broken_image_outlined, size: 40))),
+                    ),
+                    Positioned(right: 12, bottom: 12, child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.black54,
+                        borderRadius: BorderRadius.circular(18)),
+                      child: Text((index + 1).toString() + ' / ' + photos.length.toString(),
+                        style: const TextStyle(color: Colors.white, fontSize: 12)),
+                    )),
+                  ]),
+                ))),
+              const SizedBox(height: 16),
+            ],
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Text(field('title'), style: const TextStyle(
+                fontSize: 23, fontWeight: FontWeight.w800, height: 1.3))),
+              const SizedBox(width: 8),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                decoration: BoxDecoration(
+                  color: sold ? scheme.surfaceContainerHighest : scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(sold ? '판매완료' : '판매중',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+                    color: sold ? scheme.onSurfaceVariant : scheme.onPrimaryContainer)),
+              ),
+            ]),
+            const SizedBox(height: 8),
+            Text(
+              [field('manufacturer'), field('model'),
+                if (iv(x, 'model_year') != null) spec('model_year', '년식')]
+                .where((v) => v.isNotEmpty).join(' · '),
+              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Text(money(x['price_krw']), style: TextStyle(
+              fontSize: 27, fontWeight: FontWeight.w800, color: scheme.primary)),
+            const SizedBox(height: 16),
+            _detailPanel(Row(children: [
+              Icon(Icons.speed_outlined, size: 20, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(child: Text(spec('mileage_km', 'km'),
+                style: const TextStyle(fontWeight: FontWeight.w600))),
+              Icon(Icons.location_on_outlined, size: 19, color: scheme.onSurfaceVariant),
+              const SizedBox(width: 5),
+              Expanded(child: Text(field('region'), style: const TextStyle(
+                fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+            ])),
+            _detailHeading(Icons.bolt_outlined, '전기 · 충전 설비'),
+            _detailFeatureGrid([
+              _detailFeature('배터리', spec('battery_ah', 'Ah'), Icons.battery_charging_full_outlined, iv(x,'battery_ah') != null),
+              _detailFeature('태양광', spec('solar_w', 'W'), Icons.solar_power_outlined, iv(x,'solar_w') != null),
+              _detailFeature('인버터', spec('inverter_w', 'W'), Icons.power_outlined, iv(x,'inverter_w') != null),
+              _detailFeature('주행충전', spec('alternator_charger_a', 'A'), Icons.electric_bolt_outlined, iv(x,'alternator_charger_a') != null),
+              _detailFeature('한전충전', x['shore_power'] == true ? '가능' : '없음', Icons.ev_station_outlined, x['shore_power'] == true),
+            ]),
+            _detailHeading(Icons.water_drop_outlined, '생활 · 위생 설비'),
+            _detailFeatureGrid([
+              _detailFeature('청수 탱크', spec('fresh_water_l', 'L'), Icons.water_drop_outlined, iv(x,'fresh_water_l') != null),
+              _detailFeature('오수 탱크', spec('grey_water_l', 'L'), Icons.water_outlined, iv(x,'grey_water_l') != null),
+              _detailFeature('화장실', bathroom + (bathCapacity == null ? '' : ' · ' + bathCapacity.toString() + 'L'),
+                  Icons.wc_outlined, bathroom != '없음'),
+            ]),
+            if (description.isNotEmpty) ...[
+              _detailHeading(Icons.notes_outlined, '차량 설명 및 추가 옵션'),
+              _detailPanel(Text(description, style: const TextStyle(
+                fontSize: 14, height: 1.7))),
+            ],
+            _detailHeading(Icons.person_outline, '판매자 정보'),
+            _detailPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                CircleAvatar(backgroundColor: scheme.primaryContainer,
+                  child: Icon(Icons.person_outline, color: scheme.onPrimaryContainer)),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(_sellerName(x), style: const TextStyle(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text('등록 ' + _registrationDate(x['created_at']),
+                    style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12)),
+                ])),
+              ]),
+              if (field('phone').trim().isNotEmpty) ...[
+                const SizedBox(height: 13),
+                Divider(height: 1, color: scheme.outlineVariant),
+                const SizedBox(height: 13),
+                Row(children: [
+                  Icon(Icons.phone_outlined, color: scheme.onSurfaceVariant, size: 18),
+                  const SizedBox(width: 9),
+                  Expanded(child: SelectableText(field('phone'),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+                ]),
+              ],
+            ])),
+            const SizedBox(height: 21),
+            if (mine) ...[
+              Row(children: [
+                Expanded(child: OutlinedButton.icon(
+                  onPressed: () { Navigator.pop(sheetCtx); ownerAction(x,'edit'); },
+                  icon: const Icon(Icons.edit_outlined, size: 18), label: const Text('수정'))),
+                const SizedBox(width: 10),
+                Expanded(child: FilledButton.tonalIcon(
+                  onPressed: () { Navigator.pop(sheetCtx); ownerAction(x,sold?'active':'sold'); },
+                  icon: Icon(sold ? Icons.replay_outlined : Icons.check_circle_outline, size: 18),
+                  label: Text(sold ? '판매중으로 변경' : '판매완료'))),
+              ]),
+              const SizedBox(height: 8),
+            ],
+            if (!mine) OutlinedButton.icon(
+              onPressed: () => report(x),
+              icon: const Icon(Icons.report_outlined), label: const Text('매물 신고')),
+            if (mine || isAdministrator) Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () { Navigator.pop(sheetCtx); ownerAction(x,'delete'); },
+                icon: const Icon(Icons.delete_outline),
+                label: Text(isAdministrator && !mine ? '관리자 삭제' : '매물 삭제'),
+                style: TextButton.styleFrom(foregroundColor: scheme.error)),
+            ),
+          ],
         ),
-      ])
-    ]))));
+      ),
+    );
   }
 
   @override
