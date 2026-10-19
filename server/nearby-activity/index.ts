@@ -41,23 +41,115 @@ function label(t:AnyObj, activity:string) {
  if(t["leisure"]==="marina")return "마리나";
  return [t.tourism,t.leisure,t.sport,t.shop,t.amenity,t.historic].find(Boolean) || "주변 활동 장소";
 }
+// An explicit POI search is best-effort; unavailable public endpoints must never
+// prevent results already checked and stored in our own database from displaying.
 async function overpass(lat:number, lon:number, keys:string[]) {
- const query='[out:json][timeout:23];('+keys.map(k=>'nwr(around:'+RANGE+','+lat+','+lon+')'+k+';').join('')+');out center 400;';
- const endpoints=['https://overpass.kumi.systems/api/interpreter','https://overpass-api.de/api/interpreter'];
+ const query='[out:json][timeout:15];('+keys.map(k=>'nwr(around:'+RANGE+','+lat+','+lon+')'+k+';').join('')+');out center 120;';
+ const urls=[
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
+ ];
  let lastError='';
- for(const url of endpoints) {
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),14000);
+ for(const url of urls) {
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8500);
   try {
-   const res=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(query),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:controller.signal});
-   if (!res.ok) {lastError='공개 지도 서버 HTTP '+res.status;continue;}
-   const data=await res.json();
-   if(!Array.isArray(data.elements))throw new Error('invalid Overpass response');
-   return data.elements as AnyObj[];
+   // GET avoids several public proxies rejecting form-encoded POST with HTTP 406.
+   const response=await fetch(url+'?data='+encodeURIComponent(query),{
+     headers:{'Accept':'application/json','User-Agent':'CampingcarRoadmap/1.0'},
+     signal:controller.signal});
+   if(!response.ok) {lastError='HTTP '+response.status;continue;}
+   const data=await response.json();
+   if(Array.isArray(data.elements))return data.elements as AnyObj[];
+   lastError='unexpected data';
   }catch(e){lastError=String(e);}finally{clearTimeout(timer);}
  }
- throw new Error('주변 정보 출처에 일시적으로 접속할 수 없습니다. '+lastError.slice(0,90));
+ throw new Error('공개 지도 서버 일시 중단 ('+lastError.slice(0,80)+')');
 }
+function validHttp(value:any):string {
+ const text=String(value||'').trim();
+ return /^https?:\\/\\//i.test(text)?text.slice(0,400):'';
+}
+function normalizePlace(item:AnyObj,lat:number,lon:number,activity:string) {
+ const a=Number(item.lat),b=Number(item.lon);
+ if(!Number.isFinite(a)||!Number.isFinite(b))return null;
+ const distance_m=Math.round(distanceM(lat,lon,a,b));
+ if(distance_m>RANGE)return null;
+ const name=String(item.name||'').trim().slice(0,130);
+ if(!name)return null;
+ return {
+  name,lat:a,lon:b,distance_m,
+  kind:String(item.kind||activity).slice(0,90),
+  description:String(item.description||'').slice(0,320),
+  address:String(item.address||'').slice(0,170),
+  phone:String(item.phone||'').slice(0,80),
+  website:validHttp(item.website),
+  opening_hours:String(item.opening_hours||'').slice(0,140),
+  fee:String(item.fee||'').slice(0,70),
+  source_url:validHttp(item.source_url),
+ };
+}
+async function curatedPoi(db:any,lat:number,lon:number,activity:string){
+ const latDelta=RANGE/110570,lonDelta=RANGE/(111320*Math.max(0.2,Math.cos(lat*Math.PI/180)));
+ const {data,error}=await db.from('verified_activity_pois').select('*')
+  .eq('activity',activity)
+  .gte('latitude',lat-latDelta).lte('latitude',lat+latDelta)
+  .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
+ if(error)throw error;
+ return (data||[]).map((p:AnyObj)=>normalizePlace({
+  name:p.name,lat:p.latitude,lon:p.longitude,kind:activity,
+  description:p.description,phone:p.phone,website:p.info_source_url,
+  source_url:p.info_source_url||p.map_source_url,
+ },lat,lon,activity)).filter(Boolean) as AnyObj[];
+}
+const discoveryKeywords:Record<string,string>={
+ '관광지':'관광명소','산책':'산책로 공원','등산':'등산로',
+ '낚시':'낚시','해루질':'갯벌', '수상레포츠':'수상레저',
+ '지상레포츠':'레포츠','카지노':'카지노', '자전거':'자전거',
+ '수영':'수영장','서핑':'서핑','카약·SUP':'카약 SUP',
+ '스노클링':'스노클링','스키·눈썰매':'스키장','골프':'골프장',
+ '온천·스파':'온천','문화체험':'문화체험','시장·쇼핑':'시장 수산시장'
+};
+async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined){
+ if(!key)return [] as AnyObj[];
+ const query=discoveryKeywords[activity]||activity;
+ const reqUrl='https://dapi.kakao.com/v2/local/search/keyword.json?'+
+  new URLSearchParams({query,x:String(lon),y:String(lat),radius:String(RANGE),size:'15',sort:'distance'});
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),6500);
+ try{
+  const r=await fetch(reqUrl,{headers:{Authorization:'KakaoAK '+key},signal:ctrl.signal});
+  if(!r.ok)throw new Error('Kakao '+r.status);
+  const body=await r.json();
+  return (body.documents||[]).map((d:AnyObj)=>normalizePlace({
+   name:d.place_name,lat:d.y,lon:d.x,kind:d.category_name||activity,
+   address:d.road_address_name||d.address_name,phone:d.phone,
+   website:d.place_url,source_url:d.place_url
+  },lat,lon,activity)).filter(Boolean);
+ }finally{clearTimeout(timer);}
+}
+async function nominatimSearch(lat:number,lon:number,activity:string,name:string){
+ // Nominatim is a backup, not a bulk POI scraper. At most one bounded request.
+ const latDelta=RANGE/110570,lonDelta=RANGE/(111320*Math.max(0.2,Math.cos(lat*Math.PI/180)));
+ const tokens=name.replace(/(공영주차장|주차장|캠핑장|덤프스테이션|노지|후보|오토캠핑|자동차캠핑)/g,'').trim().slice(0,35);
+ const query=(tokens+' '+(discoveryKeywords[activity]||activity)).trim();
+ const url='https://nominatim.openstreetmap.org/search?'+new URLSearchParams({
+  q:query,format:'jsonv2',addressdetails:'0',limit:'6',bounded:'1',
+  viewbox:[lon-lonDelta,lat+latDelta,lon+lonDelta,lat-latDelta].join(','),
+ });
+ const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),6500);
+ try{
+  const response=await fetch(url,{headers:{'Accept-Language':'ko','User-Agent':'CampingcarRoadmap/1.0'},signal:ctrl.signal});
+  if(!response.ok)throw new Error('Nominatim '+response.status);
+  const items=await response.json();
+  return (Array.isArray(items)?items:[]).map((d:AnyObj)=>normalizePlace({
+   name:d.name||String(d.display_name||'').split(',')[0],lat:d.lat,lon:d.lon,
+   kind:activity,description:'공개지도 검색결과입니다. 세부 운영사항은 직접 확인하세요.',
+   source_url:d.osm_type&&d.osm_id?'https://www.openstreetmap.org/'+
+    ({N:'node',W:'way',R:'relation'}[String(d.osm_type).toUpperCase()]||d.osm_type)+'/'+d.osm_id:'',
+  },lat,lon,activity)).filter(Boolean);
+ }finally{clearTimeout(timer);}
+}
+
 function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
  const t=e.tags||{};
  const name=String(t['name:ko']||t.name||'').trim();
@@ -100,21 +192,55 @@ Deno.serve(async (req:Request)=>{
   const {data:cache}=await db.from('place_activity_insights').select('*').eq('place_id',placeId).eq('activity',activity).maybeSingle();
   if(cache && new Date(cache.expires_at).getTime()>Date.now() && body.force_refresh!==true)return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated)});
   const lat=Number(place.latitude),lon=Number(place.longitude);
-  let elements:AnyObj[]=[];
-  try{elements=await overpass(lat,lon,selectors[activity]);}
-  catch(e){if(cache)return json({...cache,cached:true,stale:true,warning:String(e)});return json({error:String(e)},503);}
+  // Search our existing verified dataset first, even on the very first tap.
+  let collected:AnyObj[]=[];
+  try{collected=await curatedPoi(db,lat,lon,activity);}catch(e){console.warn('curated POI lookup:',String(e));}
+  const errors:string[]=[];
+  let lookupSucceeded=collected.length>0;
+  // Fresh results are persisted so subsequent opens do not repeat internet searches.
+  try{
+   const kakao=await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'));
+   if(kakao.length) {collected.push(...kakao);lookupSucceeded=true;}
+  }catch(e){errors.push('지역검색 연결 문제');}
+  if(collected.length<12){
+   try{
+    const elements=await overpass(lat,lon,selectors[activity]);
+    lookupSucceeded=true;
+    for(const e of elements){
+     const raw=spotFromElement(e,lat,lon,activity);
+     if(raw)collected.push(raw);
+    }
+   }catch(e){errors.push('공개지도 검색 지연');}
+  }
+  // Nominatim is a backup when API keys/Overpass have no matching places.
+  if(collected.length===0){
+   try{
+    const nearby=await nominatimSearch(lat,lon,activity,place.name);
+    if(nearby.length){collected.push(...nearby);lookupSucceeded=true;}
+   }catch(e){errors.push('위치 검색 지연');}
+  }
   const unique=new Map<string,AnyObj>();
-  for(const e of elements) {
-   const spot=spotFromElement(e,lat,lon,activity);
-   if(spot && !unique.has(spot.name))unique.set(spot.name,spot);
+  for(const candidate of collected){
+   const item=normalizePlace(candidate,lat,lon,activity);
+   if(!item)continue;
+   const id=(item.name.trim().toLocaleLowerCase()+'-'+Math.round(item.lat*1000)+'-'+Math.round(item.lon*1000));
+   if(!unique.has(id))unique.set(id,item);
   }
   const spots=[...unique.values()].sort((a,b)=>a.distance_m-b.distance_m).slice(0,20);
+  if(spots.length===0 && !lookupSucceeded){
+   // Do not cache an outage as "no attractions" or show a raw HTTP 406/503.
+   if(cache)return json({...cache,cached:true,stale:true,warning:'최신 검색 연결이 지연돼 이전 정보를 보여드립니다.'});
+   return json({place_id:place.id,activity,radius_m:RANGE,summary:
+     '현재 주변 검색 서버 연결이 원활하지 않습니다. 잠시 뒤 다시 검색해주세요. 등록된 활동 정보는 유지됩니다.',
+     spots:[],providers:[],tips:['운영 및 출입 가능 여부는 공식 안내에서 확인하세요.'],
+     sources:[],temporarily_unavailable:true,warning:errors.join(' · '),cached:false,ai_generated:false});
+  }
   const providers=spots.filter(s=>s.phone || s.website).slice(0,12);
   const primary=spots.slice(0,3).map(s=>s.name).join('·');
   const fallback=spots.length>0
    ? (place.name+' 주변 3km 이내 공개지도에 '+spots.length+'곳의 '+activity+' 관련 장소가 확인됩니다. 가까운 곳: '+primary+'.')
    : (place.name+' 주변 3km 이내 공개지도에서 '+activity+' 관련 장소를 확인하지 못했습니다. 정보가 없다는 뜻이지 이용이 불가능하다는 뜻은 아닙니다.');
-  const ai=await optionalAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY'));
+  const ai=spots.length>0?await optionalAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY')):null;
   const caution=(activity==='해루질'||activity==='낚시')
    ? '채취·낚시 가능 구역, 출입 제한, 금어기, 기상 및 물때를 현장에서 반드시 확인하세요. 위치 정보만으로 합법적인 이용이 보장되지 않습니다.'
    : '운영시간·요금·예약·입장 가능 여부는 출발 전 공식 안내 또는 해당 업체에 확인하세요.';
