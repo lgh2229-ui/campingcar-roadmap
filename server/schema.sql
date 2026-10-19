@@ -54,7 +54,7 @@ create table if not exists public.places (
   status text not null default 'ok' check (status in ('ok','change','bad')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint places_services_allowed check (services <@ array['급수','블랙탱크 비움','노지/차박','공중화장실']::text[])
+  constraint places_services_allowed check (services <@ array['급수','블랙탱크 비움','노지/차박','공중화장실','전기','캠핑장','제작','매매','A/S','부품·용품','수리','정비','장착','상담','관광지','산책','등산','낚시','해루질','수상레포츠','지상레포츠','카지노','자전거','수영','서핑','카약·SUP','스노클링','스키·눈썰매','골프','온천·스파','문화체험','시장·쇼핑']::text[])
 );
 create index if not exists places_lat_lng_idx on public.places(latitude, longitude);
 create index if not exists places_created_at_idx on public.places(created_at desc);
