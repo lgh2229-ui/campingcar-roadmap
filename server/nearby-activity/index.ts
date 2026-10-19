@@ -276,7 +276,7 @@ async function photoFor(spot:AnyObj):Promise<AnyObj|null>{
    const license=metaText(meta.LicenseShortName?.value);
    if(!/(CC0|CC[-\s]*BY|public domain)/i.test(license))continue;
    const url=validHttp(info?.thumburl||info?.url);
-   if(!url.startsWith('https://upload.wikimedia.org/'))continue;
+   if(!(url.startsWith('https://upload.wikimedia.org/')||url.startsWith('https://thumb.wikimedia.org/')))continue;
    return {name:spot.name,url,thumbnail_url:url,source_url:'https://commons.wikimedia.org/wiki/'+encodeURIComponent(title.replace(/ /g,'_')),
     source_name:'Wikimedia Commons',license,attribution:metaText(meta.Artist?.value)||'출처에서 저작자 확인'};
   }
