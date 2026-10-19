@@ -72,6 +72,18 @@ Deno.serve(async(req:Request)=>{
   }
   if(!authorized)return send({error:'관리자 또는 서버 작업 인증 필요'},403);
   const input=await req.json().catch(()=>({}));
+  // Authenticated non-billable configuration check. Never return secret contents.
+  if(input.check_configuration===true){
+    const {data:settings,error:settingsError}=await db.from('camping_ai_budget_settings')
+      .select('budget_monthly_krw,enabled,refresh_requires_report').eq('id',1).maybeSingle();
+    return send({
+      openai_key_present:Boolean(Deno.env.get('OPENAI_API_KEY')),
+      ai_budget_ready:!settingsError && settings?.enabled===true &&
+        settings?.budget_monthly_krw===30000 &&
+        settings?.refresh_requires_report===true,
+      budget_monthly_krw:settings?.budget_monthly_krw??null,
+    });
+  }
   const offset=Math.max(0,Math.min(100000,Number(input.offset)||0));
   const limit=3;
   const {data:places,error}=await db.from('places').select('id,name,latitude,longitude')
