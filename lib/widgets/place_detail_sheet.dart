@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
+import '../models/recreation_activities.dart';
 import '../models/place_review.dart';
 
 
@@ -75,6 +76,7 @@ class PlaceDetailSheet extends StatefulWidget {
 class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   late bool saved = widget.initiallySaved;
   bool saving = false;
+  bool showAllActivities = false;
 
   // Canonical options currently supported by the map and registration flow.
   static const coreServices = <String>[
@@ -111,6 +113,24 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     '매매': Icons.directions_car_filled_outlined,
     '제작': Icons.handyman_outlined,
     '부품·용품': Icons.construction_outlined,
+    '관광지': Icons.place_outlined,
+    '산책': Icons.directions_walk_outlined,
+    '등산': Icons.terrain_outlined,
+    '낚시': Icons.anchor_outlined,
+    '해루질': Icons.water_outlined,
+    '수상레포츠': Icons.sailing_outlined,
+    '지상레포츠': Icons.sports_soccer_outlined,
+    '카지노': Icons.casino_outlined,
+    '자전거': Icons.directions_bike_outlined,
+    '수영': Icons.pool_outlined,
+    '서핑': Icons.waves_outlined,
+    '카약·SUP': Icons.sailing_outlined,
+    '스노클링': Icons.scuba_diving_outlined,
+    '스키·눈썰매': Icons.ac_unit_outlined,
+    '골프': Icons.golf_course_outlined,
+    '온천·스파': Icons.hot_tub_outlined,
+    '문화체험': Icons.museum_outlined,
+    '시장·쇼핑': Icons.storefront_outlined,
   };
 
   Color get muted => Theme.of(context).colorScheme.onSurfaceVariant;
@@ -138,19 +158,21 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   bool isConfirmedAvailable(String service) =>
       placeServiceShowsAvailable(widget.place, service);
 
-  Widget serviceCard(String service, {bool business = false}) {
+  Widget serviceCard(String service, {bool business = false, bool activity = false}) {
     final p = widget.place;
     final listed = p.services.contains(service);
     final active = isConfirmedAvailable(service);
     final price = (p.prices[service] ?? '').trim();
     final uncertain = listed && !active;
     final display = !listed
-        ? (business ? '정보 없음' : '이용불가')
+        ? (business || activity ? '정보 없음' : '이용불가')
         : price.isNotEmpty
             ? price
-            : business
-                ? '서비스 가능'
-                : '요금 확인 필요';
+            : activity
+                ? '활동 정보 등록'
+                : business
+                    ? '서비스 가능'
+                    : '요금 확인 필요';
 
     // Use exactly the same blue treatment for verified facilities and
     // services, irrespective of whether there is a numeric price.
@@ -203,7 +225,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     );
   }
 
-  Widget serviceGrid(List<String> services, {bool business = false}) =>
+  Widget serviceGrid(List<String> services, {bool business = false, bool activity = false}) =>
       LayoutBuilder(builder: (context, constraints) {
         final itemWidth = (constraints.maxWidth - 10) / 2;
         return Wrap(
@@ -212,7 +234,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
           children: services
               .map((service) => SizedBox(
                     width: itemWidth,
-                    child: serviceCard(service, business: business),
+                    child: serviceCard(service, business: business, activity: activity),
                   ))
               .toList(),
         );
@@ -300,13 +322,17 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     final otherServices = p.services.where((service) =>
         !coreServices.contains(service) &&
         !businessServices.contains(service) &&
-        !extraBusinessAliases.contains(service)).toList();
+        !extraBusinessAliases.contains(service) &&
+        !recreationActivities.contains(service)).toList();
     final businessExtras = p.services.where((service) =>
         extraBusinessAliases.contains(service)).toList();
     final facilities = <String>[...coreServices, ...otherServices.where(
       (service) => service == '전기' || service == '캠핑장',
     )];
     final businesses = <String>[...businessServices, ...businessExtras];
+    final activities = showAllActivities
+        ? recreationActivities
+        : recreationActivities.take(8).toList();
     final others = otherServices.where((service) =>
         service != '전기' && service != '캠핑장').toList();
     final hasOperation = p.hours.isNotEmpty ||
@@ -397,6 +423,19 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         const SizedBox(height: 24),
         heading(Icons.handyman_outlined, '캠핑카 서비스'),
         serviceGrid(businesses, business: true),
+        const SizedBox(height: 24),
+        heading(Icons.explore_outlined, '주변 관광·레저'),
+        serviceGrid(activities, activity: true),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => setState(() => showAllActivities = !showAllActivities),
+            icon: Icon(showAllActivities ? Icons.expand_less : Icons.expand_more, size: 18),
+            label: Text(showAllActivities ? '접기' : '활동 더 보기'),
+          ),
+        ),
+        Text('현장 이용 가능 여부, 허가, 운영시간 및 요금은 방문 전 확인하세요.',
+            style: TextStyle(fontSize: 12, height: 1.4, color: muted)),
         if (others.isNotEmpty) ...[
           const SizedBox(height: 24),
           heading(Icons.grid_view_rounded, '기타 서비스'),
