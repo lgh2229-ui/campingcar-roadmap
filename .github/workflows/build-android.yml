@@ -2,11 +2,6 @@ name: Build Android AAB (manual)
 # Run Play AAB only after the owner asks for it. APK testing happens first.
 on:
   workflow_dispatch:
-  # One-time owner-requested AAB build; will revert to manual-only afterwards.
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-android.yml'
 
 jobs:
   build:
