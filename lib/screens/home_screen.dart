@@ -126,6 +126,15 @@ class _HomeScreenState extends State<HomeScreen> {
     _msg('등록 위치를 선택했습니다. 빨간 핀 위치로 등록됩니다.');
   }
 
+  void _cancelSpotSelection() {
+    setState(() {
+      selectedSpot = null;
+      locationPickMode = false;
+      editingLocationPlace = null;
+    });
+    _msg('장소 위치 지정을 취소했습니다.');
+  }
+
   bool _isMine(Place p) => p.ownerId == _currentAuthorId;
   List<Place> get visiblePlaces {
     final rows = filter == '전체' ? places : places.where((p) => p.services.contains(filter)).toList();
@@ -535,7 +544,42 @@ class _HomeScreenState extends State<HomeScreen> {
               if (currentLocation != null)
                 Marker(point: currentLocation!, width: 34, height: 34, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: Colors.blue, width: 3), boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black38)]), child: const Center(child: Icon(Icons.circle, color: Colors.blue, size: 14)))),
               if (selectedSpot != null)
-                Marker(point: selectedSpot!, width: 100, height: 75, alignment: Alignment.topCenter, child: Column(children: [Text(locationPickMode?'수정 위치':'등록 위치', style: TextStyle(fontWeight: FontWeight.bold)), Icon(Icons.location_pin, color: Colors.red, size: 48)])),
+                Marker(
+                  point: selectedSpot!,
+                  width: 138,
+                  height: 88,
+                  alignment: Alignment.topCenter,
+                  child: Stack(children: [
+                    Align(alignment: Alignment.topCenter, child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(locationPickMode ? '수정 위치' : '등록 위치',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                        const Icon(Icons.location_pin, color: Colors.red, size: 48),
+                      ],
+                    )),
+                    Positioned(top: 0, right: 0, child: Material(
+                      color: Colors.white,
+                      elevation: 2,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: _cancelSpotSelection,
+                        child: const SizedBox(
+                          width: 33, height: 33,
+                          child: Icon(Icons.close, size: 19, color: Colors.black87),
+                        ),
+                      ),
+                    )),
+                  ]),
+                ),
             ]),
           ],
         ),
@@ -563,7 +607,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),
         ])),
         if (selectedSpot != null)
-          Positioned(left:12,right:12,bottom:86,child:Card(child:ListTile(leading:const Icon(Icons.location_pin,color:Colors.red),title:Text('${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12)),trailing:locationPickMode?Wrap(spacing:4,children:[TextButton(onPressed:(){setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;});},child:const Text('취소')),FilledButton(onPressed:()async{final target=editingLocationPlace,spot=selectedSpot;if(target==null||spot==null)return;final a=await _reverseAddress(spot);target.latitude=spot.latitude;target.longitude=spot.longitude;target.address=a;try{await widget.data.updatePlace(target);await _load();if(!mounted)return;setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;center=spot;});map.move(spot,17);_msg('위치와 주소를 반영했습니다.');}catch(e){_msg('위치 수정에 실패했습니다: $e');}},child:const Text('확인'))]):TextButton(onPressed:()=>setState(()=>selectedSpot=null),child:const Text('취소'))))),
+          Positioned(left:12,right:12,bottom:86,child:Card(child:ListTile(leading:const Icon(Icons.location_pin,color:Colors.red),title:Text('${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12)),trailing:locationPickMode?Wrap(spacing:4,children:[TextButton(onPressed:(){setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;});},child:const Text('취소')),FilledButton(onPressed:()async{final target=editingLocationPlace,spot=selectedSpot;if(target==null||spot==null)return;final a=await _reverseAddress(spot);target.latitude=spot.latitude;target.longitude=spot.longitude;target.address=a;try{await widget.data.updatePlace(target);await _load();if(!mounted)return;setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;center=spot;});map.move(spot,17);_msg('위치와 주소를 반영했습니다.');}catch(e){_msg('위치 수정에 실패했습니다: $e');}},child:const Text('확인'))]):IconButton(tooltip:'위치 지정 취소',onPressed:_cancelSpotSelection,icon:const Icon(Icons.close))))),
         Positioned(right:14,bottom:18,child:Column(children:[
           if(!locationPickMode) FloatingActionButton.small(heroTag:'loc',onPressed:_locate,child:const Icon(Icons.my_location)),
           if(!locationPickMode) const SizedBox(height:10),
