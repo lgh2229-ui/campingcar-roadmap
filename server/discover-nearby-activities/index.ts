@@ -73,6 +73,37 @@ Deno.serve(async(req:Request)=>{
   if(!authorized)return send({error:'관리자 또는 서버 작업 인증 필요'},403);
   const input=await req.json().catch(()=>({}));
   // Authenticated non-billable configuration check. Never return secret contents.
+  // Zero-generation credential/permission diagnostic: an intentionally invalid
+  // Responses request should return HTTP 400 only after auth succeeds.
+  if(input.check_openai_access===true){
+    const key=Deno.env.get('OPENAI_API_KEY')||'';
+    if(!key)return send({openai_status:'missing_key'});
+    try{
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),10000);
+      try{
+        const response=await fetch('https://api.openai.com/v1/responses',{
+          method:'POST',
+          headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+          body:'{}',
+          signal:controller.signal,
+        });
+        const status=response.status;
+        return send({
+          openai_status:status===400?'authenticated_responses_endpoint':
+            status===401?'invalid_key':
+            status===403?'permission_denied':
+            status===429?'billing_or_rate_limit':
+            status===200?'unexpected_success':
+            'unexpected_http_'+status,
+          http_status:status,
+          generated_tokens:0,
+        });
+      }finally{clearTimeout(timer);}
+    }catch(e){
+      return send({openai_status:'connectivity_error',detail:String(e).slice(0,120)});
+    }
+  }
   if(input.check_configuration===true){
     const {data:settings,error:settingsError}=await db.from('camping_ai_budget_settings')
       .select('budget_monthly_krw,enabled,refresh_requires_report').eq('id',1).maybeSingle();
