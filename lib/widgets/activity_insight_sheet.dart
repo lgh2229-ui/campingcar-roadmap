@@ -14,12 +14,11 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   late Future<Map<String, dynamic>> result;
   @override void initState() { super.initState(); result = _search(); }
 
-  Future<Map<String, dynamic>> _search({bool refresh = false}) async {
+  Future<Map<String, dynamic>> _search() async {
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'nearby-activity',
-        body: {'place_id': widget.place.id, 'activity': widget.activity,
-          if (refresh) 'force_refresh': true},
+        body: {'place_id': widget.place.id, 'activity': widget.activity},
       );
       if (response.data is! Map) throw StateError('검색 결과 형식이 올바르지 않습니다.');
       final data = Map<String, dynamic>.from(response.data as Map);
@@ -34,7 +33,54 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       throw StateError('주변 검색 서버 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.');
     }
   }
-  void _refresh() => setState(() => result = _search(refresh: true));
+  // Standard user reloads only the permanent cache. Only admins may
+  // execute a paid AI refresh associated with a pending member report.
+  void _refresh() => setState(() => result = _search());
+  Future<void> _reportIssue() async {
+    final controller=TextEditingController();
+    final reason=await showDialog<String>(
+      context:context,
+      builder:(dialog)=>AlertDialog(
+        title:const Text('주변 정보 오류 신고'),
+        content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(widget.place.name+' · '+widget.activity),
+          const SizedBox(height:10),
+          TextField(controller:controller,maxLines:4,maxLength:500,
+            decoration:const InputDecoration(
+              hintText:'변경된 점이나 잘못된 정보를 구체적으로 알려주세요.',
+              border:OutlineInputBorder())),
+          const Text('신고된 내용은 관리자가 확인하며, 일반 회원은 AI 재검색을 실행할 수 없습니다.',
+            style:TextStyle(fontSize:12)),
+        ]),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(dialog),child:const Text('취소')),
+          FilledButton(onPressed:(){
+            final value=controller.text.trim();
+            if(value.length<5)return;
+            Navigator.pop(dialog,value);
+          },child:const Text('신고 제출'))
+        ],
+      ),
+    );
+    controller.dispose();
+    if(reason==null||reason.length<5)return;
+    final user=Supabase.instance.client.auth.currentUser;
+    if(user==null){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('로그인이 필요합니다.')));
+      return;
+    }
+    try{
+      await Supabase.instance.client.from('place_activity_reports').insert({
+        'place_id':widget.place.id,'activity':widget.activity,
+        'reporter_id':user.id,'reason':reason,'status':'pending'
+      });
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('신고가 접수됐습니다. 관리자 검토 후 필요할 때 AI로 재검색합니다.')));
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('신고 저장에 실패했습니다. 다시 시도해주세요.')));
+    }
+  }
   List<Map<String, dynamic>> _rows(dynamic v) =>
     v is List ? v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : [];
   Future<void> _open(String value) async {
@@ -104,7 +150,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         + '.' + when.day.toString() + ' · OpenStreetMap 공개지도',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant))),
       if (data['stale'] == true) const Text('검색 서버가 일시적으로 느려 저장된 기존 정보를 보여드립니다.'),
-      if (data['cached'] == true) Text('저장된 정보를 표시 중 · 새로 검색하려면 우측 상단 새로고침',
+      if (data['cached'] == true) Text('저장된 정보 · 자동 만료 없음 · 재검색은 신고 후 관리자만 가능',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
       if (data['temporarily_unavailable'] == true) const Padding(
         padding: EdgeInsets.only(top: 12),
@@ -132,6 +178,11 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
               overflow:TextOverflow.ellipsis),
           ),
         )),
+      Padding(padding:const EdgeInsets.symmetric(vertical:10),child:OutlinedButton.icon(
+        onPressed:_reportIssue,
+        icon:const Icon(Icons.flag_outlined),
+        label:const Text('주변 정보 오류·변경 신고'),
+      )),
       _heading('이용 안내·주의사항'),
       ...tips.map((tip) => Padding(padding:const EdgeInsets.only(bottom:6),child:Text('• '+tip))),
       const SizedBox(height:18),
@@ -152,7 +203,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
               Text(widget.place.name+' · 반경 3km',
                 style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
             ])),
-            IconButton(tooltip:'새로 검색',onPressed:_refresh,icon:const Icon(Icons.refresh)),
+            IconButton(tooltip:'저장된 정보 다시 보기',onPressed:_refresh,icon:const Icon(Icons.refresh)),
             IconButton(tooltip:'닫기',onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close)),
           ])),
         const Divider(height:1),
