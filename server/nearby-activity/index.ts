@@ -68,7 +68,7 @@ async function overpass(lat:number, lon:number, keys:string[]) {
 }
 function validHttp(value:any):string {
  const text=String(value||'').trim();
- return /^https?:\\/\\//i.test(text)?text.slice(0,400):'';
+ return (text.startsWith('https://')||text.startsWith('http://'))?text.slice(0,400):'';
 }
 function normalizePlace(item:AnyObj,lat:number,lon:number,activity:string) {
  const a=Number(item.lat),b=Number(item.lon);
