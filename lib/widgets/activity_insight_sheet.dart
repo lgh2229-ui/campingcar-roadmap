@@ -15,13 +15,24 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   @override void initState() { super.initState(); result = _search(); }
 
   Future<Map<String, dynamic>> _search({bool refresh = false}) async {
-    final response = await Supabase.instance.client.functions.invoke('nearby-activity',
-      body: {'place_id': widget.place.id, 'activity': widget.activity,
-        if (refresh) 'force_refresh': true});
-    if (response.data is! Map) throw StateError('검색 결과를 읽지 못했습니다.');
-    final data = Map<String, dynamic>.from(response.data as Map);
-    if (data['error'] != null) throw StateError(data['error'].toString());
-    return data;
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'nearby-activity',
+        body: {'place_id': widget.place.id, 'activity': widget.activity,
+          if (refresh) 'force_refresh': true},
+      );
+      if (response.data is! Map) throw StateError('검색 결과 형식이 올바르지 않습니다.');
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (data['error'] != null) throw StateError(data['error'].toString());
+      return data;
+    } catch (e) {
+      // Never expose raw HTTP exceptions or internal backend diagnostics to users.
+      final raw = e.toString().toLowerCase();
+      if (raw.contains('401') || raw.contains('jwt') || raw.contains('인증')) {
+        throw StateError('로그인 시간이 만료됐습니다. 다시 로그인해 주세요.');
+      }
+      throw StateError('주변 검색 서버 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.');
+    }
   }
   void _refresh() => setState(() => result = _search(refresh: true));
   List<Map<String, dynamic>> _rows(dynamic v) =>
@@ -83,6 +94,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   Widget _content(Map<String, dynamic> data) {
     final spots = _rows(data['spots']);
     final contacts = _rows(data['providers']);
+    final sources = _rows(data['sources']);
     final tips = data['tips'] is List ? (data['tips'] as List).map((e) => e.toString()).toList() : <String>[];
     final ai = data['ai_generated'] == true;
     final when = DateTime.tryParse((data['fetched_at'] ?? '').toString())?.toLocal();
@@ -91,10 +103,16 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         '검색 날짜: ' + when.year.toString() + '.' + when.month.toString()
         + '.' + when.day.toString() + ' · OpenStreetMap 공개지도',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant))),
-      if (data['stale'] == true) const Text('최신 검색이 실패해 이전 정보를 표시 중입니다.'),
+      if (data['stale'] == true) const Text('검색 서버가 일시적으로 느려 저장된 기존 정보를 보여드립니다.'),
+      if (data['cached'] == true) Text('저장된 정보를 표시 중 · 새로 검색하려면 우측 상단 새로고침',
+        style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+      if (data['temporarily_unavailable'] == true) const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Text('등록 정보는 유지됩니다. 인터넷 검색 서버가 정상화되면 다시 확인할 수 있습니다.')),
+
       _heading(ai ? 'AI 주변정보 요약' : '주변정보 요약'),
       Text((data['summary'] ?? '').toString(),style:const TextStyle(height:1.5)),
-      if (!ai) Text('공개지도 검색결과 자동 요약입니다. AI 문장 생성은 서버 키 설정 후 제공됩니다.',
+      if (!ai && spots.isNotEmpty) Text('확인된 지도·관광자료를 자동으로 정리한 내용입니다. 실시간 AI 웹검색은 서버 설정 시 사용됩니다.',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
       _heading('3km 이내 관련 장소 · ' + spots.length.toString() + '곳'),
       if (spots.isEmpty) const Text('공개지도에서 확인되지 않았습니다. 실제 이용 불가를 의미하지 않습니다.'),
@@ -103,6 +121,17 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       if (contacts.isEmpty) const Text('확인된 연락처 정보가 없습니다. 업체 정보를 임의로 생성하지 않습니다.'),
       ...contacts.map(_spot),
       if (widget.activity == '낚시') const Text('선상낚시 업체/출항/요금은 별도 확인이 필요하며, 낚시용품점은 낚싯배 예약업체가 아닙니다.'),
+      if (sources.isNotEmpty) _heading('정보 출처 · 눌러서 확인'),
+      ...sources.where((item) => (item['url'] ?? '').toString().startsWith('https://'))
+        .take(15).map((item) => Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _open(item['url'].toString()),
+            icon: const Icon(Icons.open_in_new,size:16),
+            label: Text((item['name'] ?? '출처 열기').toString(),maxLines:2,
+              overflow:TextOverflow.ellipsis),
+          ),
+        )),
       _heading('이용 안내·주의사항'),
       ...tips.map((tip) => Padding(padding:const EdgeInsets.only(bottom:6),child:Text('• '+tip))),
       const SizedBox(height:18),
@@ -133,7 +162,8 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
               CircularProgressIndicator(),SizedBox(height:12),Text('3km 주변 정보를 검색 중입니다...')]));
           if (snapshot.hasError) return Center(child:Padding(padding:const EdgeInsets.all(24),
             child:Column(mainAxisSize:MainAxisSize.min,children:[
-              Text('검색에 실패했습니다.\n'+snapshot.error.toString(),textAlign:TextAlign.center),
+              const Text('주변 정보를 불러오지 못했습니다.\n잠시 후 다시 검색해주세요.',
+                textAlign:TextAlign.center),
               const SizedBox(height:12),
               FilledButton(onPressed:_refresh,child:const Text('다시 검색'))])));
           return _content(snapshot.data!);
