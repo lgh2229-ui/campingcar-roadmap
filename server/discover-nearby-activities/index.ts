@@ -95,7 +95,8 @@ Deno.serve(async(req:Request)=>{
      const entry={name,lat:la,lon:lo,distance_m,kind:String(tags.tourism||tags.sport||tags.leisure||tags.shop||tags.amenity||'주변 활동'),
       address:String(tags['addr:full']||tags['addr:street']||'').slice(0,160),
       description:String(tags['description:ko']||tags.description||'').slice(0,300),
-      phone, website:/^https?:\\/\\//.test(website)?website:'',
+      phone,website:(website.startsWith('https://') || website.startsWith('http://'))?website:'',
+
       fee:String(tags.fee||'').slice(0,60),opening_hours:String(tags.opening_hours||'').slice(0,100),source_url};
      for(const activity of classify(tags)){
       if(!grouped.has(activity))grouped.set(activity,new Map());
