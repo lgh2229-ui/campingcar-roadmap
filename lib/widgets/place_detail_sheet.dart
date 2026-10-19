@@ -51,6 +51,7 @@ class PlaceDetailSheet extends StatefulWidget {
     required this.reviewBuilder,
     this.reservationUrl = '',
     this.heightCompatibility,
+    this.onActivityTap,
   });
 
   final Place place;
@@ -68,6 +69,7 @@ class PlaceDetailSheet extends StatefulWidget {
   final Widget Function(PlaceReview) reviewBuilder;
   final String reservationUrl;
   final Widget? heightCompatibility;
+  final void Function(String)? onActivityTap;
 
   @override
   State<PlaceDetailSheet> createState() => _PlaceDetailSheetState();
@@ -187,9 +189,12 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         ? const Color(0xFF9BCBFF)
         : const Color(0xFF205FA1);
     final ink = active ? blueText : muted;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 100),
-      padding: const EdgeInsets.all(14),
+    return InkWell(
+      onTap: activity ? () => widget.onActivityTap?.call(service) : null,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+      constraints: BoxConstraints(minHeight: activity ? 73 : 100),
+      padding: EdgeInsets.all(activity ? 10 : 14),
       decoration: BoxDecoration(
         color: active ? blueBackground : Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
@@ -198,23 +203,23 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Icon(serviceIcons[service] ?? Icons.miscellaneous_services_outlined,
-              color: ink, size: 19),
+              color: ink, size: activity ? 17 : 19),
           const SizedBox(width: 7),
           Expanded(child: Text(
             serviceTitles[service] ?? service,
             style: TextStyle(
-              fontSize: 12.5, color: ink, fontWeight: FontWeight.w600,
+              fontSize: activity ? 12 : 12.5, color: ink, fontWeight: FontWeight.w600,
             ),
           )),
           if (active)
             Icon(Icons.check_circle_rounded, size: 16, color: blueText),
         ]),
-        const SizedBox(height: 11),
+        SizedBox(height: activity ? 5 : 11),
         Text(
           display,
           style: TextStyle(
-            fontSize: 14,
-            height: 1.4,
+            fontSize: activity ? 12 : 14,
+            height: activity ? 1.2 : 1.4,
             fontWeight: active ? FontWeight.w700 : FontWeight.w500,
             color: active ? blueText : uncertain
                 ? Theme.of(context).colorScheme.onSurface
@@ -222,6 +227,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
           ),
         ),
       ]),
+      ),
     );
   }
 
@@ -434,6 +440,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             label: Text(showAllActivities ? '접기' : '활동 더 보기'),
           ),
         ),
+        Text('카드를 누르면 이 장소에서 3km 이내의 관광·레저 정보를 확인할 수 있습니다.', style: TextStyle(fontSize: 12, color: muted)),
         Text('현장 이용 가능 여부, 허가, 운영시간 및 요금은 방문 전 확인하세요.',
             style: TextStyle(fontSize: 12, height: 1.4, color: muted)),
         if (others.isNotEmpty) ...[
