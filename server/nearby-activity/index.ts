@@ -87,6 +87,7 @@ function normalizePlace(item:AnyObj,lat:number,lon:number,activity:string) {
   opening_hours:String(item.opening_hours||'').slice(0,140),
   fee:String(item.fee||'').slice(0,70),
   source_url:validHttp(item.source_url),
+  photo_hint:String(item.photo_hint||'').startsWith('File:')?String(item.photo_hint).slice(0,200):'',
  };
 }
 async function curatedPoi(db:any,lat:number,lon:number,activity:string){
@@ -161,7 +162,7 @@ function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
  const phone=String(t['contact:phone']||t.phone||'').trim().slice(0,90);
  const website=String(t['contact:website']||t.website||'').trim();
  const safeWebsite=/^https?:\/\//i.test(website)?website:'';
- return {name,lat:la,lon:lo,distance_m:meters,kind:label(t,activity),address:String(t['addr:full']||t['addr:street']||'').slice(0,160),phone,website:safeWebsite,opening_hours:String(t.opening_hours||'').slice(0,120),fee:String(t.fee||'').slice(0,45),description:String(t['description:ko']||t.description||'').slice(0,250),source_url:url};
+ return {name,lat:la,lon:lo,distance_m:meters,kind:label(t,activity),address:String(t['addr:full']||t['addr:street']||'').slice(0,160),phone,website:safeWebsite,opening_hours:String(t.opening_hours||'').slice(0,120),fee:String(t.fee||'').slice(0,45),description:String(t['description:ko']||t.description||'').slice(0,250),source_url:url,photo_hint:String(t.wikimedia_commons||'').startsWith('File:')?String(t.wikimedia_commons):''};
 }
 // AI searches fresh public web sources only when a server-side API key is configured.
 // It may enrich descriptions of independently geolocated POIs, but must not create
@@ -240,6 +241,160 @@ async function onlineAISummary(
   console.warn('AI web search unavailable:',String(e).slice(0,150));
   return null;
  }finally{clearTimeout(timer);}
+}
+
+
+function metaText(x:unknown):string {
+ return String(x||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/\\s+/g,' ').trim().slice(0,180);
+}
+// Photos are never AI-generated or sourced from arbitrary copyrighted images.
+// Only Commons items with an actual CC/Public Domain licence may appear.
+async function photoFor(spot:AnyObj):Promise<AnyObj|null>{
+ const name=String(spot.name||'').trim(),hint=String(spot.photo_hint||'');
+ if(!name||name.length<2)return null;
+ const params=new URLSearchParams({
+  action:'query',format:'json',
+  prop:'imageinfo',iiprop:'url|extmetadata',iiurlwidth:'760'
+ });
+ if(hint.startsWith('File:'))params.set('titles',hint);
+ else {
+  params.set('generator','search');
+  params.set('gsrsearch','intitle:"'+name.slice(0,35)+'"');
+  params.set('gsrnamespace','6');
+  params.set('gsrlimit','4');
+ }
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),5000);
+ try{
+  const r=await fetch('https://commons.wikimedia.org/w/api.php?'+params.toString(),{
+   headers:{'User-Agent':'CampingcarRoadmap/1.0','Accept':'application/json'},signal:ctrl.signal});
+  if(!r.ok)return null;
+  const data=await r.json();
+  for(const page of Object.values(data.query?.pages||{}) as AnyObj[]){
+   const title=String(page.title||'');
+   if(!hint && !title.replace(/[\\s_-]+/g,'').toLowerCase().includes(name.replace(/[\\s_-]+/g,'').toLowerCase()))continue;
+   const info=page.imageinfo?.[0],meta=info?.extmetadata||{};
+   const license=metaText(meta.LicenseShortName?.value);
+   if(!/(CC0|CC[-\\s]*BY|public domain)/i.test(license))continue;
+   const url=validHttp(info?.thumburl||info?.url);
+   if(!url.startsWith('https://upload.wikimedia.org/'))continue;
+   return {name:spot.name,url,thumbnail_url:url,source_url:'https://commons.wikimedia.org/wiki/'+encodeURIComponent(title.replace(/ /g,'_')),
+    source_name:'Wikimedia Commons',license,attribution:metaText(meta.Artist?.value)||'출처에서 저작자 확인'};
+  }
+ }catch(e){console.warn('Commons image unavailable:',String(e).slice(0,90));}
+ finally{clearTimeout(timer);}
+ return null;
+}
+async function photoList(spots:AnyObj[]):Promise<AnyObj[]>{
+ const items:AnyObj[]=[];
+ for(const spot of spots.slice(0,3)){
+  const p=await photoFor(spot);
+  if(p && !items.some(x=>x.source_url===p.source_url))items.push(p);
+ }
+ return items;
+}
+// AI is only a candidate finder; locations must be independently re-geocoded.
+async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:string,sources:AnyObj[],candidates:AnyObj[]}|null>{
+ const key=Deno.env.get('OPENAI_API_KEY');
+ if(!key)return null;
+ const id=crypto.randomUUID();
+ const hold=await db.rpc('reserve_camping_ai_budget',{
+  p_request_id:id,p_place_id:place.id,p_activity:activity,p_report_id:null,p_admin_id:null});
+ if(hold.error || hold.data!==true)return null;
+ let settled=false;
+ const settle=async(ok:boolean,cost:number,inputs:number,outputs:number,calls:number,responseId:string,err:string)=>{
+  const {error}=await db.rpc('settle_camping_ai_budget',{
+   p_request_id:id,p_completed:ok,p_actual_krw:cost,p_input_tokens:inputs,
+   p_output_tokens:outputs,p_web_search_calls:calls,p_response_id:responseId,p_error_code:err});
+  settled=!error;
+ };
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),17000);
+ try{
+  const input=[
+   '한국의 여행지 주변 시설을 웹검색하고 검증 근거를 찾으세요.',
+   '기준: '+place.name+' ('+place.latitude+', '+place.longitude+') 활동='+activity+' 반경 3km',
+   '실제로 존재하는 산책로, 공원, 관광 코스의 이름을 최대 3개만 찾아주세요.',
+   '지자체 관광 안내 또는 공개지도 등 출처를 우선하고 허위 장소를 만들지 마세요.',
+   '다음 JSON 객체만 출력하세요: {"summary":"한국어 2~3문장","places":[{"name":"정확한 명칭","source_url":"https URL"}]}',
+   '이용가능 여부가 확실하지 않으면 확정하지 마세요. 좌표는 작성하지 마세요.'
+  ].join('\\n');
+  const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',
+   headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
+   body:JSON.stringify({model:'gpt-4.1-mini',tools:[{type:'web_search',search_context_size:'low'}],
+    tool_choice:'required',max_output_tokens:500,input}),signal:ctrl.signal});
+  if(!r.ok){await settle(false,0,0,0,0,'','http_'+r.status);return null;}
+  const body=await r.json();
+  const texts=(body.output||[]).flatMap((x:AnyObj)=>x.content||[]).filter((x:AnyObj)=>x.type==='output_text');
+  const raw=texts.map((x:AnyObj)=>String(x.text||'')).join('');
+  const sources=new Map<string,AnyObj>();
+  for(const x of texts)for(const c of x.annotations||[]){
+   if(c.type==='url_citation' && validHttp(c.url))sources.set(c.url,{name:String(c.title||'AI 검색 출처'),url:c.url});
+  }
+  const inputs=Math.max(0,Number(body.usage?.input_tokens||0));
+  const outputs=Math.max(0,Number(body.usage?.output_tokens||0));
+  const calls=Math.max(1,(body.output||[]).filter((x:AnyObj)=>x.type==='web_search_call').length);
+  const estimate=Math.ceil((calls*.01+(inputs+8000*calls)*.4/1000000+outputs*1.6/1000000)*1500);
+  await settle(true,estimate,inputs,outputs,calls,String(body.id||''),'');
+  if(!settled)return null;
+  let parsed:AnyObj={};
+  try{parsed=JSON.parse(raw.slice(raw.indexOf('{'),raw.lastIndexOf('}')+1));}
+  catch(_){return {summary:'',sources:[...sources.values()],candidates:[]};}
+  const candidates=(Array.isArray(parsed.places)?parsed.places:[]).slice(0,3)
+   .map((p:AnyObj)=>({name:String(p.name||'').slice(0,90),source_url:validHttp(p.source_url)}))
+   .filter((p:AnyObj)=>p.name.length>1 && (p.source_url||sources.size));
+  return {summary:String(parsed.summary||'').slice(0,500),sources:[...sources.values()],candidates};
+ }catch(e){console.warn('AI discovery unavailable:',String(e).slice(0,90));if(!settled)await settle(false,0,0,0,0,'','request_error');return null;}
+ finally{clearTimeout(timer);}
+}
+// Independent mapping source validates each suggested trailhead/place.
+// Model-supplied coordinates are never used.
+async function verifyCandidate(place:AnyObj,activity:string,candidate:AnyObj):Promise<AnyObj|null>{
+ const lat=Number(place.latitude),lon=Number(place.longitude),name=String(candidate.name||'').trim();
+ const kakao=Deno.env.get('KAKAO_REST_API_KEY');
+ if(kakao){
+  const u='https://dapi.kakao.com/v2/local/search/keyword.json?'+new URLSearchParams({
+   query:name,x:String(lon),y:String(lat),radius:'3000',size:'6'});
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),6000);
+  try{
+   const r=await fetch(u,{headers:{Authorization:'KakaoAK '+kakao},signal:ctrl.signal});
+   if(r.ok){
+    const data=await r.json();
+    for(const p of data.documents||[]){
+     const actual=String(p.place_name||'').replace(/\\s/g,'');
+     const expected=name.replace(/\\s/g,'');
+     if(actual.includes(expected)||expected.includes(actual)){
+      const spot=normalizePlace({
+       name:p.place_name,lat:p.y,lon:p.x,kind:activity,
+       address:p.road_address_name||p.address_name,phone:p.phone,
+       website:p.place_url,source_url:p.place_url,
+       description:'AI 추가 웹검색 후 지도 좌표로 검증한 장소입니다.'},lat,lon,activity);
+      if(spot)return spot;
+     }
+    }
+   }
+  }catch(_){}finally{clearTimeout(timer);}
+ }
+ const latD=RANGE/110570,lonD=RANGE/(111320*Math.max(.2,Math.cos(lat*Math.PI/180)));
+ const url='https://nominatim.openstreetmap.org/search?'+new URLSearchParams({
+  q:name,format:'jsonv2',limit:'5',bounded:'1',
+  viewbox:[lon-lonD,lat+latD,lon+lonD,lat-latD].join(',')});
+ const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),6000);
+ try{
+  const r=await fetch(url,{headers:{'Accept-Language':'ko','User-Agent':'CampingcarRoadmap/1.0'},signal:ctrl.signal});
+  if(!r.ok)return null;
+  const list=await r.json();
+  for(const p of Array.isArray(list)?list:[]){
+   const got=String(p.name||String(p.display_name||'').split(',')[0]).replace(/\\s/g,'');
+   const expected=name.replace(/\\s/g,'');
+   if(!got||(!got.includes(expected)&&!expected.includes(got)))continue;
+   const type=String(p.osm_type||'').toLowerCase();
+   const source=type&&p.osm_id?'https://www.openstreetmap.org/'+
+    ({n:'node',w:'way',r:'relation'}[type]||type)+'/'+p.osm_id:candidate.source_url;
+   const spot=normalizePlace({name:p.name||name,lat:p.lat,lon:p.lon,
+    kind:activity,source_url:source,description:'AI 웹검색 결과를 공개지도 좌표로 검증한 장소입니다.'},lat,lon,activity);
+   if(spot)return spot;
+  }
+ }catch(_){}finally{clearTimeout(timer);}
+ return null;
 }
 
 Deno.serve(async (req:Request)=>{
