@@ -1,9 +1,7 @@
 name: Hotfix home syntax
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+  workflow_dispatch: # old one-time repair; do not run or rewrite source on every push
 
 permissions:
   contents: write
