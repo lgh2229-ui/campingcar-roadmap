@@ -430,7 +430,18 @@ Deno.serve(async (req:Request)=>{
    if(!Deno.env.get('OPENAI_API_KEY'))return json({error:'OpenAI API 키가 등록되지 않아 AI 재검색을 실행할 수 없습니다.'},503);
   }
   // Cached results never expire automatically. A normal user cannot force-refresh.
-  if(cache && !force)return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated)});
+  if(cache && !force){
+   // One-time licensed-photo enrichment, never a paid AI re-search.
+   if(!cache.photo_checked_at){
+    const images=await photoList(Array.isArray(cache.spots)?cache.spots:[]);
+    const now=new Date().toISOString();
+    const {error}=await db.from('place_activity_insights')
+     .update({photos:images,photo_checked_at:now})
+     .eq('place_id',placeId).eq('activity',activity).is('photo_checked_at',null);
+    if(!error)return json({...cache,photos:images,photo_checked_at:now,cached:true});
+   }
+   return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated)});
+  }
   const lat=Number(place.latitude),lon=Number(place.longitude);
   // Search our existing verified dataset first, even on the very first tap.
   let collected:AnyObj[]=[];
@@ -466,23 +477,63 @@ Deno.serve(async (req:Request)=>{
    const id=(item.name.trim().toLocaleLowerCase()+'-'+Math.round(item.lat*1000)+'-'+Math.round(item.lon*1000));
    if(!unique.has(id))unique.set(id,item);
   }
-  const spots=[...unique.values()].sort((a,b)=>a.distance_m-b.distance_m).slice(0,20);
-  if(spots.length===0 && !lookupSucceeded){
-   // Do not cache an outage as "no attractions" or show a raw HTTP 406/503.
-   if(cache)return json({...cache,cached:true,stale:true,warning:'최신 검색 연결이 지연돼 이전 정보를 보여드립니다.'});
-   return json({place_id:place.id,activity,radius_m:RANGE,summary:
-     '현재 주변 검색 서버 연결이 원활하지 않습니다. 잠시 뒤 다시 검색해주세요. 등록된 활동 정보는 유지됩니다.',
-     spots:[],providers:[],tips:['운영 및 출입 가능 여부는 공식 안내에서 확인하세요.'],
-     sources:[],temporarily_unavailable:true,warning:errors.join(' · '),cached:false,ai_generated:false});
-  }
-  // Unknown POIs are never cached as confirmed. Keep existing data indefinitely.
+  let spots=[...unique.values()].sort((a,b)=>a.distance_m-b.distance_m).slice(0,20);
+  let researched:AnyObj|null=null;
+  let extraSources:AnyObj[]=[];
+  let firstClaimed=false;
   if(spots.length===0){
-    return json({place_id:place.id,activity,radius_m:RANGE,
-      summary:'반경 3km 이내 공개자료에서 확인된 '+activity+
-       ' 장소가 아직 없습니다. 정보 미등록은 이용 불가를 뜻하지 않습니다. 다시 검색해보세요.',
-      spots:[],providers:[],sources:[],
-      tips:['해당 활동의 허가·안전·운영 정보는 방문 전 현장에서 확인해주세요.'],
-      cached:false,no_verified_results:true,ai_generated:false});
+   if(!force){
+    const {data:claimed,error:claimError}=await db.rpc('claim_activity_initial_research',
+      {p_place_id:placeId,p_activity:activity});
+    if(claimError)return json({error:'최초 검색 상태 확인 오류'},503);
+    if(claimed!==true)return json({
+      summary:'이 장소의 주변 활동은 이미 최초 조사했거나 현재 조사 중입니다. 새로운 정보는 신고해 주세요.',
+      spots:[],providers:[],photos:[],sources:[],
+      tips:['정보가 확인되지 않았다고 활동이 불가능하다는 뜻은 아닙니다.'],
+      cached:true,checked_once:true,ai_generated:false
+    });
+    firstClaimed=true;
+   }
+   researched=await aiFallback(db,place,activity);
+   if(researched){
+    extraSources=researched.sources||[];
+    for(const candidate of researched.candidates||[]){
+     const verified=await verifyCandidate(place,activity,candidate);
+     if(verified && !spots.some(x=>x.name===verified.name))spots.push(verified);
+     if(spots.length>=3)break;
+     await new Promise(resolve=>setTimeout(resolve,1100));
+    }
+    spots.sort((a,b)=>a.distance_m-b.distance_m);
+   }
+  }
+
+  if(spots.length===0){
+   const summary=researched
+    ? 'AI 웹검색으로 다시 확인했지만 반경 3km에서 지도 좌표까지 검증된 '+activity+' 장소를 찾지 못했습니다. 실제 이용이 불가능하다는 뜻은 아닙니다.'
+    : '현재 공개지도/AI 확인이 원활하지 않습니다. 정보가 있다면 신고해주세요.';
+   if(force)return json({error:'관리자 AI 재검색에서 확인된 장소가 없어 이전 기록을 유지했습니다.'},503);
+   if(researched){
+    const now=new Date().toISOString();
+    const item={place_id:placeId,activity,radius_m:RANGE,summary,
+     spots:[],providers:[],photos:[],sources:extraSources,
+     tips:['확인된 자료 없음은 이용 불가를 의미하지 않습니다.','새로운 정보가 있다면 신고해주세요.'],
+     fetched_at:now,photo_checked_at:now,expires_at:null,
+     research_status:'not_confirmed',ai_generated:false};
+    const {error:saveError}=await db.from('place_activity_insights').upsert(item,{
+      onConflict:'place_id,activity',ignoreDuplicates:true});
+    if(saveError)return json({error:'조사 결과를 저장하지 못했습니다.'},503);
+    if(firstClaimed)await db.from('place_activity_first_attempts')
+      .update({outcome:'not_confirmed',finished_at:now})
+      .eq('place_id',placeId).eq('activity',activity);
+    return json({...item,cached:true,checked_once:true});
+   }
+   if(firstClaimed)await db.from('place_activity_first_attempts')
+    .update({outcome:'error',finished_at:new Date().toISOString()})
+    .eq('place_id',placeId).eq('activity',activity);
+   return json({summary,place_id:placeId,activity,radius_m:RANGE,
+    spots:[],providers:[],photos:[],sources:[],
+    tips:['서버 오류가 해결되면 관리자 신고·확인 절차를 이용해 주세요.'],
+    temporarily_unavailable:true,cached:false,ai_generated:false});
   }
   const providers=spots.filter(s=>s.phone || s.website).slice(0,12);
   const primary=spots.slice(0,3).map(s=>s.name).join('·');
@@ -501,11 +552,19 @@ Deno.serve(async (req:Request)=>{
   const caution=(activity==='해루질'||activity==='낚시')
    ? '채취·낚시 가능 구역, 출입 제한, 금어기, 기상 및 물때를 현장에서 반드시 확인하세요. 위치 정보만으로 합법적인 이용이 보장되지 않습니다.'
    : '운영시간·요금·예약·입장 가능 여부는 출발 전 공식 안내 또는 해당 업체에 확인하세요.';
-  const sources=[...spots.map(s=>({name:s.name,url:s.source_url})),...(ai?.sources||[])]
+  const sources=[...spots.map(s=>({name:s.name,url:s.source_url})),...extraSources,...(ai?.sources||[])]
     .filter((s:AnyObj)=>Boolean(validHttp(s.url))).slice(0,26);
-  const record={place_id:place.id,activity,radius_m:RANGE,summary:ai?.summary||fallback,spots,providers,tips:[caution],sources,fetched_at:new Date().toISOString(),expires_at:null,ai_generated:Boolean(ai?.summary)};
+  const photos=await photoList(spots);
+  const now=new Date().toISOString();
+  const record={place_id:place.id,activity,radius_m:RANGE,
+   summary:ai?.summary||fallback,spots,providers,photos,tips:[caution],sources,
+   fetched_at:now,photo_checked_at:now,expires_at:null,
+   research_status:'verified',ai_generated:Boolean(ai?.summary)};
   const {error:writeError}=await db.from('place_activity_insights').upsert(record,{onConflict:'place_id,activity'});
   if(writeError){return json({...record,warning:'캐시 저장 실패: '+writeError.message,cached:false});}
+  if(firstClaimed)await db.from('place_activity_first_attempts')
+    .update({outcome:'verified',finished_at:new Date().toISOString()})
+    .eq('place_id',placeId).eq('activity',activity);
   if(spots.length>0 && activity!=='해루질') {
    await db.from('place_activity_candidates').upsert({place_id:place.id,activity,radius_m:RANGE,spot_count:spots.length,example_spot:spots[0].name,source_url:spots[0].source_url,updated_at:new Date().toISOString()},{onConflict:'place_id,activity',ignoreDuplicates:true});
   }
