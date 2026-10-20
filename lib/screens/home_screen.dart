@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../config/app_config.dart';
 import '../widgets/roadmap_naver_map.dart';
+import '../widgets/place_marker_icons.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
 import '../models/recreation_activities.dart';
@@ -181,14 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
   LatLng _groupPoint(List<Place> group) =>
       LatLng(group.first.latitude, group.first.longitude);
 
-  List<String> _icons(Place p) {
-    final out = <String>[];
-    if (p.services.contains('급수')) out.add('💧');
-    if (p.services.contains('블랙탱크 비움')) out.add('🚽');
-    if (p.services.contains('노지/차박')) out.add('🅿️');
-    if (p.services.contains('공중화장실')) out.add('🚻');
-    return out.isEmpty ? ['📍'] : out;
-  }
+  List<String> _icons(Place p) => PlaceMarkerIcons.fromServices(p.services);
 
   String _filterLabel(String value) => value == '블랙탱크 비움' ? '블랙' : value == '공중화장실' ? '화장실' : value;
   String _approvalLabel(Place p) => switch (p.approvalStatus) {
@@ -551,29 +545,19 @@ class _HomeScreenState extends State<HomeScreen> {
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'kr.co.campingcarroadmap.app'),
             MarkerLayer(markers: [
               ...visiblePlaceGroups.map((group) {
-                final p = group.first;
-                final pending = group.any((x) => x.isPending && _isMine(x));
+                final pending=group.any((x)=>x.isPending && _isMine(x));
+                final icons=PlaceMarkerIcons.fromServices(
+                  group.expand((place)=>place.services).toSet(),
+                );
                 return Marker(
-                  point: _groupPoint(group),
-                  width: 48,
-                  height: 48,
-                  child: GestureDetector(
-                    onTap: () => _showPlaceGroup(group),
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: pending ? Theme.of(context).colorScheme.tertiaryContainer : Colors.white,
-                        border: Border.all(width: 2),
-                        borderRadius: BorderRadius.circular(7),
-                        boxShadow: const [BoxShadow(blurRadius: 5, color: Colors.black26)],
-                      ),
-                      child: group.length > 1
-                          ? Stack(alignment: Alignment.center, children: [
-                              const Icon(Icons.location_on, size: 26),
-                              Positioned(right: 0, top: 0, child: Text('${group.length}', style: const TextStyle(fontWeight: FontWeight.bold))),
-                            ])
-                          : Center(child: Text(_icons(p).take(3).join(), style: const TextStyle(fontSize: 17))),
-                    ),
+                  point:_groupPoint(group),
+                  width:PlaceMarkerIcons.markerWidth(icons.length),
+                  height:PlaceMarkerIcons.markerHeight(icons.length),
+                  child:GestureDetector(
+                    onTap:()=>_showPlaceGroup(group),
+                    child:PlaceMarkerIcons.tile(icons,
+                      groupCount:group.length,
+                      background:pending ? Theme.of(context).colorScheme.tertiaryContainer : Colors.white),
                   ),
                 );
               }),
