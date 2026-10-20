@@ -335,17 +335,20 @@ async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:
  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),17000);
  try{
   const input=[
-   '한국의 여행지 주변 시설을 웹검색하고 검증 근거를 찾으세요.',
-   '기준: '+place.name+' ('+place.latitude+', '+place.longitude+') 활동='+activity+' 반경 3km',
-   '실제로 존재하는 산책로, 공원, 관광 코스의 이름을 최대 3개만 찾아주세요.',
-   '지자체 관광 안내 또는 공개지도 등 출처를 우선하고 허위 장소를 만들지 마세요.',
-   '다음 JSON 객체만 출력하세요: {"summary":"한국어 2~3문장","places":[{"name":"정확한 명칭","source_url":"https URL"}]}',
-   '이용가능 여부가 확실하지 않으면 확정하지 마세요. 좌표는 작성하지 마세요.'
+   '대한민국 캠핑카 여행 장소의 3km 이내 활동을 다양한 공개 웹정보로 조사하세요.',
+   '장소: '+place.name+' 위도 '+place.latitude+' 경도 '+place.longitude,
+   '활동: '+activity+' / 구체 검색어: '+(searchTerms[activity]||[activity]).join(', '),
+   '한 가지 추상 분류어만 검색하지 마세요. 지자체 관광, 한국관광공사, 국내 지역 블로그·낚시 조황 및 지도 안내 등 서로 다른 출처로 교차 검증하세요.',
+   '산책은 벽화골목·해안길·수변공원, 낚시는 내항·방파제·선착장, 지상레포츠는 와이어 자전거·스카이사이클·짚라인까지 조사하세요.',
+   '장소 이름과 출처를 최대 5곳 반환하고, 근거 없이 장소·좌표·연락처·어종을 지어내지 마세요. 일부 검색사이트는 접근이 제한될 수 있습니다.',
+   '낚시 가능 구간은 출입금지·위험 테트라포드와 구분하고, 실제 어획은 보장하지 마세요.',
+   '응답은 반드시 JSON 객체로만: {"summary":"한국어 요약","places":[{"name":"실제 시설명","source_url":"https://원문"}]}',
+   '후보의 좌표·3km 이내 여부는 다른 지도 제공자가 최종 확인합니다.'
   ].join('\\n');
   const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',
    headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
    body:JSON.stringify({model:'gpt-4.1-mini',tools:[{type:'web_search',search_context_size:'low'}],
-    tool_choice:'required',max_output_tokens:500,input}),signal:ctrl.signal});
+    tool_choice:'required',max_output_tokens:850,input}),signal:ctrl.signal});
   if(!r.ok){await settle(false,0,0,0,0,'','http_'+r.status);return null;}
   const body=await r.json();
   const texts=(body.output||[]).flatMap((x:AnyObj)=>x.content||[]).filter((x:AnyObj)=>x.type==='output_text');
@@ -363,7 +366,7 @@ async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:
   let parsed:AnyObj={};
   try{parsed=JSON.parse(raw.slice(raw.indexOf('{'),raw.lastIndexOf('}')+1));}
   catch(_){return {summary:'',sources:[...sources.values()],candidates:[]};}
-  const candidates=(Array.isArray(parsed.places)?parsed.places:[]).slice(0,3)
+  const candidates=(Array.isArray(parsed.places)?parsed.places:[]).slice(0,5)
    .map((p:AnyObj)=>({name:String(p.name||'').slice(0,90),source_url:validHttp(p.source_url)}))
    .filter((p:AnyObj)=>p.name.length>1 && (p.source_url||sources.size));
   return {summary:String(parsed.summary||'').slice(0,500),sources:[...sources.values()],candidates};
