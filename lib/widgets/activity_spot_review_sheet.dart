@@ -111,7 +111,7 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
     } catch (_) { _notice('후기를 삭제하지 못했습니다.'); }
   }
 
-  void _showImage(String url) => showDialog<void>(context: context,
+  Future<void> _showImage(String url) => showDialog<void>(context: context,
     builder: (ctx) => Dialog(child: SizedBox(height: MediaQuery.sizeOf(ctx).height * .56,
       child: Stack(children: [
         Center(child: InteractiveViewer(child: Image.network(url, fit: BoxFit.contain,
