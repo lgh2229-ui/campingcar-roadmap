@@ -548,14 +548,23 @@ Deno.serve(async (req:Request)=>{
   }
 
   if(spots.length===0){
+   // Source-backed candidates are distinct from verified places inside 3km.
+   const suggested=(researched?.candidates||[]).map((p:AnyObj)=>({
+    name:String(p.name||'').slice(0,100),source_url:validHttp(p.source_url),
+    location_verified:false,
+    note:'공개 웹자료에서 찾은 후보입니다. 3km 이내 위치는 확인되지 않았습니다.'
+   })).slice(0,5);
    const summary=researched
-    ? 'AI 웹검색으로 다시 확인했지만 반경 3km에서 지도 좌표까지 검증된 '+activity+' 장소를 찾지 못했습니다. 실제 이용이 불가능하다는 뜻은 아닙니다.'
-    : '현재 공개지도/AI 확인이 원활하지 않습니다. 정보가 있다면 신고해주세요.';
+    ? (suggested.length>0
+       ? '주변 관련 정보를 재검색해 '+suggested.map((p:AnyObj)=>p.name).join(' · ')+
+         ' 등의 자료를 찾았습니다. 다만 위치 데이터가 확인되지 않아 반경 3km 확정 목록에는 포함하지 않았습니다. 출처에서 직접 확인하거나 변경 신고를 남겨주세요.'
+       : 'AI 웹검색을 시도했으나 반경 3km 이내에서 위치까지 검증된 '+activity+' 장소는 아직 확인하지 못했습니다. 이용 불가라는 뜻은 아닙니다.')
+    : '현재 공개지도·AI 확인이 원활하지 않습니다. 정보가 있다면 신고해주세요.';
    if(force)return json({error:'관리자 AI 재검색에서 확인된 장소가 없어 이전 기록을 유지했습니다.'},503);
    if(researched){
     const now=new Date().toISOString();
     const item={place_id:placeId,activity,radius_m:RANGE,summary,
-     spots:[],providers:[],photos:[],sources:extraSources,
+     spots:[],providers:[],photos:[],sources:extraSources,suggested_places:suggested,
      tips:['확인된 자료 없음은 이용 불가를 의미하지 않습니다.','새로운 정보가 있다면 신고해주세요.'],
      fetched_at:now,photo_checked_at:now,expires_at:null,
      research_status:'not_confirmed',ai_generated:false};
