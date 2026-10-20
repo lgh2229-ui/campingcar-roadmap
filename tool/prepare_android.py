@@ -72,6 +72,9 @@ for gradle_name in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
     if not gp.exists():
         continue
     g = gp.read_text(encoding='utf-8')
+    # Naver's native Maps SDK requires Android API level 23 or newer.
+    g = g.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+    g = g.replace('minSdkVersion flutter.minSdkVersion', 'minSdkVersion 23')
     g = g.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
     g = g.replace('targetSdk = flutter.targetSdkVersion', 'targetSdk = 36')
     g = g.replace('compileSdkVersion flutter.compileSdkVersion', 'compileSdkVersion 36')
