@@ -16,6 +16,10 @@ class AppConfig {
 
   static bool get serverEnabled => supabaseUrl.isNotEmpty && supabaseKey.isNotEmpty;
 
+  static const naverMapClientId = String.fromEnvironment('NAVER_MAP_CLIENT_ID', defaultValue: '');
+  static bool naverMapFailed = false;
+  static bool get naverMapEnabled => naverMapClientId.trim().isNotEmpty && !naverMapFailed;
+
   static const packageName = 'kr.co.campingcarroadmap.app';
   static const appName = '캠핑카족 로드맵';
 }
