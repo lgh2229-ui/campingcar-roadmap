@@ -10,6 +10,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/app_config.dart';
+import '../widgets/roadmap_naver_map.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
 import '../models/recreation_activities.dart';
@@ -51,6 +53,17 @@ class _HomeScreenState extends State<HomeScreen> {
   String _noteWithReservation(String note,String url){final clean=_visibleNote(note);return url.trim().isEmpty?clean:'${clean.isEmpty?'':clean+'\n'}[예약링크]${url.trim()}';}
 
   final map = MapController();
+  final GlobalKey<RoadmapNaverMapState> _naverMapKey = GlobalKey<RoadmapNaverMapState>();
+  double _mapZoom = 14;
+  void _moveMap(LatLng target, double zoom) {
+    center = target;
+    _mapZoom = zoom;
+    if (AppConfig.naverMapEnabled) {
+      _naverMapKey.currentState?.moveTo(target, zoom);
+    } else if (tab == 0) {
+      try { map.move(target, zoom); } catch (_) {}
+    }
+  }
   final search = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   Timer? _searchSuggestionTimer;
@@ -101,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
       places = await widget.data.places();
       saved = await widget.data.savedIds();
       if (mounted) setState(() {});
-      if(!_focusHandled&&widget.focusPlaceId!=null){final hit=places.where((x)=>x.id==widget.focusPlaceId).toList();if(hit.isNotEmpty){_focusHandled=true;final p=hit.first;center=LatLng(p.latitude,p.longitude);map.move(center,17);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_showPlace(p);});}}
+      if(!_focusHandled&&widget.focusPlaceId!=null){final hit=places.where((x)=>x.id==widget.focusPlaceId).toList();if(hit.isNotEmpty){_focusHandled=true;final p=hit.first;center=LatLng(p.latitude,p.longitude);_moveMap(center,17);WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)_showPlace(p);});}}
     } catch (e) {
       _msg('데이터를 불러오지 못했습니다: $e');
     }
@@ -115,7 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final p = await Geolocator.getCurrentPosition();
       center = LatLng(p.latitude, p.longitude);
       currentLocation = center;
-      map.move(center, 15);
+      _moveMap(center, 15);
       if (mounted) setState(() {});
     } catch (_) {}
   }
@@ -124,7 +137,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if(locationPickMode)return;
     selectedSpot = point;
     center = point;
-    map.move(point, 17);
+    _moveMap(point, 17);
     setState(() {});
     _msg('등록 위치를 선택했습니다. 빨간 핀 위치로 등록됩니다.');
   }
@@ -307,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _hideSearchSuggestions();
     final point = LatLng(place.latitude, place.longitude);
     center = point;
-    map.move(point, 17);
+    _moveMap(point, 17);
     if (!mounted) return;
     setState(() {});
     Future.delayed(const Duration(milliseconds: 150), () {
@@ -328,7 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final point = LatLng(lat, lon);
     center = point;
-    map.move(point, 17);
+    _moveMap(point, 17);
     if (mounted) setState(() {});
   }
 
@@ -436,14 +449,14 @@ class _HomeScreenState extends State<HomeScreen> {
         if(!mounted)return;
         final hit=await showModalBottomSheet<Map<String,dynamic>>(context:context,builder:(ctx)=>SafeArea(child:ListView(shrinkWrap:true,children:hits.map((e){final x=Map<String,dynamic>.from(e);return ListTile(title:Text('${x['display_name']}'),onTap:()=>Navigator.pop(ctx,x));}).toList())));
         if(hit==null)return;
-        final point=LatLng(double.parse('${hit['lat']}'),double.parse('${hit['lon']}'));center=point;map.move(point,16);if(mounted)setState((){});return;
+        final point=LatLng(double.parse('${hit['lat']}'),double.parse('${hit['lon']}'));center=point;_moveMap(point,16);if(mounted)setState((){});return;
       }
       if(!mounted)return;
       final picked=await showModalBottomSheet<Map<String,dynamic>>(context:context,showDragHandle:true,builder:(ctx)=>SafeArea(child:ListView.separated(shrinkWrap:true,itemCount:addresses.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final row=addresses[i];final road='${row['roadAddr']??''}',jibun='${row['jibunAddr']??''}';return ListTile(title:Text(road.isNotEmpty?road:jibun),subtitle:Text(jibun),onTap:()=>Navigator.pop(ctx,row));})));
       if(picked==null)return;
       final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
       if(lat==null||lon==null){await _offerParcelSearch(q);return;}
-      final point=LatLng(lat,lon);center=point;map.move(point,16);if(mounted)setState((){});
+      final point=LatLng(lat,lon);center=point;_moveMap(point,16);if(mounted)setState((){});
     }catch(e){_msg('검색에 실패했습니다: $e');}
   }
 
@@ -511,7 +524,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _mapPage() => Stack(children: [
-        FlutterMap(
+        AppConfig.naverMapEnabled
+            ? RoadmapNaverMap(
+                key: _naverMapKey,
+                groups: visiblePlaceGroups,
+                center: center,
+                initialZoom: _mapZoom,
+                currentLocation: currentLocation,
+                selectedSpot: selectedSpot,
+                locationPickMode: locationPickMode,
+                onGroupTap: _showPlaceGroup,
+                onMapTap: () {
+                  if (_showSearchSuggestions) _hideSearchSuggestions();
+                },
+                onLongPress: _selectSpot,
+                onGestureCenter: (point) {
+                  if (locationPickMode && mounted) {
+                    setState(() => selectedSpot = point);
+                  }
+                },
+              )
+            : FlutterMap(
           mapController: map,
           options: MapOptions(initialCenter: center, initialZoom: 14, interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate), onTap: (_, __) { if (_showSearchSuggestions) _hideSearchSuggestions(); }, onLongPress: (_, p) => _selectSpot(p),onPositionChanged:(camera,hasGesture){if(locationPickMode&&hasGesture&&mounted)setState(()=>selectedSpot=camera.center);}),
           children: [
@@ -610,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SingleChildScrollView(scrollDirection: Axis.horizontal, child: Row(children: serviceFilters.map((e) => Padding(padding: const EdgeInsets.only(right: 6), child: ChoiceChip(label: Text(_filterLabel(e)), selected: filter == e, onSelected: (_) => setState(() => filter = e)))).toList())),
         ])),
         if (selectedSpot != null)
-          Positioned(left:12,right:12,bottom:86,child:Card(child:ListTile(leading:const Icon(Icons.location_pin,color:Colors.red),title:Text('${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12)),trailing:locationPickMode?Wrap(spacing:4,children:[TextButton(onPressed:(){setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;});},child:const Text('취소')),FilledButton(onPressed:()async{final target=editingLocationPlace,spot=selectedSpot;if(target==null||spot==null)return;final a=await _reverseAddress(spot);target.latitude=spot.latitude;target.longitude=spot.longitude;target.address=a;try{await widget.data.updatePlace(target);await _load();if(!mounted)return;setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;center=spot;});map.move(spot,17);_msg('위치와 주소를 반영했습니다.');}catch(e){_msg('위치 수정에 실패했습니다: $e');}},child:const Text('확인'))]):IconButton(tooltip:'위치 지정 취소',onPressed:_cancelSpotSelection,icon:const Icon(Icons.close))))),
+          Positioned(left:12,right:12,bottom:86,child:Card(child:ListTile(leading:const Icon(Icons.location_pin,color:Colors.red),title:Text('${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12)),trailing:locationPickMode?Wrap(spacing:4,children:[TextButton(onPressed:(){setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;});},child:const Text('취소')),FilledButton(onPressed:()async{final target=editingLocationPlace,spot=selectedSpot;if(target==null||spot==null)return;final a=await _reverseAddress(spot);target.latitude=spot.latitude;target.longitude=spot.longitude;target.address=a;try{await widget.data.updatePlace(target);await _load();if(!mounted)return;setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;center=spot;});_moveMap(spot,17);_msg('위치와 주소를 반영했습니다.');}catch(e){_msg('위치 수정에 실패했습니다: $e');}},child:const Text('확인'))]):IconButton(tooltip:'위치 지정 취소',onPressed:_cancelSpotSelection,icon:const Icon(Icons.close))))),
         Positioned(right:14,bottom:18,child:Column(children:[
           if(!locationPickMode) FloatingActionButton.small(heroTag:'loc',onPressed:_locate,child:const Icon(Icons.my_location)),
           if(!locationPickMode) const SizedBox(height:10),
@@ -652,7 +685,7 @@ class _HomeScreenState extends State<HomeScreen> {
             leading: Text(_icons(p).join()),
             title: Text(p.name),
             subtitle: Text(p.address),
-            onTap: () { setState(() => tab = 0); map.move(LatLng(p.latitude, p.longitude), 17); Future.delayed(const Duration(milliseconds: 150), () => _showPlace(p)); },
+            onTap: () { setState(() => tab = 0); _moveMap(LatLng(p.latitude, p.longitude), 17); Future.delayed(const Duration(milliseconds: 150), () => _showPlace(p)); },
             trailing: IconButton(onPressed: () async { saved.remove(p.id); await widget.data.saveSavedIds(saved); if (mounted) setState(() {}); _msg('저장에서 해제했습니다.'); }, icon: const Icon(Icons.close)),
           );
         })),
@@ -674,7 +707,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   leading: CircleAvatar(backgroundColor: _approvalColor(p, context), child: Icon(p.isApproved ? Icons.check : p.isPending ? Icons.hourglass_top : Icons.close)),
                   title: Text(p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'), '')),
                   subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(p.address), Text(_approvalLabel(p), style: const TextStyle(fontWeight: FontWeight.bold))]),
-                  onTap: () { setState(() => tab = 0); final point=LatLng(p.latitude,p.longitude);center=point;map.move(point,17); Future.delayed(const Duration(milliseconds: 150), () { if(mounted)_showPlace(p); }); },
+                  onTap: () { setState(() => tab = 0); final point=LatLng(p.latitude,p.longitude);center=point;_moveMap(point,17); Future.delayed(const Duration(milliseconds: 150), () { if(mounted)_showPlace(p); }); },
                 ));
               }),
       ),
@@ -1040,7 +1073,7 @@ class _HomeScreenState extends State<HomeScreen> {
       for(final service in serviceNames)
         service:TextEditingController(text:p.prices[service]??''),
     };String reservation=['예약불필요','예약필수','전화문의'].contains(p.reservation)?p.reservation:'전화문의';double editLat=p.latitude,editLon=p.longitude;bool editLocationConfirmed=false;
-    final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setS)=>AlertDialog(title:const Text('장소 정보 수정'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),const SizedBox(height:8),Container(width:double.infinity,padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:Theme.of(ctx).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(10)),child:Text('수정 위치 ${editLat.toStringAsFixed(6)}, ${editLon.toStringAsFixed(6)}')),Wrap(spacing:8,children:[OutlinedButton.icon(onPressed:()async{final pos=await Geolocator.getCurrentPosition();final pt=LatLng(pos.latitude,pos.longitude);final a=await _reverseAddress(pt);setS((){editLat=pt.latitude;editLon=pt.longitude;address.text=a;editLocationConfirmed=true;});},icon:const Icon(Icons.my_location),label:const Text('내 현위치로 지정')),OutlinedButton.icon(onPressed:()async{final found=await _pickKoreanAddress(address.text.trim());if(found==null)return;final lat=(found['lat'] as num?)?.toDouble(),lon=(found['lon'] as num?)?.toDouble();if(lat==null||lon==null)return _msg('선택한 주소의 좌표가 없습니다.');final road=(found['roadAddr']??'').toString().trim(),parcel=(found['jibunAddr']??'').toString().trim();setS((){editLat=lat;editLon=lon;editLocationConfirmed=true;address.text=road.isNotEmpty?road:parcel;});_msg('주소와 좌표를 함께 변경했습니다.');},icon:const Icon(Icons.search),label:const Text('주소로 위치 맞추기')),OutlinedButton.icon(onPressed:()async{Navigator.pop(ctx,false);final pt=LatLng(editLat,editLon);setState((){tab=0;locationPickMode=true;editingLocationPlace=p;selectedSpot=pt;center=pt;});map.move(pt,17);_msg('지도를 움직여 빨간 핀을 원하는 위치에 맞춘 뒤 확인을 누르세요.');},icon:const Icon(Icons.map_outlined),label:const Text('지도에서 위치 지정'))]),...serviceNames.map((service) {
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setS)=>AlertDialog(title:const Text('장소 정보 수정'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),const SizedBox(height:8),Container(width:double.infinity,padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:Theme.of(ctx).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(10)),child:Text('수정 위치 ${editLat.toStringAsFixed(6)}, ${editLon.toStringAsFixed(6)}')),Wrap(spacing:8,children:[OutlinedButton.icon(onPressed:()async{final pos=await Geolocator.getCurrentPosition();final pt=LatLng(pos.latitude,pos.longitude);final a=await _reverseAddress(pt);setS((){editLat=pt.latitude;editLon=pt.longitude;address.text=a;editLocationConfirmed=true;});},icon:const Icon(Icons.my_location),label:const Text('내 현위치로 지정')),OutlinedButton.icon(onPressed:()async{final found=await _pickKoreanAddress(address.text.trim());if(found==null)return;final lat=(found['lat'] as num?)?.toDouble(),lon=(found['lon'] as num?)?.toDouble();if(lat==null||lon==null)return _msg('선택한 주소의 좌표가 없습니다.');final road=(found['roadAddr']??'').toString().trim(),parcel=(found['jibunAddr']??'').toString().trim();setS((){editLat=lat;editLon=lon;editLocationConfirmed=true;address.text=road.isNotEmpty?road:parcel;});_msg('주소와 좌표를 함께 변경했습니다.');},icon:const Icon(Icons.search),label:const Text('주소로 위치 맞추기')),OutlinedButton.icon(onPressed:()async{Navigator.pop(ctx,false);final pt=LatLng(editLat,editLon);setState((){tab=0;locationPickMode=true;editingLocationPlace=p;selectedSpot=pt;center=pt;});_moveMap(pt,17);_msg('지도를 움직여 빨간 핀을 원하는 위치에 맞춘 뒤 확인을 누르세요.');},icon:const Icon(Icons.map_outlined),label:const Text('지도에서 위치 지정'))]),...serviceNames.map((service) {
       final business=businessServices.contains(service);
       return Row(children:[
         Checkbox(
