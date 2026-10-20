@@ -92,9 +92,76 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       }
     }
   }
-  Widget _heading(String text) => Padding(
-    padding: const EdgeInsets.only(top: 20, bottom: 9),
-    child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)));
+  Widget _heading(String text, {String? detail}) => Padding(
+    padding:const EdgeInsets.only(top:20,bottom:10),
+    child:Row(children:[
+      Expanded(child:Text(text,style:const TextStyle(fontSize:16,fontWeight:FontWeight.w800))),
+      if(detail!=null)Text(detail,style:TextStyle(
+        fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+    ]),
+  );
+
+  Widget _tag(String title, {IconData? icon}) {
+    final scheme=Theme.of(context).colorScheme;
+    return Container(
+      padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),
+      decoration:BoxDecoration(
+        color:scheme.surfaceContainerHighest.withValues(alpha:.55),
+        borderRadius:BorderRadius.circular(9),
+      ),
+      child:Row(mainAxisSize:MainAxisSize.min,children:[
+        if(icon!=null)...[Icon(icon,size:13,color:scheme.onSurfaceVariant),
+          const SizedBox(width:4)],
+        Text(title,style:TextStyle(fontSize:11,
+          fontWeight:FontWeight.w600,color:scheme.onSurfaceVariant)),
+      ]),
+    );
+  }
+
+  Widget _detailRow(IconData icon,String label,String value) {
+    final scheme=Theme.of(context).colorScheme;
+    return Padding(padding:const EdgeInsets.only(top:6),
+      child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Icon(icon,size:15,color:scheme.onSurfaceVariant),
+        const SizedBox(width:7),
+        Expanded(child:Text('$label$value',
+          style:TextStyle(fontSize:12.5,height:1.35,color:scheme.onSurface))),
+      ]),
+    );
+  }
+
+  Widget _summaryCard(Map<String,dynamic> data,int spotCount) {
+    final scheme=Theme.of(context).colorScheme;
+    final summary=(data['summary']??'').toString().trim();
+    final ai=data['ai_generated']==true;
+    return Container(
+      width:double.infinity,
+      padding:const EdgeInsets.all(16),
+      decoration:BoxDecoration(
+        color:scheme.primaryContainer.withValues(alpha:.33),
+        borderRadius:BorderRadius.circular(17),
+        border:Border.all(color:scheme.primary.withValues(alpha:.12)),
+      ),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Row(children:[
+          Icon(Icons.explore_outlined,color:scheme.primary,size:19),
+          const SizedBox(width:8),
+          const Expanded(child:Text('주변 한눈에 보기',
+            style:TextStyle(fontSize:15,fontWeight:FontWeight.w800))),
+          _tag('$spotCount곳 확인'),
+        ]),
+        const SizedBox(height:11),
+        Text(summary.isEmpty?'확인된 주변 정보가 아직 없습니다.':summary,
+          style:const TextStyle(fontSize:14,height:1.5)),
+        if(spotCount>0)...[
+          const SizedBox(height:9),
+          Text(ai?'웹검색 및 공개자료를 바탕으로 정리했어요.'
+            :'공개 지도와 관광자료를 바탕으로 정리했어요.',
+            style:TextStyle(fontSize:11,color:scheme.onSurfaceVariant)),
+        ],
+      ]),
+    );
+  }
   Widget _photoGallery(List<Map<String,dynamic>> photos) {
     if(photos.isEmpty) return Padding(
       padding:const EdgeInsets.only(bottom:7),
@@ -149,47 +216,68 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     ));
   }
   Widget _spot(Map<String, dynamic> spot) {
-    final name = (spot['name'] ?? '').toString();
-    final kind = (spot['kind'] ?? '').toString();
-    final description = (spot['description'] ?? '').toString();
-    final address = (spot['address'] ?? '').toString();
-    final phone = (spot['phone'] ?? '').toString();
-    final hours = (spot['opening_hours'] ?? '').toString();
-    final fee = (spot['fee'] ?? '').toString();
-    final website = (spot['website'] ?? '').toString();
-    final source = (spot['source_url'] ?? '').toString();
-    final lat = spot['lat'], lon = spot['lon'];
-    final dist = spot['distance_m'] is num ? (spot['distance_m'] as num).round() : 0;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8), elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant)),
-      child: Padding(padding: const EdgeInsets.all(12),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 5),
-          Text(kind + ' · 약 ' + dist.toString() + 'm',
-            style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          if (description.isNotEmpty) Padding(padding:const EdgeInsets.only(top:6),child:Text(description)),
-          if (address.isNotEmpty) Text('등록 주소: ' + address,style:const TextStyle(fontSize:12)),
-          if (hours.isNotEmpty) Text('공개지도 운영시간: ' + hours),
-          if (fee.isNotEmpty) Text('공개지도 요금 표기: ' + fee),
-          if (phone.isNotEmpty) Text('연락처: ' + phone),
-          Wrap(spacing: 4, children: [
-            if (lat is num && lon is num) TextButton.icon(
-              onPressed: () => _open('https://www.google.com/maps/search/?api=1&query='
-                + lat.toString() + ',' + lon.toString()),
-              icon: const Icon(Icons.map_outlined,size:18),label:const Text('지도')),
-            if (phone.isNotEmpty) TextButton.icon(
-              onPressed: () => _open('tel:' + phone),
-              icon: const Icon(Icons.call_outlined,size:18),label:const Text('전화')),
-            if (website.startsWith('http')) TextButton(
-              onPressed: () => _open(website),child:const Text('홈페이지')),
-            if (source.startsWith('https://')) TextButton(
-              onPressed: () => _open(source),child:const Text('출처')),
+    final scheme=Theme.of(context).colorScheme;
+    final name=(spot['name']??'장소명 미확인').toString();
+    final kind=(spot['kind']??widget.activity).toString();
+    final description=(spot['description']??'').toString();
+    final address=(spot['address']??'').toString();
+    final phone=(spot['phone']??'').toString();
+    final hours=(spot['opening_hours']??'').toString();
+    final fee=(spot['fee']??'').toString();
+    final website=(spot['website']??'').toString();
+    final source=(spot['source_url']??'').toString();
+    final lat=spot['lat'],lon=spot['lon'];
+    final distance=spot['distance_m'];
+    final meters=distance is num?distance.round():null;
+    return Container(
+      margin:const EdgeInsets.only(bottom:10),
+      padding:const EdgeInsets.all(14),
+      decoration:BoxDecoration(
+        color:scheme.surface,
+        border:Border.all(color:scheme.outlineVariant.withValues(alpha:.75)),
+        borderRadius:BorderRadius.circular(16),
+      ),
+      child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(name,style:const TextStyle(fontSize:15.5,fontWeight:FontWeight.w800)),
+        const SizedBox(height:8),
+        Wrap(spacing:6,runSpacing:6,children:[
+          if(kind.isNotEmpty)_tag(kind,icon:Icons.category_outlined),
+          if(meters!=null)_tag(meters>=1000?
+            '${(meters/1000).toStringAsFixed(1)}km':'약 ${meters}m',
+            icon:Icons.near_me_outlined),
+        ]),
+        if(description.isNotEmpty)Padding(
+          padding:const EdgeInsets.only(top:10),
+          child:Text(description,style:const TextStyle(fontSize:13.5,height:1.48))),
+        if(address.isNotEmpty)_detailRow(Icons.place_outlined,'주소  ',address),
+        if(hours.isNotEmpty)_detailRow(Icons.schedule_outlined,'운영  ',hours),
+        if(fee.isNotEmpty)_detailRow(Icons.payments_outlined,'요금  ',fee),
+        if(phone.isNotEmpty)_detailRow(Icons.call_outlined,'전화  ',phone),
+        if((lat is num && lon is num)||phone.isNotEmpty||
+           website.startsWith('https://')||source.startsWith('https://'))...[
+          const SizedBox(height:10),
+          Divider(color:scheme.outlineVariant.withValues(alpha:.6),height:1),
+          const SizedBox(height:5),
+          Wrap(spacing:2,runSpacing:0,children:[
+            if(lat is num && lon is num)TextButton.icon(
+              onPressed:()=>_open('https://www.google.com/maps/search/?api=1&query=$lat,$lon'),
+              icon:const Icon(Icons.map_outlined,size:17),label:const Text('지도')),
+            if(phone.isNotEmpty)TextButton.icon(
+              onPressed:()=>_open('tel:$phone'),
+              icon:const Icon(Icons.call_outlined,size:17),label:const Text('전화')),
+            if(website.startsWith('https://'))TextButton.icon(
+              onPressed:()=>_open(website),
+              icon:const Icon(Icons.language_outlined,size:17),
+              label:const Text('홈페이지')),
+            if(source.startsWith('https://'))TextButton.icon(
+              onPressed:()=>_open(source),
+              icon:const Icon(Icons.open_in_new,size:17),label:const Text('출처')),
           ]),
-        ])));
+        ],
+      ]),
+    );
   }
+
   Widget _content(Map<String, dynamic> data) {
     final spots = _rows(data['spots']);
     final contacts = _rows(data['providers']);
