@@ -4,63 +4,37 @@ import 'package:flutter/material.dart';
 /// Centralised marker icons. All saved service tags are represented on the
 /// map, without a take(n) limit. Nearby activity tags remain identifiable.
 class PlaceMarkerIcons {
+  // Only four campervan services appear on the MAP marker.
+  // Tourism, recreation, repair, sales and other place data are still visible
+  // in the place details and filters, but never create category marker icons.
   static const Map<String,String> symbols = <String,String>{
     '급수':'💧',
     '청수':'💧',
     '블랙탱크 비움':'🚽',
+    '오수':'🚽',
     '노지/차박':'🅿️',
     '공중화장실':'🚻',
-    '전기':'🔌',
-    '캠핑장':'🏕️',
-    '제작':'🛠️',
-    '매매':'🚐',
-    'A/S':'🔧',
-    '부품·용품':'⚙️',
-    '수리':'🔧',
-    '정비':'🔩',
-    '장착':'🛠️',
-    '상담':'📞',
-    '관광지':'🏞️',
-    '산책':'🚶',
-    '등산':'🥾',
-    '낚시':'🎣',
-    '해루질':'🐚',
-    '수상레포츠':'🏄',
-    '지상레포츠':'🚴',
-    '카지노':'🎰',
-    '자전거':'🚲',
-    '수영':'🏊',
-    '서핑':'🏄',
-    '카약·SUP':'🛶',
-    '스노클링':'🤿',
-    '스키·눈썰매':'⛷️',
-    '골프':'⛳',
-    '온천·스파':'♨️',
-    '문화체험':'🎨',
-    '시장·쇼핑':'🛍️',
   };
 
   static List<String> fromServices(Iterable<String> services) {
-    final result = <String>[];
-    final seen = <String>{};
-    for (final service in services) {
-      final icon = symbols[service] ?? '📌';
-      // Multiple distinct service tags share icons, but every service can
-      // still be inspected by tapping the marker. Deduplicate identical tags.
-      if (seen.add(service)) result.add(icon);
-    }
+    final tags=services.toSet();
+    final result=<String>[];
+    if (tags.contains('급수') || tags.contains('청수')) result.add('💧');
+    if (tags.contains('블랙탱크 비움') || tags.contains('오수')) result.add('🚽');
+    if (tags.contains('노지/차박')) result.add('🅿️');
+    if (tags.contains('공중화장실')) result.add('🚻');
+    // A neutral location pin preserves navigation to places offering only
+    // non-core services, without representing tourism or leisure as a marker.
     return result.isEmpty ? <String>['📍'] : result;
   }
 
-  // Four icons are displayed 2x2. For more than four, use three columns
-  // and as many rows as necessary instead of silently hiding services.
-  static int columns(int count) => count <= 4 ? 2 : 3;
+  // All qualifying map icons fit in a compact 2x2 grid.
+  static int columns(int count) => count <= 1 ? 1 : 2;
   static int rows(int count) => (math.max(1,count) / columns(count)).ceil();
   static double markerWidth(int count) => math.max(52,columns(count)*25+10).toDouble();
   static double markerHeight(int count) => math.max(52,rows(count)*25+10).toDouble();
 
   static Widget tile(List<String> icons,{int groupCount=1,Color? background}) {
-    final cols=columns(icons.length);
     final width=markerWidth(icons.length);
     final height=markerHeight(icons.length);
     return SizedBox(width:width,height:height,child:Stack(clipBehavior:Clip.none,children:[
