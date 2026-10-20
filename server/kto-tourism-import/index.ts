@@ -113,6 +113,17 @@ Deno.serve(async(req:Request)=>{
     max_places_per_run:3,photo_rights:"공공누리 제1유형만"});
  }
  if(!key())return reply({error:"KTO_TOUR_API_KEY 미등록"},503);
+ // Admin-only targeted image audit: checks official Korean Open Government
+ // Licence type before an image is considered for commercial app display.
+ if(body.content_id!==undefined){
+  const contentId=String(body.content_id||"");
+  if(!/^\\d{1,15}$/.test(contentId))return reply({error:"관광 콘텐츠 ID가 올바르지 않습니다."},400);
+  try{
+   const photos=await licensedPhoto(contentId,trim(body.name||"관광지"));
+   return reply({content_id:contentId,licensed_photos:photos,
+    notice:"공공누리 제1유형만 반환. 이미지 사용 시 저작자/원본 출처를 확인하세요."});
+  }catch(e){return reply({error:"사진 저작권 조회 실패",detail:String(e).slice(0,130)},502);}
+ }
  const offset=Math.max(0,Math.min(100000,Math.trunc(int(body.offset))));
  const limit=Math.min(3,Math.max(1,Math.trunc(int(body.limit,2))));
  const {data:places,error}=await client.from("places")
