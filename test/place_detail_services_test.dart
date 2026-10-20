@@ -23,6 +23,15 @@ void main() {
       prices: {'노지/차박': '주차 무료 / 차박 허용 여부 미확인'});
     expect(placeServiceShowsAvailable(u, '노지/차박'), false);
   });
+  test('EV charging availability follows the saved services checkbox', () {
+    final noEv = Place(id:'x1',name:'parking',latitude:37,longitude:127,
+      address:'a',services:['공중화장실'],prices:{'공중화장실':'무료'});
+    final withEv = Place(id:'x2',name:'parking',latitude:37,longitude:127,
+      address:'a',services:['공중화장실','전기차 충전기'],
+      prices:{'공중화장실':'무료'});
+    expect(placeServiceShowsAvailable(noEv,'전기차 충전기'),false);
+    expect(placeServiceShowsAvailable(withEv,'전기차 충전기'),true);
+  });
   testWidgets('Facility and camper business cards stay visible with correct status',
       (tester) async {
     final controller = ScrollController();
@@ -71,7 +80,7 @@ void main() {
     expect(find.text('제작'), findsOneWidget);
     expect(find.text('부품 / 용품'), findsOneWidget);
     expect(find.text('서비스 가능'), findsNWidgets(2));
-    expect(find.text('정보 없음'), findsNWidgets(2));
+    expect(find.text('정보 없음'), findsNWidgets(3)); // Includes unconfirmed EV charger.
 
     // Selected & confirmed service: light-blue. Unknown service: neutral.
     final availableCards = tester.widgetList<Container>(find.ancestor(
