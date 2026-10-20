@@ -24,7 +24,9 @@ if start < 0 or end < 0:
 logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
 
   bool _servicePriceMatches(Place p, String service, String price) {
-    if (!p.services.contains(service)) return false;
+    if (!p.services.contains(service) &&
+        !(service == '수리' &&
+            (p.services.contains('A/S') || p.services.contains('정비')))) return false;
     if (price == '전체') return true;
     final value = '${p.prices[service] ?? ''}'.trim();
     if (value.isEmpty || value.contains('정보 없음') || value.contains('확인 필요') || value.contains('금액정보 없음')) return false;
