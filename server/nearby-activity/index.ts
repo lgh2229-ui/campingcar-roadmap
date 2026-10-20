@@ -377,11 +377,11 @@ async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:
 // "도째비골 스카이사이클" and "도째비골 스카이밸리" can reference
 // the same venue even when their full strings differ.
 function equivalentPlace(a:string,b:string):boolean{
- const n=(x:string)=>x.toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]/gu,'');
+ const n=(x:string)=>x.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
  const x=n(a),y=n(b);
  if(x.length>=4 && y.length>=4 && (x.includes(y)||y.includes(x)))return true;
  const stop=/^(산책|레포츠|낚시|포인트|정보|체험|코스|시설|주변|해안|바다|내항|방파제|스카이|공원|관광지)$/;
- const words=(v:string)=>v.toLocaleLowerCase().split(/[\\s,().-]+/g)
+ const words=(v:string)=>v.toLocaleLowerCase().split(/[\s,().-]+/g)
    .map(n).filter(t=>t.length>=3 && !stop.test(t));
  return words(a).some(t=>words(b).some(u=>t.length>=3 && u.length>=3 && (t===u || (t.length>=4 && u.length>=4&&(t.includes(u)||u.includes(t))))));
 }
