@@ -117,7 +117,7 @@ Deno.serve(async(req:Request)=>{
  // Licence type before an image is considered for commercial app display.
  if(body.content_id!==undefined){
   const contentId=String(body.content_id||"");
-  if(!/^\\d{1,15}$/.test(contentId))return reply({error:"관광 콘텐츠 ID가 올바르지 않습니다."},400);
+  if(!/^[0-9]{1,15}$/.test(contentId))return reply({error:"관광 콘텐츠 ID가 올바르지 않습니다."},400);
   try{
    const photos=await licensedPhoto(contentId,trim(body.name||"관광지"));
    return reply({content_id:contentId,licensed_photos:photos,
