@@ -202,7 +202,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     return ListView(padding:const EdgeInsets.fromLTRB(16, 0, 16, 28),children: [
       if (when != null) Padding(padding:const EdgeInsets.only(top:9),child:Text(
         '검색 날짜: ' + when.year.toString() + '.' + when.month.toString()
-        + '.' + when.day.toString() + ' · OpenStreetMap 공개지도',
+        + '.' + when.day.toString() + ' · 관광기관·지역지도·공개 웹자료',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant))),
       if (data['stale'] == true) const Text('검색 서버가 일시적으로 느려 저장된 기존 정보를 보여드립니다.'),
       if (data['research_status'] == 'not_confirmed') const Text('추가 조사 완료 · 반경 3km 내 위치 확정 자료는 아직 없음'),
@@ -264,7 +264,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       _heading('이용 안내·주의사항'),
       ...tips.map((tip) => Padding(padding:const EdgeInsets.only(bottom:6),child:Text('• '+tip))),
       const SizedBox(height:18),
-      Text('지도 데이터 © OpenStreetMap contributors · 운영/허가/요금 정보는 방문 전 재확인',
+      Text('장소별 정보 출처는 아래 링크에서 확인하세요. OpenStreetMap 지도자료 © OpenStreetMap contributors. 운영·출입·요금은 현장 재확인.',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
       TextButton(onPressed:()=>_open('https://www.openstreetmap.org/copyright'),
         child:const Text('OpenStreetMap 저작권 안내')),
