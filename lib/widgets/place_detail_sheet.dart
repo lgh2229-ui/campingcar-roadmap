@@ -83,6 +83,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   // Canonical options currently supported by the map and registration flow.
   static const coreServices = <String>[
     '노지/차박', '공중화장실', '급수', '블랙탱크 비움',
+    '전기차 충전기',
   ];
   static const businessServices = <String>[
     '매매', 'A/S', '제작', '부품·용품',
@@ -96,6 +97,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     '급수': '청수 / 급수',
     '블랙탱크 비움': '블랙탱크',
     '전기': '전기',
+    '전기차 충전기': '전기차 충전기',
     '캠핑장': '캠핑장',
     '부품·용품': '부품 / 용품',
     'A/S': 'A/S · 수리',
@@ -110,11 +112,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     '급수': Icons.water_drop_outlined,
     '블랙탱크 비움': Icons.delete_outline,
     '전기': Icons.bolt_outlined,
+    '전기차 충전기': Icons.ev_station_outlined,
     '캠핑장': Icons.terrain_outlined,
     'A/S': Icons.build_outlined,
     '매매': Icons.directions_car_filled_outlined,
     '제작': Icons.handyman_outlined,
     '부품·용품': Icons.construction_outlined,
+    '수리': Icons.build_outlined,
     '관광지': Icons.place_outlined,
     '산책': Icons.directions_walk_outlined,
     '등산': Icons.terrain_outlined,
