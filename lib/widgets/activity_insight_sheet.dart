@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
+import 'activity_spot_review_sheet.dart';
 
 class ActivityInsightSheet extends StatefulWidget {
   const ActivityInsightSheet({super.key, required this.place, required this.activity});
@@ -23,6 +24,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       if (response.data is! Map) throw StateError('검색 결과 형식이 올바르지 않습니다.');
       final data = Map<String, dynamic>.from(response.data as Map);
       if (data['error'] != null) throw StateError(data['error'].toString());
+      await _loadReviewCounts();
       return data;
     } catch (e) {
       // Never expose raw HTTP exceptions or internal backend diagnostics to users.
@@ -83,6 +85,58 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   }
   List<Map<String, dynamic>> _rows(dynamic v) =>
     v is List ? v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : [];
+  final Map<String, int> _reviewCounts = {};
+
+  String _spotKey(Map<String, dynamic> spot) {
+    final external = (spot['content_id'] ?? spot['contentid'] ?? spot['id'] ?? '')
+        .toString().trim().toLowerCase();
+    if (external.isNotEmpty) return ('external:' + external).substring(
+      0, ('external:' + external).length.clamp(0, 400));
+    final name = (spot['name'] ?? '').toString()
+        .trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final address = (spot['address'] ?? '').toString()
+        .trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    final location = address.isNotEmpty ? address :
+        (spot['lat'] ?? '').toString() + ',' + (spot['lon'] ?? '').toString();
+    final value = name + '|' + location;
+    return value.length > 400 ? value.substring(0, 400) : value;
+  }
+
+  Future<void> _loadReviewCounts() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('activity_spot_reviews').select('spot_key')
+          .eq('place_id', widget.place.id)
+          .eq('activity', widget.activity);
+      final counts = <String, int>{};
+      for (final row in rows as List) {
+        final key = (row['spot_key'] ?? '').toString();
+        counts[key] = (counts[key] ?? 0) + 1;
+      }
+      if (mounted) setState(() {
+        _reviewCounts..clear()..addAll(counts);
+      });
+    } catch (_) {
+      // Nearby tourist information remains available even if reviews fail.
+    }
+  }
+
+  Future<void> _openSpotReviews(Map<String, dynamic> spot) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (_) => ActivitySpotReviewSheet(
+        placeId: widget.place.id,
+        activity: widget.activity,
+        spotKey: _spotKey(spot),
+        spotName: (spot['name'] ?? '주변 장소').toString(),
+      ),
+    );
+    if (mounted) await _loadReviewCounts();
+  }
+
   Future<void> _open(String value) async {
     final uri = Uri.tryParse(value);
     if (uri != null && ['https','http','tel'].contains(uri.scheme)) {
@@ -274,6 +328,29 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
               icon:const Icon(Icons.open_in_new,size:17),label:const Text('출처')),
           ]),
         ],
+        const SizedBox(height: 8),
+        Wrap(spacing: 10, runSpacing: 5, crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => _openSpotReviews(spot),
+              icon: const Icon(Icons.rate_review_outlined, size: 18),
+              label: const Text('리뷰보기'),
+            ),
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _openSpotReviews(spot),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.chat_bubble_outline, size: 17),
+                  const SizedBox(width: 5),
+                  Text('댓글 ' + (_reviewCounts[_spotKey(spot)] ?? 0).toString() + '개',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ],
+        ),
       ]),
     );
   }
