@@ -278,99 +278,216 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     );
   }
 
-  Widget _content(Map<String, dynamic> data) {
-    final spots = _rows(data['spots']);
-    final contacts = _rows(data['providers']);
-    final sources = _rows(data['sources']);
-    final photos = _rows(data['photos']);
-    final suggested = _rows(data['suggested_places']);
-    final tips = data['tips'] is List ? (data['tips'] as List).map((e) => e.toString()).toList() : <String>[];
-    final ai = data['ai_generated'] == true;
-    final when = DateTime.tryParse((data['fetched_at'] ?? '').toString())?.toLocal();
-    return ListView(padding:const EdgeInsets.fromLTRB(16, 0, 16, 28),children: [
-      if (when != null) Padding(padding:const EdgeInsets.only(top:9),child:Text(
-        '검색 날짜: ' + when.year.toString() + '.' + when.month.toString()
-        + '.' + when.day.toString() + ' · 관광기관·지역지도·공개 웹자료',
-        style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant))),
-      if (data['stale'] == true) const Text('검색 서버가 일시적으로 느려 저장된 기존 정보를 보여드립니다.'),
-      if (data['research_status'] == 'not_confirmed') const Text('추가 조사 완료 · 반경 3km 내 위치 확정 자료는 아직 없음'),
-      if (data['cached'] == true) Text('저장된 정보 · 자동 만료 없음 · 재검색은 신고 후 관리자만 가능',
-        style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
-      if (data['temporarily_unavailable'] == true) const Padding(
-        padding: EdgeInsets.only(top: 12),
-        child: Text('등록 정보는 유지됩니다. 인터넷 검색 서버가 정상화되면 다시 확인할 수 있습니다.')),
-
-      _heading(ai ? 'AI 주변정보 요약' : '주변정보 요약'),
-      Text((data['summary'] ?? '').toString(),style:const TextStyle(height:1.5)),
-      if (!ai && spots.isNotEmpty) Text('확인된 지도·관광자료를 자동으로 정리한 내용입니다. 실시간 AI 웹검색은 서버 설정 시 사용됩니다.',
-        style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
-      _heading('주변 사진 · 출처 확인된 자료'),
-      _photoGallery(photos),
-      if (suggested.isNotEmpty) _heading('추가 확인 중인 웹검색 후보 · 3km 거리 미확인'),
-      if (suggested.isNotEmpty) const Padding(
-        padding: EdgeInsets.only(bottom:8),
-        child:Text('아래 장소는 웹에서 관련 정보가 발견됐지만 좌표가 확인되지 않았습니다. 확정된 3km 추천은 아닙니다.',
-          style:TextStyle(fontSize:12)),
+  Widget _providerCard(Map<String,dynamic> contact) {
+    final name=(contact['name']??'업체/장소').toString();
+    final phone=(contact['phone']??'').toString();
+    final source=(contact['source_url']??'').toString();
+    final scheme=Theme.of(context).colorScheme;
+    return Container(
+      padding:const EdgeInsets.symmetric(vertical:10,horizontal:12),
+      margin:const EdgeInsets.only(bottom:8),
+      decoration:BoxDecoration(
+        color:scheme.surface,
+        border:Border.all(color:scheme.outlineVariant),
+        borderRadius:BorderRadius.circular(12),
       ),
-      ...suggested.map((item) => Card(
-        elevation:0,
-        child:Padding(padding:const EdgeInsets.all(12),
-          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text((item['name']??'장소 후보').toString(),
-              style:const TextStyle(fontWeight:FontWeight.w600)),
-            if ((item['source_url']??'').toString().startsWith('https://'))
-              Align(alignment:Alignment.centerLeft,child:TextButton.icon(
-                onPressed:()=>_open(item['source_url'].toString()),
-                icon:const Icon(Icons.open_in_new,size:17),
-                label:const Text('해당 정보 출처 열기'),
-              )),
-          ])),
-      )),
-      _heading('3km 이내 관련 장소 · ' + spots.length.toString() + '곳'),
-      if (spots.isEmpty) const Text('공개지도에서 확인되지 않았습니다. 실제 이용 불가를 의미하지 않습니다.'),
-      ...spots.map(_spot),
-      _heading(widget.activity == '낚시' ? '낚시 관련 연락처·업체' : '연락처가 등록된 장소'),
-      if (contacts.isEmpty) const Text('확인된 연락처 정보가 없습니다. 업체 정보를 임의로 생성하지 않습니다.'),
-      ...contacts.map(_spot),
-      if (widget.activity == '낚시') const Text('선상낚시 업체/출항/요금은 별도 확인이 필요하며, 낚시용품점은 낚싯배 예약업체가 아닙니다.'),
-      if (sources.isNotEmpty) _heading('정보 출처 · 눌러서 확인'),
-      ...sources.where((item) => (item['url'] ?? '').toString().startsWith('https://'))
-        .take(15).map((item) => Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => _open(item['url'].toString()),
-            icon: const Icon(Icons.open_in_new,size:16),
-            label: Text((item['name'] ?? '출처 열기').toString(),maxLines:2,
-              overflow:TextOverflow.ellipsis),
-          ),
-        )),
-      Padding(padding:const EdgeInsets.symmetric(vertical:10),child:OutlinedButton.icon(
-        onPressed:_reportIssue,
-        icon:const Icon(Icons.flag_outlined),
-        label:const Text('주변 정보 오류·변경 신고'),
-      )),
-      _heading('이용 안내·주의사항'),
-      ...tips.map((tip) => Padding(padding:const EdgeInsets.only(bottom:6),child:Text('• '+tip))),
-      const SizedBox(height:18),
-      Text('장소별 정보 출처는 아래 링크에서 확인하세요. OpenStreetMap 지도자료 © OpenStreetMap contributors. 운영·출입·요금은 현장 재확인.',
-        style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
-      TextButton(onPressed:()=>_open('https://www.openstreetmap.org/copyright'),
-        child:const Text('OpenStreetMap 저작권 안내')),
-    ]);
+      child:Row(children:[
+        Icon(Icons.storefront_outlined,size:21,color:scheme.primary),
+        const SizedBox(width:10),
+        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          Text(name,style:const TextStyle(fontWeight:FontWeight.w700,fontSize:13)),
+          if(phone.isNotEmpty)Text(phone,
+            style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant)),
+        ])),
+        if(phone.isNotEmpty)IconButton(
+          tooltip:'전화 걸기',onPressed:()=>_open('tel:$phone'),
+          icon:const Icon(Icons.call_outlined)),
+        if(source.startsWith('https://'))IconButton(
+          tooltip:'정보 출처',onPressed:()=>_open(source),
+          icon:const Icon(Icons.open_in_new)),
+      ]),
+    );
   }
+
+  Widget _content(Map<String,dynamic> data) {
+    final spots=_rows(data['spots']);
+    final contacts=_rows(data['providers']);
+    final sources=_rows(data['sources']).where(
+      (x)=>(x['url']??'').toString().startsWith('https://')).toList();
+    final photos=_rows(data['photos']);
+    final suggested=_rows(data['suggested_places']);
+    final tips=data['tips'] is List
+        ? (data['tips'] as List).map((e)=>e.toString()).where((e)=>e.isNotEmpty).toList()
+        : <String>[];
+    final when=DateTime.tryParse((data['fetched_at']??'').toString())?.toLocal();
+    final date=when==null?'':('${when.year}.${when.month.toString().padLeft(2,'0')}.${when.day.toString().padLeft(2,'0')}');
+    final scheme=Theme.of(context).colorScheme;
+    return ListView(
+      padding:const EdgeInsets.fromLTRB(16,13,16,30),
+      children:[
+        // Keep technical provenance compact and visually subordinate.
+        Wrap(spacing:6,runSpacing:6,children:[
+          if(date.isNotEmpty)_tag('확인 $date',icon:Icons.event_available_outlined),
+          _tag('반경 3km',icon:Icons.near_me_outlined),
+          if(data['cached']==true)_tag('정보 보관 중',icon:Icons.bookmark_outline),
+        ]),
+        if(data['stale']==true)Padding(
+          padding:const EdgeInsets.only(top:8),
+          child:Text('저장된 기존 정보를 표시하고 있습니다.',
+            style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
+        if(data['temporarily_unavailable']==true)Padding(
+          padding:const EdgeInsets.only(top:8),
+          child:Text('검색 서버 연결이 원활하지 않습니다. 기존 정보는 유지됩니다.',
+            style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
+        if(data['research_status']=='not_confirmed')Padding(
+          padding:const EdgeInsets.only(top:8),
+          child:Text('위치가 검증된 정보가 아직 없습니다. 이용 불가를 뜻하지 않습니다.',
+            style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
+        const SizedBox(height:13),
+        _summaryCard(data,spots.length),
+
+        _heading('주변 즐길 거리',detail:'${spots.length}곳'),
+        if(spots.isEmpty)Container(
+          padding:const EdgeInsets.symmetric(horizontal:14,vertical:16),
+          decoration:BoxDecoration(
+            color:scheme.surfaceContainerLow,
+            borderRadius:BorderRadius.circular(13)),
+          child:Row(children:[
+            Icon(Icons.info_outline,color:scheme.onSurfaceVariant),
+            const SizedBox(width:10),
+            const Expanded(child:Text(
+              '현재 확인된 장소가 없습니다. 실제 이용할 수 없다는 뜻은 아닙니다.',
+              style:TextStyle(fontSize:13,height:1.4))),
+          ]),
+        ),
+        ...spots.map(_spot),
+
+        // Photos are shown only when licensed images are actually available.
+        if(photos.isNotEmpty)...[
+          _heading('주변 사진',detail:'${photos.length}장'),
+          _photoGallery(photos),
+        ],
+
+        if(contacts.isNotEmpty)...[
+          _heading(widget.activity=='낚시'?'낚시 관련 업체·연락처':'연락처가 있는 장소',
+            detail:'${contacts.length}곳'),
+          ...contacts.map(_providerCard),
+          if(widget.activity=='낚시')Padding(
+            padding:const EdgeInsets.only(bottom:6),
+            child:Text('낚시용품점과 낚싯배 예약업체는 다릅니다. 출항·요금·예약을 확인하세요.',
+              style:TextStyle(fontSize:11.5,color:scheme.onSurfaceVariant))),
+        ],
+
+        if(suggested.isNotEmpty)...[
+          _heading('추가 확인 중',detail:'${suggested.length}건'),
+          Padding(padding:const EdgeInsets.only(bottom:9),
+            child:Text('웹에서 찾은 후보이며, 3km 이내 위치는 아직 검증되지 않았습니다.',
+              style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
+          ...suggested.map((item)=>Container(
+            margin:const EdgeInsets.only(bottom:6),
+            padding:const EdgeInsets.symmetric(horizontal:12,vertical:8),
+            decoration:BoxDecoration(
+              borderRadius:BorderRadius.circular(12),
+              border:Border.all(color:scheme.outlineVariant)),
+            child:Row(children:[
+              const Icon(Icons.place_outlined,size:18),
+              const SizedBox(width:8),
+              Expanded(child:Text((item['name']??'장소 후보').toString(),
+                style:const TextStyle(fontSize:13,fontWeight:FontWeight.w600))),
+              if((item['source_url']??'').toString().startsWith('https://'))
+                TextButton(onPressed:()=>_open(item['source_url'].toString()),
+                  child:const Text('출처')),
+            ]),
+          )),
+        ],
+
+        if(sources.isNotEmpty)Padding(
+          padding:const EdgeInsets.only(top:12),
+          child:Container(
+            decoration:BoxDecoration(
+              border:Border.all(color:scheme.outlineVariant),
+              borderRadius:BorderRadius.circular(13),
+            ),
+            child:ExpansionTile(
+              tilePadding:const EdgeInsets.symmetric(horizontal:14),
+              childrenPadding:const EdgeInsets.fromLTRB(8,0,8,8),
+              leading:Icon(Icons.fact_check_outlined,color:scheme.primary),
+              title:Text('정보 출처 ${sources.length}건',
+                style:const TextStyle(fontSize:13,fontWeight:FontWeight.w700)),
+              subtitle:const Text('눌러서 확인',style:TextStyle(fontSize:11)),
+              children:sources.take(15).map((item)=>Align(
+                alignment:Alignment.centerLeft,
+                child:TextButton.icon(
+                  onPressed:()=>_open(item['url'].toString()),
+                  icon:const Icon(Icons.open_in_new,size:16),
+                  label:Text((item['name']??'출처 열기').toString(),
+                    maxLines:2,overflow:TextOverflow.ellipsis),
+                ),
+              )).toList(),
+            ),
+          ),
+        ),
+
+        Padding(
+          padding:const EdgeInsets.only(top:16,bottom:8),
+          child:SizedBox(width:double.infinity,
+            child:OutlinedButton.icon(
+              onPressed:_reportIssue,
+              icon:const Icon(Icons.flag_outlined,size:19),
+              label:const Text('주변 정보 오류·변경 신고'),
+              style:OutlinedButton.styleFrom(
+                padding:const EdgeInsets.symmetric(vertical:14),
+                shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(13))),
+            )),
+        ),
+        if(tips.isNotEmpty)ExpansionTile(
+          tilePadding:EdgeInsets.zero,
+          leading:Icon(Icons.info_outline,color:scheme.onSurfaceVariant,size:19),
+          title:const Text('이용 안내·주의사항',
+            style:TextStyle(fontSize:13,fontWeight:FontWeight.w700)),
+          children:tips.map((tip)=>Padding(
+            padding:const EdgeInsets.only(bottom:9,left:8,right:8),
+            child:Align(alignment:Alignment.centerLeft,
+              child:Text('• $tip',
+                style:const TextStyle(fontSize:12,height:1.35))))).toList(),
+        ),
+        Padding(padding:const EdgeInsets.only(top:8),
+          child:Text('자료 출처 및 실제 운영·출입·요금은 방문 전 확인하세요. 저장된 정보의 재검색은 신고 후 관리자만 가능합니다.',
+            style:TextStyle(fontSize:11,height:1.4,color:scheme.onSurfaceVariant))),
+        Align(alignment:Alignment.centerLeft,child:TextButton(
+          onPressed:()=>_open('https://www.openstreetmap.org/copyright'),
+          child:const Text('OpenStreetMap 저작권',style:TextStyle(fontSize:11)),
+        )),
+      ],
+    );
+  }
+
   @override Widget build(BuildContext context) => SafeArea(top:false,
     child:SizedBox(height:MediaQuery.of(context).size.height*.87,
       child:Column(children:[
-        Padding(padding:const EdgeInsets.fromLTRB(16,8,8,6),
+        Padding(padding:const EdgeInsets.fromLTRB(18,9,8,11),
           child:Row(children:[
-            const Icon(Icons.explore_outlined), const SizedBox(width:8),
+            Container(
+              padding:const EdgeInsets.all(8),
+              decoration:BoxDecoration(
+                color:Theme.of(context).colorScheme.primaryContainer.withValues(alpha:.5),
+                borderRadius:BorderRadius.circular(12)),
+              child:Icon(Icons.explore_outlined,size:23,
+                color:Theme.of(context).colorScheme.primary)),
+            const SizedBox(width:11),
             Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-              Text(widget.activity,style:const TextStyle(fontSize:20,fontWeight:FontWeight.w800)),
-              Text(widget.place.name+' · 반경 3km',
-                style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(widget.activity,style:const TextStyle(
+                fontSize:20,fontWeight:FontWeight.w800)),
+              const SizedBox(height:2),
+              Text(widget.place.name+' · 3km 주변',
+                maxLines:1,overflow:TextOverflow.ellipsis,
+                style:TextStyle(fontSize:12,
+                  color:Theme.of(context).colorScheme.onSurfaceVariant)),
             ])),
-            IconButton(tooltip:'저장된 정보 다시 보기',onPressed:_refresh,icon:const Icon(Icons.refresh)),
-            IconButton(tooltip:'닫기',onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close)),
+            IconButton(tooltip:'저장된 정보 다시 보기',onPressed:_refresh,
+              icon:const Icon(Icons.refresh_rounded)),
+            IconButton(tooltip:'닫기',onPressed:()=>Navigator.pop(context),
+              icon:const Icon(Icons.close_rounded)),
           ])),
         const Divider(height:1),
         Expanded(child:FutureBuilder<Map<String,dynamic>>(future:result,builder:(ctx,snapshot){
