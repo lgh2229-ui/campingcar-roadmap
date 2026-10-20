@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import '../models/place.dart';
+import 'place_marker_icons.dart';
 
 /// Native Naver basemap with the Roadmap's original group markers and
 /// place-selection gestures. No locations are copied into Naver's databases.
@@ -76,47 +77,29 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
     });
   }
 
-  String _iconText(Place place) {
-    final values = <String>[];
-    if (place.services.contains('급수')) values.add('💧');
-    if (place.services.contains('블랙탱크 비움')) values.add('🚽');
-    if (place.services.contains('노지/차박')) values.add('🅿️');
-    if (place.services.contains('공중화장실')) values.add('🚻');
-    if (place.services.contains('매매')) values.add('🚐');
-    if (place.services.contains('수리')) values.add('🔧');
-    if (place.services.contains('캠핑장')) values.add('🏕️');
-    return values.isEmpty ? '📍' : values.take(3).join();
+  Future<NOverlayImage> _iconFor(List<String> icons,{int groupCount=1}) async {
+    final key='${icons.join('|')}#$groupCount';
+    final cached=_imageCache[key];
+    if(cached!=null)return cached;
+    final image=await NOverlayImage.fromWidget(
+      context:context,
+      size:Size(PlaceMarkerIcons.markerWidth(icons.length),
+        PlaceMarkerIcons.markerHeight(icons.length)),
+      widget:PlaceMarkerIcons.tile(icons,groupCount:groupCount),
+    );
+    _imageCache[key]=image;
+    return image;
   }
 
-  Future<NOverlayImage> _iconFor(String key, {bool selected = false}) async {
-    final cached = _imageCache[key];
-    if (cached != null) return cached;
-    final image = await NOverlayImage.fromWidget(
-      context: context,
-      size: selected ? const Size(70, 80) : const Size(48, 48),
-      widget: selected
-          ? const Center(child: Icon(Icons.location_pin, color: Colors.red, size: 58))
-          : Center(
-              child: Container(
-                width: 45,
-                height: 45,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.black87, width: 2),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [BoxShadow(
-                    color: Colors.black26, blurRadius: 3, offset: Offset(0, 1),
-                  )],
-                ),
-                child: Text(key,
-                  maxLines: 1,
-                  style: const TextStyle(fontSize: 16, decoration: TextDecoration.none),
-                  textAlign: TextAlign.center),
-              ),
-            ),
+  Future<NOverlayImage> _selectedIcon() async {
+    final cached=_imageCache['selected'];
+    if(cached!=null)return cached;
+    final image=await NOverlayImage.fromWidget(
+      context:context,
+      size:const Size(70,80),
+      widget:const Center(child:Icon(Icons.location_pin,color:Colors.red,size:58)),
     );
-    _imageCache[key] = image;
+    _imageCache['selected']=image;
     return image;
   }
 
@@ -139,15 +122,17 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
         if (generation != _overlayGeneration || !mounted) return;
         if (group.isEmpty) continue;
         final first = group.first;
-        final iconKey = group.length > 1
-            ? '📍${group.length}'
-            : _iconText(first);
-        final icon = await _iconFor(iconKey);
-        final marker = NMarker(
-          id: 'place_${first.id}',
-          position: NLatLng(first.latitude, first.longitude),
-          size: const Size(48, 48),
-          icon: icon,
+        // Merge all represented services at shared coordinates.
+        // Never replace service symbols with a generic group pin.
+        final serviceTags=group.expand((p)=>p.services).toSet();
+        final icons=PlaceMarkerIcons.fromServices(serviceTags);
+        final icon=await _iconFor(icons,groupCount:group.length);
+        final marker=NMarker(
+          id:'place_${first.id}',
+          position:NLatLng(first.latitude,first.longitude),
+          size:Size(PlaceMarkerIcons.markerWidth(icons.length),
+            PlaceMarkerIcons.markerHeight(icons.length)),
+          icon:icon,
         );
         marker.setOnTapListener((_) {
           if (mounted) widget.onGroupTap(group);
@@ -161,7 +146,7 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
           id: 'selected_place',
           position: _native(selected),
           size: const Size(70, 80),
-          icon: await _iconFor('selected', selected: true),
+          icon: await _selectedIcon(),
           caption: NOverlayCaption(
             text: widget.locationPickMode ? '수정 위치' : '등록 위치',
           ),
