@@ -112,10 +112,12 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
         run: >
           flutter build apk --debug
           --dart-define=SUPABASE_URL="$SUPABASE_URL"
           --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+          --dart-define=NAVER_MAP_CLIENT_ID="$NAVER_MAP_CLIENT_ID"
       - name: Build release APK for Play-equivalent startup test
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -124,6 +126,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
         run: |
           test -n "$ANDROID_KEYSTORE_BASE64" || (echo "Missing release keystore" && exit 1)
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
@@ -134,7 +137,7 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
           python tool/configure_release_signing.py
-          flutter build apk --release --dart-define=SUPABASE_URL="$SUPABASE_URL" --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY"
+          flutter build apk --release --dart-define=SUPABASE_URL="$SUPABASE_URL" --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" --dart-define=NAVER_MAP_CLIENT_ID="$NAVER_MAP_CLIENT_ID"
       - name: Dump merged release manifest and dependency tree
         run: |
           echo "=== MERGED RELEASE MANIFEST ADS ==="
