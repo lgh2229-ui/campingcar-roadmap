@@ -90,7 +90,7 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
       await _reload();
       _notice('후기가 등록되었습니다.');
     } catch (e) {
-      _notice(e is StateError ? e.message : '후기 저장에 실패했습니다. 로그인 상태와 사진 용량을 확인해주세요.');
+      _notice(e is StateError ? e.message.toString() : '후기 저장에 실패했습니다. 로그인 상태와 사진 용량을 확인해주세요.');
     } finally { if (mounted) setState(() => _saving = false); }
   }
 
