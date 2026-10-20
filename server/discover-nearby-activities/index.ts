@@ -109,6 +109,7 @@ Deno.serve(async(req:Request)=>{
       .select('budget_monthly_krw,enabled,refresh_requires_report').eq('id',1).maybeSingle();
     return send({
       openai_key_present:Boolean(Deno.env.get('OPENAI_API_KEY')),
+      kakao_local_search_key_present:Boolean(Deno.env.get('KAKAO_REST_API_KEY')),
       ai_budget_ready:!settingsError && settings?.enabled===true &&
         settings?.budget_monthly_krw===30000 &&
         settings?.refresh_requires_report===true,
