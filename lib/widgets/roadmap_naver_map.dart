@@ -10,6 +10,7 @@ class RoadmapNaverMap extends StatefulWidget {
     super.key,
     required this.groups,
     required this.center,
+    this.initialZoom = 14,
     required this.onGroupTap,
     required this.onMapTap,
     required this.onLongPress,
@@ -21,6 +22,7 @@ class RoadmapNaverMap extends StatefulWidget {
 
   final List<List<Place>> groups;
   final ll.LatLng center;
+  final double initialZoom;
   final ll.LatLng? currentLocation;
   final ll.LatLng? selectedSpot;
   final bool locationPickMode;
@@ -180,7 +182,7 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
       options: NaverMapViewOptions(
         mapType: NMapType.basic,
         initialCameraPosition: NCameraPosition(
-          target: _native(widget.center), zoom: 14,
+          target: _native(widget.center), zoom: widget.initialZoom,
         ),
         rotationGesturesEnable: false,
         tiltGesturesEnable: false,
@@ -189,7 +191,7 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
       onMapReady: (controller) {
         _controller = controller;
         _scheduleOverlays();
-        moveTo(widget.center, 14);
+        moveTo(widget.center, widget.initialZoom);
       },
       onMapTapped: (_, __) => widget.onMapTap(),
       onMapLongTapped: (_, point) => widget.onLongPress(_flutter(point)),
