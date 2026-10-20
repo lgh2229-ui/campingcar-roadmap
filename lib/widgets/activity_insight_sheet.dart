@@ -195,6 +195,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     final contacts = _rows(data['providers']);
     final sources = _rows(data['sources']);
     final photos = _rows(data['photos']);
+    final suggested = _rows(data['suggested_places']);
     final tips = data['tips'] is List ? (data['tips'] as List).map((e) => e.toString()).toList() : <String>[];
     final ai = data['ai_generated'] == true;
     final when = DateTime.tryParse((data['fetched_at'] ?? '').toString())?.toLocal();
@@ -204,7 +205,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         + '.' + when.day.toString() + ' · OpenStreetMap 공개지도',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant))),
       if (data['stale'] == true) const Text('검색 서버가 일시적으로 느려 저장된 기존 정보를 보여드립니다.'),
-      if (data['research_status'] == 'not_confirmed') const Text('AI 재확인 완료 · 확인 가능한 장소 없음 (이용 불가를 뜻하지 않음)'),
+      if (data['research_status'] == 'not_confirmed') const Text('추가 조사 완료 · 반경 3km 내 위치 확정 자료는 아직 없음'),
       if (data['cached'] == true) Text('저장된 정보 · 자동 만료 없음 · 재검색은 신고 후 관리자만 가능',
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
       if (data['temporarily_unavailable'] == true) const Padding(
@@ -217,6 +218,26 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
       _heading('주변 사진 · 출처 확인된 자료'),
       _photoGallery(photos),
+      if (suggested.isNotEmpty) _heading('추가 확인 중인 웹검색 후보 · 3km 거리 미확인'),
+      if (suggested.isNotEmpty) const Padding(
+        padding: EdgeInsets.only(bottom:8),
+        child:Text('아래 장소는 웹에서 관련 정보가 발견됐지만 좌표가 확인되지 않았습니다. 확정된 3km 추천은 아닙니다.',
+          style:TextStyle(fontSize:12)),
+      ),
+      ...suggested.map((item) => Card(
+        elevation:0,
+        child:Padding(padding:const EdgeInsets.all(12),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text((item['name']??'장소 후보').toString(),
+              style:const TextStyle(fontWeight:FontWeight.w600)),
+            if ((item['source_url']??'').toString().startsWith('https://'))
+              Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+                onPressed:()=>_open(item['source_url'].toString()),
+                icon:const Icon(Icons.open_in_new,size:17),
+                label:const Text('해당 정보 출처 열기'),
+              )),
+          ])),
+      )),
       _heading('3km 이내 관련 장소 · ' + spots.length.toString() + '곳'),
       if (spots.isEmpty) const Text('공개지도에서 확인되지 않았습니다. 실제 이용 불가를 의미하지 않습니다.'),
       ...spots.map(_spot),
