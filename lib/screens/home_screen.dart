@@ -89,6 +89,13 @@ class _HomeScreenState extends State<HomeScreen> {
     '전체','블랙탱크 비움','급수','노지/차박','공중화장실',
     '매매','수리','제작','부품·용품','전기차 충전기',
   ];
+  // Used by the full, multi-select filter generated during Android builds.
+  static const campingFilters = <String>[
+    '노지/차박','공중화장실','급수','블랙탱크 비움',
+  ];
+  static const businessFilters = <String>[
+    '매매','수리','제작','부품·용품','전기차 충전기',
+  ];
   bool _matchesServiceFilter(Place p, String value) =>
     value=='전체' || p.services.contains(value) ||
     (value=='수리' && (p.services.contains('A/S') || p.services.contains('정비')));
