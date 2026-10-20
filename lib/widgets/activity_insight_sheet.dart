@@ -90,8 +90,10 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   String _spotKey(Map<String, dynamic> spot) {
     final external = (spot['content_id'] ?? spot['contentid'] ?? spot['id'] ?? '')
         .toString().trim().toLowerCase();
-    if (external.isNotEmpty) return ('external:' + external).substring(
-      0, ('external:' + external).length.clamp(0, 400));
+    if (external.isNotEmpty) {
+      final value = 'external:' + external;
+      return value.length > 400 ? value.substring(0, 400) : value;
+    }
     final name = (spot['name'] ?? '').toString()
         .trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
     final address = (spot['address'] ?? '').toString()
