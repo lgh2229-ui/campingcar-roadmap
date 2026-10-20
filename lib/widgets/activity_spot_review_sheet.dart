@@ -61,10 +61,10 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
   Future<void> _submit() async {
     final body = _text.text.trim();
     if (_saving) return;
-    if (body.isEmpty) return _notice('다녀온 소감을 입력해주세요.');
-    if (body.length > 500) return _notice('소감은 500자 이내로 작성해주세요.');
+    if (body.isEmpty) { _notice('다녀온 소감을 입력해주세요.'); return; }
+    if (body.length > 500) { _notice('소감은 500자 이내로 작성해주세요.'); return; }
     final user = _db.auth.currentUser;
-    if (user == null) return _notice('후기를 작성하려면 로그인해야 합니다.');
+    if (user == null) { _notice('후기를 작성하려면 로그인해야 합니다.'); return; }
     setState(() => _saving = true);
     try {
       final urls = <String>[];
