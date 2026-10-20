@@ -5,9 +5,9 @@ const RANGE = 3000;
 type AnyObj = Record<string, any>;
 const selectors: Record<string, string[]> = {
   "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]', '["historic"]'],
-  "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian)$"]["name"]','["route"="foot"]'],
+  "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian|steps)$"]["name"]','["route"="foot"]','["tourism"="viewpoint"]'],
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
-  "낚시": ['["sport"="fishing"]','["fishing"]','["shop"="fishing"]','["leisure"="fishing"]'],
+  "낚시": ['["sport"="fishing"]','["fishing"]','["shop"="fishing"]','["leisure"="fishing"]','["man_made"="breakwater"]["name"]','["harbour"]["name"]'],
   "해루질": ['["natural"~"^(beach|mud)$"]','["wetland"="tidalflat"]'],
   "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing)$"]', '["leisure"="marina"]'],
   "지상레포츠": ['["sport"~"^(climbing|paragliding|archery|motocross|skateboard|horse_racing)$"]','["leisure"="sports_centre"]'],
@@ -103,30 +103,55 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
   source_url:p.info_source_url||p.map_source_url,
  },lat,lon,activity)).filter(Boolean) as AnyObj[];
 }
-const discoveryKeywords:Record<string,string>={
- '관광지':'관광명소','산책':'산책로 공원','등산':'등산로',
- '낚시':'낚시','해루질':'갯벌', '수상레포츠':'수상레저',
- '지상레포츠':'레포츠','카지노':'카지노', '자전거':'자전거',
- '수영':'수영장','서핑':'서핑','카약·SUP':'카약 SUP',
- '스노클링':'스노클링','스키·눈썰매':'스키장','골프':'골프장',
- '온천·스파':'온천','문화체험':'문화체험','시장·쇼핑':'시장 수산시장'
+// Search the names people actually use, not just abstract category labels.
+const searchTerms:Record<string,string[]>={
+ '관광지':['관광명소','전망대','관광지'],
+ '산책':['산책로','수변공원','둘레길','해안길','벽화골목'],
+ '등산':['등산로','등산','둘레길'],
+ '낚시':['낚시포인트','방파제','선착장','낚시터','항구'],
+ '해루질':['갯벌체험','해루질','갯벌'],
+ '수상레포츠':['수상레저','서핑','카약','SUP'],
+ '지상레포츠':['스카이사이클','짚라인','스카이밸리','ATV','레포츠'],
+ '카지노':['카지노'], '자전거':['자전거체험','스카이사이클','자전거길'],
+ '수영':['수영장','해수욕장'], '서핑':['서핑','서핑샵'],
+ '카약·SUP':['카약','SUP'], '스노클링':['스노클링','다이빙'],
+ '스키·눈썰매':['스키장','눈썰매'], '골프':['골프장','파크골프'],
+ '온천·스파':['온천','스파','목욕탕'],
+ '문화체험':['문화체험','박물관','문화마을'],
+ '시장·쇼핑':['수산시장','전통시장','시장','쇼핑']
 };
+const discoveryKeywords:Record<string,string>=Object.fromEntries(
+ Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined){
  if(!key)return [] as AnyObj[];
- const query=discoveryKeywords[activity]||activity;
- const reqUrl='https://dapi.kakao.com/v2/local/search/keyword.json?'+
-  new URLSearchParams({query,x:String(lon),y:String(lat),radius:String(RANGE),size:'15',sort:'distance'});
- const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),6500);
- try{
-  const r=await fetch(reqUrl,{headers:{Authorization:'KakaoAK '+key},signal:ctrl.signal});
-  if(!r.ok)throw new Error('Kakao '+r.status);
-  const body=await r.json();
-  return (body.documents||[]).map((d:AnyObj)=>normalizePlace({
-   name:d.place_name,lat:d.y,lon:d.x,kind:d.category_name||activity,
-   address:d.road_address_name||d.address_name,phone:d.phone,
-   website:d.place_url,source_url:d.place_url
-  },lat,lon,activity)).filter(Boolean);
- }finally{clearTimeout(timer);}
+ const terms=(searchTerms[activity]||[activity]).slice(0,4);
+ const found:AnyObj[]=[];
+ for(const term of terms){
+  const url='https://dapi.kakao.com/v2/local/search/keyword.json?'+
+    new URLSearchParams({query:term,x:String(lon),y:String(lat),radius:String(RANGE),size:'15',sort:'distance'});
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),3500);
+  try{
+   const r=await fetch(url,{headers:{Authorization:'KakaoAK '+key},signal:ctrl.signal});
+   if(!r.ok)continue;
+   const data=await r.json();
+   for(const d of data.documents||[]){
+    const kind=activity==='낚시'&&/방파제|선착장|항구/.test(term)
+      ? '낚시 관련 해안시설 후보 (출입·낚시 허용 여부 현장 확인)'
+      : activity;
+    const spot=normalizePlace({name:d.place_name,lat:d.y,lon:d.x,kind,
+      address:d.road_address_name||d.address_name,phone:d.phone,
+      website:d.place_url,source_url:d.place_url,
+      description:activity==='낚시'?
+       '지도에 등록된 항만 관련 시설입니다. 낚시 가능 여부 및 출입통제 여부는 현장 확인이 필요합니다.':
+       '지도에 등록된 주변 장소입니다.'
+    },lat,lon,activity);
+    if(spot&&!found.some(x=>x.name===spot.name))found.push(spot);
+   }
+  }catch(e){console.warn('Kakao keyword lookup:',String(e).slice(0,80));}
+  finally{clearTimeout(timer);}
+  if(found.length>=15)break;
+ }
+ return found.slice(0,20);
 }
 async function nominatimSearch(lat:number,lon:number,activity:string,name:string){
  // Nominatim is a backup, not a bulk POI scraper. At most one bounded request.
