@@ -85,7 +85,13 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = false;
   bool _focusHandled=false;
 
-  static const serviceFilters = ['전체', '블랙탱크 비움', '급수', '노지/차박', '공중화장실'];
+  static const serviceFilters = [
+    '전체','블랙탱크 비움','급수','노지/차박','공중화장실',
+    '매매','수리','제작','부품·용품','전기차 충전기',
+  ];
+  bool _matchesServiceFilter(Place p, String value) =>
+    value=='전체' || p.services.contains(value) ||
+    (value=='수리' && (p.services.contains('A/S') || p.services.contains('정비')));
   String get _currentAuthorId => widget.user.authId.isEmpty ? widget.user.userId : widget.user.authId;
 
   @override
@@ -154,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _isMine(Place p) => p.ownerId == _currentAuthorId;
   List<Place> get visiblePlaces {
-    final rows = filter == '전체' ? places : places.where((p) => p.services.contains(filter)).toList();
+    final rows = places.where((p) => _matchesServiceFilter(p,filter)).toList();
     return rows;
   }
 
@@ -658,7 +664,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _savedPage() {
     final all = places.where((p) => p.isApproved && saved.contains(p.id)).toList();
-    final rows = savedFilter == '전체' ? all : all.where((p) => p.services.contains(savedFilter)).toList();
+    final rows = all.where((p) => _matchesServiceFilter(p,savedFilter)).toList();
     return Scaffold(
       appBar: AppBar(title: const Text('저장한 장소')),
       body: Column(children: [
@@ -802,7 +808,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final note = TextEditingController();
     final reservationUrl = TextEditingController();
     final selected = <String>{};
-    final prices = <String, TextEditingController>{for (final s in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실']) s: TextEditingController()};
+    final prices = <String, TextEditingController>{
+      for (final service in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실'])
+        service:TextEditingController(),
+    };
+    const optionalServices=<String>['매매','수리','제작','부품·용품','전기차 충전기'];
     final photos = <XFile>[];
     String reservation = '예약불필요';
     final address = TextEditingController(text: await _reverseAddress(spot));
@@ -815,6 +825,22 @@ class _HomeScreenState extends State<HomeScreen> {
         TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)')),
         ...prices.entries.map((e) => Row(children: [Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })), Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
+        const SizedBox(height:10),
+        const Align(alignment:Alignment.centerLeft,
+          child:Text('추가 서비스',style:TextStyle(fontWeight:FontWeight.w700))),
+        ...optionalServices.map((service)=>CheckboxListTile(
+          dense:true,controlAffinity:ListTileControlAffinity.leading,
+          contentPadding:EdgeInsets.zero,
+          title:Text(service),
+          subtitle:service=='전기차 충전기'
+            ? const Text('충전기가 실제 설치돼 이용 가능한 경우에만 선택하세요.',
+                style:TextStyle(fontSize:12))
+            : null,
+          value:selected.contains(service),
+          onChanged:(value)=>setS((){
+            if(value==true){selected.add(service);}else{selected.remove(service);}
+          }),
+        )),
         RecreationPicker(
           selected: selected,
           onToggle: (activity) => setS(() {
@@ -1043,13 +1069,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _adminEditPlace(Place p) async {
     if(!widget.user.isAdministrator)return _msg('관리자만 수정할 수 있습니다.');final name=TextEditingController(text:p.name.replaceFirst(RegExp(r'^\\[(승인 대기|승인 반려)\\]\\s*'),'')),address=TextEditingController(text:p.address),hours=TextEditingController(text:p.hours),height=TextEditingController(text:p.maxHeightMm==null?'':_meters(p.maxHeightMm!)),phone=TextEditingController(text:p.phone),note=TextEditingController(text:_visibleNote(p.note)),reservationUrl=TextEditingController(text:_reservationUrl(p.note));final existingPhotos=List<String>.from(p.photoUrls);final removedPhotos=<String>{};final newPhotos=<XFile>[];const pricedServices=<String>{'급수','블랙탱크 비움','노지/차박','공중화장실'};
-    const businessServices=<String>{'제작','매매','A/S','부품·용품'};
+    const businessServices=<String>{'제작','매매','수리','A/S','부품·용품'};
+    const availabilityServices=<String>{'전기차 충전기'};
     final serviceNames=[
       ...pricedServices,
       ...businessServices,
+      ...availabilityServices,
       ...p.services.where((service) =>
           !pricedServices.contains(service) &&
           !businessServices.contains(service) &&
+          !availabilityServices.contains(service) &&
           !recreationActivities.contains(service)),
     ];
     final selected=p.services.toSet();
@@ -1058,7 +1087,7 @@ class _HomeScreenState extends State<HomeScreen> {
         service:TextEditingController(text:p.prices[service]??''),
     };String reservation=['예약불필요','예약필수','전화문의'].contains(p.reservation)?p.reservation:'전화문의';double editLat=p.latitude,editLon=p.longitude;bool editLocationConfirmed=false;
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setS)=>AlertDialog(title:const Text('장소 정보 수정'),content:SizedBox(width:440,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'장소명')),TextField(controller:address,decoration:const InputDecoration(labelText:'주소')),const SizedBox(height:8),Container(width:double.infinity,padding:const EdgeInsets.all(10),decoration:BoxDecoration(color:Theme.of(ctx).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(10)),child:Text('수정 위치 ${editLat.toStringAsFixed(6)}, ${editLon.toStringAsFixed(6)}')),Wrap(spacing:8,children:[OutlinedButton.icon(onPressed:()async{final pos=await Geolocator.getCurrentPosition();final pt=LatLng(pos.latitude,pos.longitude);final a=await _reverseAddress(pt);setS((){editLat=pt.latitude;editLon=pt.longitude;address.text=a;editLocationConfirmed=true;});},icon:const Icon(Icons.my_location),label:const Text('내 현위치로 지정')),OutlinedButton.icon(onPressed:()async{final found=await _pickKoreanAddress(address.text.trim());if(found==null)return;final lat=(found['lat'] as num?)?.toDouble(),lon=(found['lon'] as num?)?.toDouble();if(lat==null||lon==null)return _msg('선택한 주소의 좌표가 없습니다.');final road=(found['roadAddr']??'').toString().trim(),parcel=(found['jibunAddr']??'').toString().trim();setS((){editLat=lat;editLon=lon;editLocationConfirmed=true;address.text=road.isNotEmpty?road:parcel;});_msg('주소와 좌표를 함께 변경했습니다.');},icon:const Icon(Icons.search),label:const Text('주소로 위치 맞추기')),OutlinedButton.icon(onPressed:()async{Navigator.pop(ctx,false);final pt=LatLng(editLat,editLon);setState((){tab=0;locationPickMode=true;editingLocationPlace=p;selectedSpot=pt;center=pt;});_moveMap(pt,17);_msg('지도를 움직여 빨간 핀을 원하는 위치에 맞춘 뒤 확인을 누르세요.');},icon:const Icon(Icons.map_outlined),label:const Text('지도에서 위치 지정'))]),...serviceNames.map((service) {
-      final business=businessServices.contains(service);
+      final business=businessServices.contains(service) || availabilityServices.contains(service);
       return Row(children:[
         Checkbox(
           value:selected.contains(service),
@@ -1071,7 +1100,7 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           }),
         ),
-        Expanded(flex:2,child:Text(service=='A/S'?'A/S · 수리':service)),
+        Expanded(flex:2,child:Text(service=='A/S'?'A/S (기존)':service)),
         if(business)
           const Expanded(flex:3,child:Text('서비스 가능',style:TextStyle(fontSize:13)))
         else
