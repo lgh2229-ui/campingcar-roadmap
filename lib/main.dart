@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -65,6 +66,23 @@ Future<void> main() async {
           (detail.length > 180 ? detail.substring(0, 180) : detail) + ')';
       debugPrint('Supabase startup failed: $error');
       debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  // Load the native Naver Map SDK only when this build has a valid client ID.
+  // Never block login if the native map fails to initialise.
+  if (AppConfig.naverMapClientId.isNotEmpty) {
+    try {
+      await FlutterNaverMap().init(
+        clientId: AppConfig.naverMapClientId,
+        onAuthFailed: (error) {
+          AppConfig.naverMapFailed = true;
+          debugPrint('Naver Maps authentication error: ${error.runtimeType}');
+        },
+      );
+    } catch (error) {
+      AppConfig.naverMapFailed = true;
+      debugPrint('Naver Maps init failed, retaining original map: $error');
     }
   }
 
