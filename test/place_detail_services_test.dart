@@ -55,6 +55,75 @@ void main() {
     expect(placeServiceShowsAvailable(unverified, '노지/차박'), false);
   });
 
+  test('Ulleung Hakpo paid campground is listed despite unknown campervan entry', () {
+    final place = Place(
+      id: 'ulleung-hakpo',
+      name: '울릉도 학포야영장',
+      latitude: 37.49, longitude: 130.90,
+      address: '경상북도 울릉군 서면 태하리 420',
+      services: ['관광지','노지/차박'],
+      prices: {
+        '노지/차박': '유료 야영장 · 요금·예약 현장 확인 · 캠핑카 진입·차박 허용 여부 미확인',
+      },
+    );
+    expect(placeServiceShowsAvailable(place, '노지/차박'), isTrue);
+    expect(placeServiceShowsAvailable(place, '전기차 충전기'), isFalse);
+    final prohibited = Place(
+      id: 'prohibited-campground', name: '차박 금지 캠핑장',
+      latitude: 37, longitude: 127, address: 'test',
+      services: ['노지/차박'], prices: {'노지/차박': '유료 캠핑장 · 차박금지'},
+    );
+    expect(placeServiceShowsAvailable(prohibited, '노지/차박'), isFalse);
+    final uncheckedParking = Place(
+      id: 'parking', name: '주차장',
+      latitude: 37, longitude: 127, address: 'test',
+      services: ['노지/차박'],
+      prices: {'노지/차박': '주차 무료 / 차박 허용 여부 미확인'},
+    );
+    expect(placeServiceShowsAvailable(uncheckedParking, '노지/차박'), isFalse);
+  });
+
+  testWidgets('Ulleung campground card is blue with caution info rather than approval check',
+      (tester) async {
+    final place = Place(
+      id: 'ulleung-hakpo-ui', name: '울릉도 학포야영장',
+      latitude: 37.49, longitude: 130.90,
+      address: '경상북도 울릉군 서면 태하리 420',
+      services: ['관광지','노지/차박'],
+      prices: {'노지/차박':
+        '유료 야영장 · 요금·예약 현장 확인 · 캠핑카 진입·차박 허용 여부 미확인'},
+      approvalStatus: 'approved',
+    );
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: PlaceDetailSheet(
+        place: place,
+        scrollController: controller,
+        reviews: const <PlaceReview>[],
+        initiallySaved: false,
+        isAdministrator: false,
+        onSetSaved: (_) async => true,
+        onReview: () {},
+        onEdit: () {},
+        onDelete: () {},
+        onOpenAddress: () {},
+        onPhotoTap: (_) {},
+        photoBuilder: (_) => const SizedBox(),
+        reviewBuilder: (_) => const SizedBox(),
+      )),
+    ));
+    final fee = find.text(
+      '유료 야영장 · 요금·예약 현장 확인 · 캠핑카 진입·차박 허용 여부 미확인');
+    expect(fee, findsOneWidget);
+    final ancestors = tester.widgetList<Container>(
+      find.ancestor(of: fee, matching: find.byType(Container)),
+    );
+    expect(ancestors.any((c) => c.decoration is BoxDecoration &&
+      (c.decoration! as BoxDecoration).color == const Color(0xFFEAF4FF)), isTrue);
+    expect(find.byIcon(Icons.info_outline_rounded), findsWidgets);
+  });
+
   test('EV must be an amenity of an overnight place, not a standalone category', () {
     final onlyCharger = Place(
       id:'ev-only', name:'독립 충전소', latitude:37,longitude:127,
