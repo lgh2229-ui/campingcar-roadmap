@@ -18,6 +18,13 @@ bool placeServiceShowsAvailable(Place place, String service) {
       .toLowerCase()
       .replaceAll(RegExp(r'\s+'), '');
 
+  if (service == '노지/차박') {
+    if (place.name.contains('노지 후보')) return false;
+    if (value.contains('현장확인필요') ||
+        value.contains('공식미확인') ||
+        value.contains('개인캠핑카입장별도확인')) return false;
+  }
+
   const unavailable = <String>[
     '이용불가', '사용불가', '서비스불가', '제공불가',
     '차박금지', '야영금지', '운영중단', '운영종료',
