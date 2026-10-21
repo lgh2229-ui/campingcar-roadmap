@@ -52,7 +52,9 @@ void main() {
     );
     expect(placeServiceShowsAvailable(campsite, '노지/차박'), true);
     expect(placeServiceShowsAvailable(legacy, '노지/차박'), true);
-    expect(placeServiceShowsAvailable(unverified, '노지/차박'), false);
+    // The registered campground exists, even if campervan admission
+    // still needs on-site confirmation (blue card with an info icon).
+    expect(placeServiceShowsAvailable(unverified, '노지/차박'), true);
   });
 
   test('Ulleung Hakpo paid campground is listed despite unknown campervan entry', () {
