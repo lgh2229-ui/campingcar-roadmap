@@ -17,22 +17,34 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
   final _picker = ImagePicker();
   List<Map<String, dynamic>> _reviews = [];
   List<XFile> _photos = [];
-  bool _loading = true, _composing = false, _saving = false;
+  bool _loading = true, _composing = false, _saving = false, _isAdmin = false;
   String? _error;
   SupabaseClient get _db => Supabase.instance.client;
 
-  @override void initState() { super.initState(); _reload(); }
+  @override void initState() { super.initState(); _loadAdminRole(); _reload(); }
   @override void dispose() { _text.dispose(); super.dispose(); }
 
   void _notice(String message) {
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _loadAdminRole() async {
+    final user = _db.auth.currentUser;
+    if (user == null) return;
+    try {
+      final profile = await _db.from('profiles')
+        .select('role').eq('id', user.id).maybeSingle();
+      if (mounted) setState(() => _isAdmin = profile?['role'] == 'admin');
+    } catch (_) {
+      // Missing role data must not expose administrator controls.
+    }
+  }
+
   Future<void> _reload() async {
     if (mounted) setState(() { _loading = true; _error = null; });
     try {
       final rows = await _db.from('activity_spot_reviews')
-        .select('id,author_id,author_name,body,photo_urls,created_at')
+        .select('id,author_id,author_name,body,photo_urls,created_at,is_hidden')
         .eq('place_id', widget.placeId).eq('activity', widget.activity)
         .eq('spot_key', widget.spotKey).order('created_at', ascending: false);
       if (mounted) setState(() {
@@ -92,6 +104,38 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
     } catch (e) {
       _notice(e is StateError ? e.message.toString() : '후기 저장에 실패했습니다. 로그인 상태와 사진 용량을 확인해주세요.');
     } finally { if (mounted) setState(() => _saving = false); }
+  }
+
+
+  Future<void> _moderateReview(Map<String, dynamic> review, bool hide) async {
+    if (!_isAdmin) return;
+    if (hide) {
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('댓글 가리기'),
+          content: const Text('이 댓글의 글과 사진을 다른 회원에게 보이지 않도록 가립니다. 기록은 유지되며 언제든 다시 공개할 수 있습니다.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('취소')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('가리기')),
+          ],
+        ),
+      );
+      if (approved != true || !mounted) return;
+    }
+    try {
+      final changed = await _db.rpc('moderate_activity_spot_review', params: {
+        'p_review_id': review['id'].toString(),
+        'p_hide': hide,
+      });
+      if (changed != true) throw StateError('상태를 변경하지 못했습니다.');
+      await _reload();
+      _notice(hide ? '댓글이 가려졌습니다.' : '댓글을 다시 공개했습니다.');
+    } catch (_) {
+      _notice('댓글 표시 상태를 변경하지 못했습니다. 관리자 권한을 확인해주세요.');
+    }
   }
 
   Future<void> _deleteReview(Map<String, dynamic> review) async {
@@ -185,6 +229,7 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
       date.month.toString().padLeft(2, '0') + '.' + date.day.toString().padLeft(2, '0');
     final nickname = (review['author_name'] ?? '회원').toString().trim();
     final mine = _db.auth.currentUser?.id == review['author_id'];
+    final hidden = review['is_hidden'] == true;
     return Container(margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: scheme.surface, border: Border.all(color: scheme.outlineVariant),
@@ -196,19 +241,45 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
           Expanded(child: Text(nickname.isEmpty ? '회원' : nickname,
             style: const TextStyle(fontWeight: FontWeight.w700))),
           Text(stamp, style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-          if (mine) ...[
-            IconButton(tooltip: '내 후기 수정', visualDensity: VisualDensity.compact,
-              onPressed: () => _editReview(review),
-              icon: const Icon(Icons.edit_outlined, size: 18)),
-            IconButton(tooltip: '내 후기 삭제', visualDensity: VisualDensity.compact,
-              onPressed: () => _deleteReview(review),
-              icon: const Icon(Icons.delete_outline, size: 18)),
-          ],
+          if (mine || _isAdmin) PopupMenuButton<String>(
+            tooltip: '댓글 관리',
+            onSelected: (action) async {
+              if (action == 'edit' && mine && !hidden) await _editReview(review);
+              if (action == 'delete' && mine) await _deleteReview(review);
+              if (action == 'hide' && _isAdmin) await _moderateReview(review, true);
+              if (action == 'restore' && _isAdmin) await _moderateReview(review, false);
+            },
+            itemBuilder: (_) => [
+              if (mine && !hidden) const PopupMenuItem(
+                value: 'edit',
+                child: ListTile(dense: true, leading: Icon(Icons.edit_outlined),
+                  title: Text('내 댓글 수정'))),
+              if (mine) const PopupMenuItem(
+                value: 'delete',
+                child: ListTile(dense: true, leading: Icon(Icons.delete_outline),
+                  title: Text('내 댓글 삭제'))),
+              if (_isAdmin) PopupMenuItem(
+                value: hidden ? 'restore' : 'hide',
+                child: ListTile(dense: true,
+                  leading: Icon(hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                  title: Text(hidden ? '댓글 다시 공개' : '댓글 가리기'))),
+            ],
+          ),
         ]),
         const SizedBox(height: 8),
-        Text((review['body'] ?? '').toString(),
-          style: const TextStyle(fontSize: 13.5, height: 1.5)),
-        if (photos.isNotEmpty) ...[
+        if (hidden) Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(children: [
+            Icon(Icons.visibility_off_outlined, size: 17, color: scheme.error),
+            const SizedBox(width: 7),
+            Expanded(child: Text('관리자에 의해 가려진 댓글입니다.',
+              style: TextStyle(color: scheme.error, fontWeight: FontWeight.w600))),
+          ]),
+        ),
+        if (!hidden || _isAdmin)
+          Text((review['body'] ?? '').toString(),
+            style: const TextStyle(fontSize: 13.5, height: 1.5)),
+        if (photos.isNotEmpty && (!hidden || _isAdmin)) ...[
           const SizedBox(height: 10),
           SizedBox(height: 88, child: ListView.separated(scrollDirection: Axis.horizontal,
             itemCount: photos.length, separatorBuilder: (_, __) => const SizedBox(width: 7),
@@ -273,7 +344,11 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(widget.spotName, maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
-                Text('방문 후기 · ' + _reviews.length.toString() + '건',
+                Text('방문 후기 · ' +
+                  _reviews.where((r) => r['is_hidden'] != true).length.toString() + '건' +
+                  (_isAdmin && _reviews.any((r) => r['is_hidden'] == true)
+                    ? ' · 숨김 ' + _reviews.where((r) => r['is_hidden'] == true).length.toString() + '건'
+                    : ''),
                   style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
               ])),
               IconButton(tooltip: '닫기', onPressed: () => Navigator.pop(context),
