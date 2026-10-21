@@ -287,7 +287,7 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
               child: ClipRRect(borderRadius: BorderRadius.circular(9),
                 child: Image.network(photos[i], height: 88, width: 88, fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => const SizedBox(width: 88,
-                    child: Icon(Icons.broken_image_outlined)))))),
+                    child: Icon(Icons.broken_image_outlined))))))),
         ],
       ]));
   }
