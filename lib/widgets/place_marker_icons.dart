@@ -23,13 +23,17 @@ class PlaceMarkerIcons {
     final icons = <String>[];
     if (tags.contains('급수') || tags.contains('청수')) icons.add('💧');
     if (tags.contains('블랙탱크 비움') || tags.contains('오수')) icons.add('DUMP');
-    if (tags.contains('노지/차박')) icons.add('🅿️');
+    if (tags.contains('노지/차박') || tags.contains('캠핑장')) icons.add('🅿️');
     if (tags.contains('공중화장실')) icons.add('🚻');
     if (tags.contains('매매')) icons.add('🚐');
     if (tags.contains('수리') || tags.contains('A/S') || tags.contains('정비')) icons.add('🔧');
     if (tags.contains('제작')) icons.add('🛠️');
     if (tags.contains('부품·용품')) icons.add('⚙️');
-    if (tags.contains('전기차 충전기')) icons.add('EV');
+    // An EV charger is an amenity of a registered camper overnight place.
+    // Standalone charging stations must not get a camping-roadmap EV pin.
+    if (tags.contains('노지/차박') && tags.contains('전기차 충전기')) {
+      icons.add('EV');
+    }
     // Still show a neutral location marker for locations offering only
     // leisure, tourism or other unsupported service categories.
     return icons.isEmpty ? const ['📍'] : icons;
