@@ -111,6 +111,62 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
     } catch (_) { _notice('후기를 삭제하지 못했습니다.'); }
   }
 
+
+  Future<void> _editReview(Map<String, dynamic> review) async {
+    final user = _db.auth.currentUser;
+    if (user == null || user.id != review['author_id']) return;
+    final original = (review['body'] ?? '').toString();
+    final controller = TextEditingController(text: original);
+    final updated = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('내 후기 수정'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 500,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            hintText: '방문 소감을 수정해주세요.',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialog), child: const Text('취소')),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isEmpty) {
+                ScaffoldMessenger.of(dialog).showSnackBar(
+                  const SnackBar(content: Text('수정할 내용을 입력해주세요.')),
+                );
+                return;
+              }
+              Navigator.pop(dialog, value);
+            },
+            child: const Text('수정 완료'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || updated == null || updated == original.trim()) return;
+    try {
+      final result = await _db.from('activity_spot_reviews')
+        .update({'body': updated})
+        .eq('id', review['id'].toString())
+        .eq('author_id', user.id)
+        .select('id');
+      if ((result as List).isEmpty) {
+        throw StateError('본인이 작성한 후기만 수정할 수 있습니다.');
+      }
+      await _reload();
+      _notice('후기를 수정했습니다.');
+    } catch (_) {
+      _notice('후기를 수정하지 못했습니다. 다시 시도해주세요.');
+    }
+  }
+
   Future<void> _showImage(String url) => showDialog<void>(context: context,
     builder: (ctx) => Dialog(child: SizedBox(height: MediaQuery.sizeOf(ctx).height * .56,
       child: Stack(children: [
@@ -140,9 +196,14 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
           Expanded(child: Text(nickname.isEmpty ? '회원' : nickname,
             style: const TextStyle(fontWeight: FontWeight.w700))),
           Text(stamp, style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
-          if (mine) IconButton(tooltip: '내 후기 삭제',
-            onPressed: () => _deleteReview(review),
-            icon: const Icon(Icons.delete_outline, size: 18)),
+          if (mine) ...[
+            IconButton(tooltip: '내 후기 수정', visualDensity: VisualDensity.compact,
+              onPressed: () => _editReview(review),
+              icon: const Icon(Icons.edit_outlined, size: 18)),
+            IconButton(tooltip: '내 후기 삭제', visualDensity: VisualDensity.compact,
+              onPressed: () => _deleteReview(review),
+              icon: const Icon(Icons.delete_outline, size: 18)),
+          ],
         ]),
         const SizedBox(height: 8),
         Text((review['body'] ?? '').toString(),
