@@ -46,6 +46,22 @@ void main() {
     expect(icons,const ['💧','DUMP','🚻','🚐','🔧']);
   });
 
+
+  test('legacy campgrounds use overnight marker instead of separate category', () {
+    expect(PlaceMarkerIcons.fromServices(const ['캠핑장']), const ['🅿️']);
+    expect(PlaceMarkerIcons.fromServices(const ['캠핑장','노지/차박']),
+      const ['🅿️']);
+  });
+
+  test('EV marker is only shown for an overnight place with charging', () {
+    expect(PlaceMarkerIcons.fromServices(const ['전기차 충전기']),
+      const ['📍']);
+    expect(PlaceMarkerIcons.fromServices(
+      const ['노지/차박','전기차 충전기']), const ['🅿️','EV']);
+    expect(PlaceMarkerIcons.fromServices(
+      const ['급수','전기차 충전기']), const ['💧']);
+  });
+
   test('other-only places remain selectable with neutral pin', () {
     expect(PlaceMarkerIcons.fromServices(const ['관광지','낚시']),const ['📍']);
   });
