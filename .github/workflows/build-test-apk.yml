@@ -8,6 +8,7 @@ on:
     paths:
       - .github/workflows/build-test-apk.yml
       - test/place_marker_icons_test.dart
+      - lib/widgets/activity_spot_review_sheet.dart
 
 jobs:
   build:
