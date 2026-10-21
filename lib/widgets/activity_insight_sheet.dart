@@ -109,7 +109,8 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
       final rows = await Supabase.instance.client
           .from('activity_spot_reviews').select('spot_key')
           .eq('place_id', widget.place.id)
-          .eq('activity', widget.activity);
+          .eq('activity', widget.activity)
+          .eq('is_hidden', false);
       final counts = <String, int>{};
       for (final row in rows as List) {
         final key = (row['spot_key'] ?? '').toString();
