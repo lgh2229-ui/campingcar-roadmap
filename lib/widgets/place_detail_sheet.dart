@@ -25,12 +25,13 @@ bool placeServiceShowsAvailable(Place place, String service) {
       .toLowerCase()
       .replaceAll(RegExp(r'\s+'), '');
 
+  var campground = false;
   if (service == '노지/차박') {
     if (place.name.contains('노지 후보')) return false;
     // Known campgrounds are real facilities even when campervan admission
     // still needs to be checked. The detail card labels that uncertainty.
     // Never infer overnight permission from an ordinary parking area.
-    final campground = place.services.contains('캠핑장') ||
+    campground = place.services.contains('캠핑장') ||
         place.name.contains('야영장') ||
         place.name.contains('캠핑장') ||
         value.contains('유료야영장') ||
@@ -56,7 +57,17 @@ bool placeServiceShowsAvailable(Place place, String service) {
     '이용가능여부확인필요', '허용여부확인필요',
     '차박여부확인필요',
   ];
-  return !unavailable.any(value.contains);
+  // A known campground with an explicit campervan-admission caveat is still
+  // an existing campground. Retain the caveat in the card and render an
+  // info glyph instead of a permission check mark.
+  // Other restrictions ('이용불가', '차박금지', etc.) still suppress blue.
+  final statusValue = service == '노지/차박' && campground
+      ? value
+          .replaceAll('캠핑카진입·차박허용여부미확인', '')
+          .replaceAll('캠핑카이용가능여부미확인', '')
+          .replaceAll('차박허용여부미확인', '')
+      : value;
+  return !unavailable.any(statusValue.contains);
 }
 
 /// Shared detail sheet for regular users and administrators.
@@ -253,9 +264,9 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         (service == '노지/차박' ? p.prices['캠핑장'] : null) ?? '').trim();
     // A blue, registered campsite is not a guarantee of campervan admission.
     final entryUnverified = service == '노지/차박' &&
-        (price.replaceAll(RegExp(r'\\s+'), '').contains('차박허용여부미확인') ||
-         price.replaceAll(RegExp(r'\\s+'), '').contains('캠핑카진입·차박허용여부미확인') ||
-         price.replaceAll(RegExp(r'\\s+'), '').contains('캠핑카이용가능여부미확인'));
+        (price.replaceAll(RegExp(r'\s+'), '').contains('차박허용여부미확인') ||
+         price.replaceAll(RegExp(r'\s+'), '').contains('캠핑카진입·차박허용여부미확인') ||
+         price.replaceAll(RegExp(r'\s+'), '').contains('캠핑카이용가능여부미확인'));
     final uncertain = listed && !active;
     final display = activity && foundCount > 0
         ? '주변 $foundCount곳 확인'
