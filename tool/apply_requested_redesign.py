@@ -24,14 +24,23 @@ if start < 0 or end < 0:
 logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
 
   bool _servicePriceMatches(Place p, String service, String price) {
-    if (!p.services.contains(service) &&
-        !(service == '수리' &&
-            (p.services.contains('A/S') || p.services.contains('정비')))) return false;
-    if (price == '전체') return true;
-    final value = '${p.prices[service] ?? ''}'.trim();
-    if (value.isEmpty || value.contains('정보 없음') || value.contains('확인 필요') || value.contains('금액정보 없음')) return false;
-    final isFree = value.contains('무료');
-    return price == '무료' ? isFree : !isFree;
+    final overnight = p.services.contains('노지/차박') || p.services.contains('캠핑장');
+    final listed = service == '노지/차박'
+        ? overnight
+        : service == '전기차 충전기'
+            ? p.services.contains('노지/차박') && p.services.contains('전기차 충전기')
+            : p.services.contains(service) ||
+              (service == '수리' && (p.services.contains('A/S') || p.services.contains('정비')));
+    if (!listed) return false;
+    // EV is a supplementary filter for registered overnight sites, never
+    // a nationwide standalone charging-station index.
+    if (service == '전기차 충전기' || price == '전체') return true;
+    final value = '${p.prices[service] ?? (service == '노지/차박' ? p.prices['캠핑장'] : '') ?? ''}'.trim();
+    if (value.isEmpty || value.contains('정보 없음') || value.contains('금액정보 없음')) return false;
+    final paid = value.contains('유료') || (value.contains('원') && !value.startsWith('무료'));
+    final free = value.startsWith('무료') && !paid;
+    if (price == '무료') return free;
+    return paid;
   }
 
   List<Place> get visiblePlaces {
@@ -54,6 +63,21 @@ logic = r'''  bool _isMine(Place p) => p.ownerId == _currentAuthorId;
     Widget serviceRow(String service, void Function(void Function()) setLocal) {
       final selected = draft.contains(service);
       final price = draftPrices[service] ?? '전체';
+      if (service == '전기차 충전기') {
+        return CheckboxListTile(
+          dense: true, contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: const Text('전기차 충전 가능'),
+          subtitle: const Text('노지/차박 등록 장소 중 충전기가 있는 곳만 표시',
+              style: TextStyle(fontSize: 11)),
+          value: selected,
+          onChanged: (v) => setLocal(() {
+            if (v == true) draft.add(service);
+            else draft.remove(service);
+            draftPrices.remove(service);
+          }),
+        );
+      }
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: LayoutBuilder(builder: (context, box) {
