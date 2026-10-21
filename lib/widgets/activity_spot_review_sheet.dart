@@ -218,7 +218,7 @@ class _ActivitySpotReviewSheetState extends State<ActivitySpotReviewSheet> {
           errorBuilder: (_, __, ___) => const Text('사진을 불러오지 못했습니다.')))),
         Positioned(right: 2, top: 2, child: IconButton(
           icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx))),
-      ])))));
+      ]))));
 
   Widget _reviewTile(Map<String, dynamic> review) {
     final scheme = Theme.of(context).colorScheme;
