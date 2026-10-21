@@ -103,17 +103,17 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   Future<void> _loadNearbyActivityCounts() async {
     final request = ++_activityLookupNumber;
     try {
-      final rows = await Supabase.instance.client
-          .from('place_activity_insights')
-          .select('activity,spots,research_status')
-          .eq('place_id', widget.place.id);
+      // A restricted RPC exposes only result counts. The cached research
+      // table is RLS-protected and must not be queried directly by members.
+      final rows = await Supabase.instance.client.rpc(
+        'get_nearby_activity_counts',
+        params: {'p_place_id': widget.place.id},
+      );
       final counts = <String, int>{};
-      for (final row in rows) {
+      for (final row in rows as List) {
         final activity = (row['activity'] ?? '').toString();
-        final spots = row['spots'];
-        if (row['research_status'] == 'verified' && spots is List) {
-          counts[activity] = spots.length;
-        }
+        final count = (row['spot_count'] as num?)?.toInt() ?? 0;
+        if (activity.isNotEmpty && count > 0) counts[activity] = count;
       }
       if (!mounted || request != _activityLookupNumber) return;
       setState(() {
