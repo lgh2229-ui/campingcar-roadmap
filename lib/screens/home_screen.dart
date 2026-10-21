@@ -92,13 +92,16 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
   // Used by the full, multi-select filter generated during Android builds.
   static const campingFilters = <String>[
-    '노지/차박','공중화장실','급수','블랙탱크 비움',
+    '노지/차박','공중화장실','급수','블랙탱크 비움','전기차 충전기',
   ];
   static const businessFilters = <String>[
-    '매매','수리','제작','부품·용품','전기차 충전기',
+    '매매','수리','제작','부품·용품',
   ];
   bool _matchesServiceFilter(Place p, String value) =>
-    value=='전체' || p.services.contains(value) ||
+    value=='전체' ||
+    (value=='노지/차박' && (p.services.contains('노지/차박') || p.services.contains('캠핑장'))) ||
+    (value=='전기차 충전기' && p.services.contains('노지/차박') && p.services.contains('전기차 충전기')) ||
+    (value!='전기차 충전기' && p.services.contains(value)) ||
     (value=='수리' && (p.services.contains('A/S') || p.services.contains('정비')));
   String get _currentAuthorId => widget.user.authId.isEmpty ? widget.user.userId : widget.user.authId;
 
@@ -198,7 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<String> _icons(Place p) => PlaceMarkerIcons.fromServices(p.services);
 
-  String _filterLabel(String value) => value == '블랙탱크 비움' ? '블랙' : value == '공중화장실' ? '화장실' : value;
+  String _filterLabel(String value) => value == '블랙탱크 비움' ? '블랙' : value == '공중화장실' ? '화장실' : value == '노지/차박' ? '노지/차박·캠핑장' : value;
   String _approvalLabel(Place p) => switch (p.approvalStatus) {
         'pending' => '승인 진행중',
         'rejected' => '승인 반려',
@@ -820,7 +823,7 @@ class _HomeScreenState extends State<HomeScreen> {
       for (final service in ['급수', '블랙탱크 비움', '노지/차박', '공중화장실'])
         service:TextEditingController(),
     };
-    const optionalServices=<String>['매매','수리','제작','부품·용품','전기차 충전기'];
+    const optionalServices=<String>['매매','수리','제작','부품·용품'];
     final photos = <XFile>[];
     String reservation = '예약불필요';
     final address = TextEditingController(text: await _reverseAddress(spot));
@@ -832,7 +835,32 @@ class _HomeScreenState extends State<HomeScreen> {
         Container(width: double.infinity, padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(10)), child: Text('등록 위치 ${spot.latitude.toStringAsFixed(6)}, ${spot.longitude.toStringAsFixed(6)}')),
         TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소 (한국 도로명주소)')),
-        ...prices.entries.map((e) => Row(children: [Checkbox(value: selected.contains(e.key), onChanged: (v) => setS(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })), Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key), decoration: const InputDecoration(hintText: '금액 / 무료')))])),
+        ...prices.entries.map((e) => Row(children: [
+          Checkbox(value:selected.contains(e.key), onChanged:(v)=>setS((){
+            if(v==true){selected.add(e.key);}else{
+              selected.remove(e.key);e.value.clear();
+              if(e.key=='노지/차박') selected.remove('전기차 충전기');
+            }
+          })),
+          Expanded(flex:2,child:Text(e.key=='노지/차박'?'노지/차박·캠핑장':e.key,
+            style:const TextStyle(fontSize:12))),
+          Expanded(flex:3,child:TextField(controller:e.value,
+            enabled:selected.contains(e.key),
+            decoration:InputDecoration(hintText:e.key=='노지/차박'?
+              '무료 / 유료 30,000원(1박)':'금액 / 무료'))),
+        ])),
+        CheckboxListTile(
+          dense:true,controlAffinity:ListTileControlAffinity.leading,
+          contentPadding:EdgeInsets.zero,
+          title:const Text('전기차 충전 가능'),
+          subtitle:const Text('노지/차박에 설치된 충전기만 선택 (일반 전기 인입과 구별)',
+            style:TextStyle(fontSize:11)),
+          value:selected.contains('전기차 충전기'),
+          onChanged:selected.contains('노지/차박')?(v)=>setS((){
+            if(v==true){selected.add('전기차 충전기');}
+            else{selected.remove('전기차 충전기');}
+          }):null,
+        ),
         const SizedBox(height:10),
         const Align(alignment:Alignment.centerLeft,
           child:Text('추가 서비스',style:TextStyle(fontWeight:FontWeight.w700))),
