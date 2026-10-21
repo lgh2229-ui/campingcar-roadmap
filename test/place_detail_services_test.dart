@@ -25,9 +25,9 @@ void main() {
   });
   test('EV charging availability follows the saved services checkbox', () {
     final noEv = Place(id:'x1',name:'parking',latitude:37,longitude:127,
-      address:'a',services:['공중화장실'],prices:{'공중화장실':'무료'});
+      address:'a',services:['공중화장실','노지/차박'],prices:{'공중화장실':'무료','노지/차박':'무료'});
     final withEv = Place(id:'x2',name:'parking',latitude:37,longitude:127,
-      address:'a',services:['공중화장실','전기차 충전기'],
+      address:'a',services:['공중화장실','노지/차박','전기차 충전기'],
       prices:{'공중화장실':'무료'});
     expect(placeServiceShowsAvailable(noEv,'전기차 충전기'),false);
     expect(placeServiceShowsAvailable(withEv,'전기차 충전기'),true);
