@@ -32,6 +32,42 @@ void main() {
     expect(placeServiceShowsAvailable(noEv,'전기차 충전기'),false);
     expect(placeServiceShowsAvailable(withEv,'전기차 충전기'),true);
   });
+
+  test('Campgrounds are part of 노지/차박 and keep their paid prices', () {
+    final campsite = Place(
+      id: 'paid-campground', name: '자동차야영장',
+      latitude: 37, longitude: 127, address: 'test',
+      services: ['노지/차박', '공중화장실'],
+      prices: {'노지/차박': '유료 35,000원 (1박)'},
+    );
+    final legacy = Place(
+      id: 'legacy-campground', name: '구버전 캠핑장',
+      latitude: 37, longitude: 127, address: 'test',
+      services: ['캠핑장'], prices: {'캠핑장': '유료 30,000원'},
+    );
+    final unverified = Place(
+      id: 'tent-only', name: '텐트야영장', latitude: 37, longitude: 127,
+      address: 'test', services: ['노지/차박'],
+      prices: {'노지/차박': '유료 캠핑장 · 캠핑카 진입·차박 허용 여부 미확인'},
+    );
+    expect(placeServiceShowsAvailable(campsite, '노지/차박'), true);
+    expect(placeServiceShowsAvailable(legacy, '노지/차박'), true);
+    expect(placeServiceShowsAvailable(unverified, '노지/차박'), false);
+  });
+
+  test('EV must be an amenity of an overnight place, not a standalone category', () {
+    final onlyCharger = Place(
+      id:'ev-only', name:'독립 충전소', latitude:37,longitude:127,
+      address:'test', services:['전기차 충전기'],prices:{},
+    );
+    final campsiteWithCharger = Place(
+      id:'with-ev', name:'차박과 충전이 가능한 곳',latitude:37,longitude:127,
+      address:'test',services:['노지/차박','전기차 충전기'],prices:{'노지/차박':'무료'},
+    );
+    expect(placeServiceShowsAvailable(onlyCharger,'전기차 충전기'),false);
+    expect(placeServiceShowsAvailable(campsiteWithCharger,'전기차 충전기'),true);
+  });
+
   testWidgets('Facility and camper business cards stay visible with correct status',
       (tester) async {
     final controller = ScrollController();
