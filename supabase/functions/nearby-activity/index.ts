@@ -7,7 +7,9 @@ const selectors: Record<string, string[]> = {
   "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]', '["historic"]'],
   "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian|steps)$"]["name"]','["route"="foot"]','["tourism"="viewpoint"]'],
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
-  "낚시": ['["sport"="fishing"]','["fishing"]','["shop"="fishing"]','["leisure"="fishing"]','["man_made"="breakwater"]["name"]','["harbour"]["name"]'],
+  "낚시": ['["sport"="fishing"]','["fishing"]','["leisure"="fishing"]',
+   '["man_made"~"^(breakwater|pier)$"]["name"]','["harbour"]["name"]',
+   '["seamark:type"="harbour"]["name"]','["man_made"="quay"]["name"]'],
   "해루질": ['["natural"~"^(beach|mud)$"]','["wetland"="tidalflat"]',
    '["natural"="wetland"]["wetland"~"^(tidalflat|saltmarsh)$"]',
    '["tourism"="attraction"]["name"~"갯벌|해루질|조개잡이|어촌체험"]'],
@@ -106,7 +108,17 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
   .gte('latitude',lat-latDelta).lte('latitude',lat+latDelta)
   .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
  if(error)throw error;
- return (data||[]).map((p:AnyObj)=>normalizePlace({
+ let matches=(data||[]) as AnyObj[];
+ // A tourist port can also be an evidence-backed fishing location.
+ if(matches.length===0){
+  const {data:related,error:relatedError}=await db.from('verified_activity_pois').select('*')
+   .contains('related_activities',[activity])
+   .gte('latitude',lat-latDelta).lte('latitude',lat+latDelta)
+   .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
+  if(relatedError)console.warn('related activity:',String(relatedError.message).slice(0,80));
+  else matches=(related||[]) as AnyObj[];
+ }
+ return matches.map((p:AnyObj)=>normalizePlace({
   name:p.name,lat:p.latitude,lon:p.longitude,kind:activity,
   description:p.description,phone:p.phone,website:p.info_source_url,
   source_url:p.info_source_url||p.map_source_url,
@@ -117,7 +129,7 @@ const searchTerms:Record<string,string[]>={
  '관광지':['관광명소','전망대','관광지'],
  '산책':['산책로','수변공원','둘레길','해안길','벽화골목'],
  '등산':['등산로','등산','둘레길'],
- '낚시':['낚시포인트','방파제','선착장','낚시터','항구'],
+ '낚시':['낚시포인트','선착장','방파제','낚시터','항구','포구','워킹낚시'],
  '해루질':['해루질','갯벌체험','갯벌','어촌체험','조개잡이','바지락체험'],
  '수상레포츠':['수상레저','서핑','카약','SUP'],
  '지상레포츠':['스카이사이클','짚라인','스카이밸리','ATV','레포츠'],
@@ -131,9 +143,13 @@ const searchTerms:Record<string,string[]>={
 };
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
-async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined){
+async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
  if(!key)return [] as AnyObj[];
- const terms=(searchTerms[activity]||[activity]).slice(0,activity==='수영'||activity==='해루질'?6:4);
+ const root=placeName.replace(/(공영주차장|주차장|노지|차박|캠핑장|야영장|주변)/g,'').trim().slice(0,30);
+ const targeted=root && (activity==='낚시'||activity==='해루질')
+  ? [root+' '+activity,root+' 선착장'] : [];
+ const count=activity==='낚시'?7:activity==='수영'||activity==='해루질'?6:4;
+ const terms=[...new Set([...targeted,...(searchTerms[activity]||[activity])])].slice(0,count);
  const found:AnyObj[]=[];
  for(const term of terms){
   const url='https://dapi.kakao.com/v2/local/search/keyword.json?'+
@@ -150,6 +166,8 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
     const waterCandidate=activity==='수영' && /계곡|강변|하천|유원지|물놀이/i.test(String(d.place_name||''));
     const candidateKind=activity==='해루질'
       ? '갯벌·해루질 장소 후보 (채취·출입 허가 미확인)'
+      : activity==='낚시'
+      ? '낚시 관련 항만시설 후보 (출입·낚시 허가 미확인)'
       : waterCandidate?'강·계곡 물놀이 후보 (안전·출입 미확인)':kind;
     const spot=normalizePlace({name:d.place_name,lat:d.y,lon:d.x,kind:candidateKind,
       address:d.road_address_name||d.address_name,phone:d.phone,
@@ -363,7 +381,7 @@ async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:
    '산책은 벽화골목·해안길·수변공원, 낚시는 내항·방파제·선착장, 지상레포츠는 와이어 자전거·스카이사이클·짚라인까지 조사하세요.',
    '장소 이름과 출처를 최대 5곳 반환하고, 근거 없이 장소·좌표·연락처·어종을 지어내지 마세요. 일부 검색사이트는 접근이 제한될 수 있습니다.',
    '낚시 가능 구간은 출입금지·위험 테트라포드와 구분하고, 실제 어획은 보장하지 마세요.',
-   '응답은 반드시 JSON 객체로만: {"summary":"한국어 요약","places":[{"name":"실제 시설명","source_url":"https://원문"}]}',
+    'JSON 객체 형식으로만 응답하세요. summary는 검색 근거 요약, places는 확인된 실제 장소 고유명칭과 열리는 출처 URL 배열입니다. 안내 예시 텍스트를 장소명 또는 URL로 복사하지 마세요.',
    '후보의 좌표·3km 이내 여부는 다른 지도 제공자가 최종 확인합니다.'
   ].join('\\n');
   const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',
@@ -389,7 +407,15 @@ async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:
   catch(_){return {summary:'',sources:[...sources.values()],candidates:[]};}
   const candidates=(Array.isArray(parsed.places)?parsed.places:[]).slice(0,5)
    .map((p:AnyObj)=>({name:String(p.name||'').slice(0,90),source_url:validHttp(p.source_url)}))
-   .filter((p:AnyObj)=>p.name.length>1 && (p.source_url||sources.size));
+   .filter((p:AnyObj)=>{
+    const label=p.name.trim().toLowerCase();
+    if(label.length<3 || /실제.?시설명|고유명칭|예시|장소명|시설명|^낚시포인트$|^주변장소$|^test$/i.test(label))return false;
+    try{
+     const url=new URL(p.source_url);
+     return (url.protocol==='https:'||url.protocol==='http:') &&
+      url.hostname.includes('.') && !/원문|예시|example|localhost|\.invalid/i.test(p.source_url);
+    }catch(_){return false;}
+   });
   return {summary:String(parsed.summary||'').slice(0,500),sources:[...sources.values()],candidates};
  }catch(e){console.warn('AI discovery unavailable:',String(e).slice(0,90));if(!settled)await settle(false,0,0,0,0,'','request_error');return null;}
  finally{clearTimeout(timer);}
@@ -512,7 +538,7 @@ Deno.serve(async (req:Request)=>{
         '상수원 보호, 출입 통제, 수심·급류·기상·수질을 현장에서 확인하세요.']:
        ['정보 출처와 출입·운영 조건은 이용 전 확인하세요.'];
       const patch={summary,spots:fresh,providers:[],sources,tips,
-       research_status:'verified',fetched_at:now,ai_generated:false,search_version:3};
+       research_status:'verified',fetched_at:now,ai_generated:false,search_version:4};
       const {error}=await db.from('place_activity_insights')
        .update(patch).eq('place_id',placeId).eq('activity',activity);
       if(!error)return json({...cache,...patch,cached:true,curated_refreshed:true});
@@ -524,9 +550,9 @@ Deno.serve(async (req:Request)=>{
    // This must never run the paid AI model.
    if(cachedSpots.length===0){
     const age=Date.now()-new Date(cache.fetched_at||0).getTime();
-    if(Number(cache.search_version||0)<3 || !Number.isFinite(age) || age>30*86400000){
+    if(Number(cache.search_version||0)<4 || !Number.isFinite(age) || age>30*86400000){
      const lat=Number(place.latitude),lon=Number(place.longitude),items:AnyObj[]=[];
-     try{items.push(...await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY')));}
+     try{items.push(...await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name));}
      catch(e){console.warn('cached-local-search:',String(e).slice(0,80));}
      if(items.length===0){
       try{for(const element of await overpass(lat,lon,selectors[activity])){
@@ -557,14 +583,14 @@ Deno.serve(async (req:Request)=>{
        ? ['강·계곡의 수영·물놀이는 출입 허용, 수심·급류·수질·기상 확인이 필요합니다.']
        : ['현장 운영·출입 조건을 확인하세요.'];
       const update={spots:found,summary,sources,tips,providers:found.filter(p=>p.phone||p.website),
-       research_status:'verified',ai_generated:false,fetched_at:now,search_version:3};
+       research_status:'verified',ai_generated:false,fetched_at:now,search_version:4};
       const {error}=await db.from('place_activity_insights')
        .update(update).eq('place_id',placeId).eq('activity',activity);
       if(!error)return json({...cache,...update,cached:true,free_map_refreshed:true});
       console.warn('cached-refresh-save:',error.message);
      }else{
       await db.from('place_activity_insights')
-       .update({search_version:3,fetched_at:now})
+       .update({search_version:4,fetched_at:now})
        .eq('place_id',placeId).eq('activity',activity);
      }
     }
@@ -588,10 +614,11 @@ Deno.serve(async (req:Request)=>{
   let lookupSucceeded=collected.length>0;
   // Fresh results are persisted so subsequent opens do not repeat internet searches.
   try{
-   const kakao=await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'));
+   const kakao=await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name);
    if(kakao.length) {collected.push(...kakao);lookupSucceeded=true;}
   }catch(e){errors.push('지역검색 연결 문제');}
-  if(collected.length===0 || body.force_refresh===true || (activity==='수영' && collected.length<5)){
+  if(collected.length===0 || body.force_refresh===true ||
+    ((activity==='수영'||activity==='낚시'||activity==='해루질') && collected.length<5)){
    try{
     const elements=await overpass(lat,lon,selectors[activity]);
     lookupSucceeded=true;
@@ -660,7 +687,7 @@ Deno.serve(async (req:Request)=>{
      spots:[],providers:[],photos:[],sources:extraSources,suggested_places:suggested,
      tips:['확인된 자료 없음은 이용 불가를 의미하지 않습니다.','새로운 정보가 있다면 신고해주세요.'],
      fetched_at:now,photo_checked_at:now,expires_at:null,
-     research_status:'not_confirmed',ai_generated:false,search_version:3};
+     research_status:'not_confirmed',ai_generated:false,search_version:4};
     const {error:saveError}=await db.from('place_activity_insights').upsert(item,{
       onConflict:'place_id,activity',ignoreDuplicates:true});
     if(saveError)return json({error:'조사 결과를 저장하지 못했습니다.'},503);
@@ -708,7 +735,7 @@ Deno.serve(async (req:Request)=>{
   const record={place_id:place.id,activity,radius_m:RANGE,
    summary:ai?.summary||fallback,spots,providers,photos,tips:[caution],sources,
    fetched_at:now,photo_checked_at:now,expires_at:null,
-   research_status:'verified',ai_generated:Boolean(ai?.summary),search_version:3};
+   research_status:'verified',ai_generated:Boolean(ai?.summary),search_version:4};
   const {error:writeError}=await db.from('place_activity_insights').upsert(record,{onConflict:'place_id,activity'});
   if(writeError){return json({...record,warning:'캐시 저장 실패: '+writeError.message,cached:false});}
   if(firstClaimed)await db.from('place_activity_first_attempts')
