@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
 import '../models/recreation_activities.dart';
 import '../models/place_review.dart';
+import 'place_marker_icons.dart';
 
 
 /// Light-blue means the service is listed as available, not that its price
@@ -117,7 +118,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     '노지/차박': Icons.directions_car_outlined,
     '공중화장실': Icons.wc_outlined,
     '급수': Icons.water_drop_outlined,
-    '블랙탱크 비움': Icons.delete_outline,
+    '블랙탱크 비움': Icons.plumbing_outlined,
     '전기': Icons.bolt_outlined,
     '전기차 충전기': Icons.ev_station_outlined,
     '캠핑장': Icons.terrain_outlined,
@@ -215,7 +216,11 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(serviceIcons[service] ?? Icons.miscellaneous_services_outlined,
+          if (service == '블랙탱크 비움' || service == '전기차 충전기')
+            PlaceMarkerIcons.servicePictogram(service,
+              size: activity ? 17 : 19)
+          else
+            Icon(serviceIcons[service] ?? Icons.miscellaneous_services_outlined,
               color: ink, size: activity ? 17 : 19),
           const SizedBox(width: 7),
           Expanded(child: Text(
