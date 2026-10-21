@@ -15,8 +15,15 @@ import 'place_marker_icons.dart';
 /// Explicitly unverified permissions/operation remain neutral to avoid
 /// presenting potentially prohibited overnight parking as permitted.
 bool placeServiceShowsAvailable(Place place, String service) {
-  if (!place.services.contains(service)) return false;
-  final value = (place.prices[service] ?? '')
+  final listed = service == '노지/차박'
+      ? place.services.contains('노지/차박') || place.services.contains('캠핑장')
+      : service == '전기차 충전기'
+          ? place.services.contains('노지/차박') &&
+              place.services.contains('전기차 충전기')
+          : place.services.contains(service);
+  if (!listed) return false;
+  final value = (place.prices[service] ??
+          (service == '노지/차박' ? place.prices['캠핑장'] : null) ?? '')
       .toLowerCase()
       .replaceAll(RegExp(r'\s+'), '');
 
@@ -24,7 +31,10 @@ bool placeServiceShowsAvailable(Place place, String service) {
     if (place.name.contains('노지 후보')) return false;
     if (value.contains('현장확인필요') ||
         value.contains('공식미확인') ||
-        value.contains('개인캠핑카입장별도확인')) return false;
+        value.contains('개인캠핑카입장별도확인') ||
+        value.contains('차박허용여부미확인') ||
+        value.contains('캠핑카진입·차박허용여부미확인') ||
+        value.contains('캠핑카이용가능여부미확인')) return false;
   }
 
   const unavailable = <String>[
@@ -149,7 +159,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     '수리', '정비', '장착', '상담',
   ];
   static const serviceTitles = <String, String>{
-    '노지/차박': '노지 / 차박',
+    '노지/차박': '노지 / 차박 · 캠핑장',
     '공중화장실': '화장실',
     '급수': '청수 / 급수',
     '블랙탱크 비움': '블랙탱크',
@@ -223,10 +233,16 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
 
   Widget serviceCard(String service, {bool business = false, bool activity = false}) {
     final p = widget.place;
-    final listed = p.services.contains(service);
+    final listed = service == '노지/차박'
+        ? p.services.contains('노지/차박') || p.services.contains('캠핑장')
+        : service == '전기차 충전기'
+            ? p.services.contains('노지/차박') &&
+                p.services.contains('전기차 충전기')
+            : p.services.contains(service);
     final foundCount = activity ? (_nearbyActivityCounts[service] ?? 0) : 0;
     final active = isConfirmedAvailable(service) || (activity && foundCount > 0);
-    final price = (p.prices[service] ?? '').trim();
+    final price = (p.prices[service] ??
+        (service == '노지/차박' ? p.prices['캠핑장'] : null) ?? '').trim();
     final uncertain = listed && !active;
     final display = activity && foundCount > 0
         ? '주변 $foundCount곳 확인'
@@ -399,18 +415,19 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         !coreServices.contains(service) &&
         !businessServices.contains(service) &&
         !extraBusinessAliases.contains(service) &&
+        service != '캠핑장' &&
         !recreationActivities.contains(service)).toList();
     final businessExtras = p.services.where((service) =>
         extraBusinessAliases.contains(service)).toList();
     final facilities = <String>[...coreServices, ...otherServices.where(
-      (service) => service == '전기' || service == '캠핑장',
+      (service) => service == '전기',
     )];
     final businesses = <String>[...businessServices, ...businessExtras];
     final activities = showAllActivities
         ? recreationActivities
         : recreationActivities.take(8).toList();
     final others = otherServices.where((service) =>
-        service != '전기' && service != '캠핑장').toList();
+        service != '전기').toList();
     final hasOperation = p.hours.isNotEmpty ||
         p.reservation.isNotEmpty || p.phone.isNotEmpty || p.maxHeightMm != null;
     final created = p.createdAt?.toLocal();
