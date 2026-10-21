@@ -953,22 +953,18 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (_, scroll) => PlaceDetailSheet(
           place: p,
           scrollController: scroll,
-          onActivityTap: (activity) {
-            // Open the activity in its own modal route instead of stacking
-            // another draggable sheet under the current place detail sheet.
-            // This avoids taps on a blue tile appearing to do nothing.
-            Navigator.of(ctx).pop();
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              showModalBottomSheet<void>(
-                context: context,
-                useRootNavigator: true,
-                useSafeArea: true,
-                isScrollControlled: true,
-                showDragHandle: true,
-                builder: (_) => ActivityInsightSheet(place: p, activity: activity),
-              );
-            });
+          onActivityTap: (activity) async {
+            // Keep this detail sheet open underneath the 3km activity sheet.
+            // Android back, the close icon, and swiping the activity sheet down
+            // must return to the same place and its previous scroll position.
+            await showModalBottomSheet<void>(
+              context: ctx,
+              useRootNavigator: true,
+              useSafeArea: true,
+              isScrollControlled: true,
+              showDragHandle: true,
+              builder: (_) => ActivityInsightSheet(place: p, activity: activity),
+            );
           },
           reviews: reviews,
           initiallySaved: saved.contains(p.id),
