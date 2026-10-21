@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
 import '../models/recreation_activities.dart';
@@ -77,7 +78,7 @@ class PlaceDetailSheet extends StatefulWidget {
   final Widget Function(PlaceReview) reviewBuilder;
   final String reservationUrl;
   final Widget? heightCompatibility;
-  final void Function(String)? onActivityTap;
+  final Future<void> Function(String)? onActivityTap;
 
   @override
   State<PlaceDetailSheet> createState() => _PlaceDetailSheetState();
@@ -87,6 +88,54 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   late bool saved = widget.initiallySaved;
   bool saving = false;
   bool showAllActivities = false;
+  bool _openingActivity = false;
+  final Map<String, int> _nearbyActivityCounts = {};
+  int _activityLookupNumber = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNearbyActivityCounts();
+  }
+
+  /// The badge counts verified 3km map results, not manually tagged services.
+  /// Water-play POIs may still require safety and access verification.
+  Future<void> _loadNearbyActivityCounts() async {
+    final request = ++_activityLookupNumber;
+    try {
+      final rows = await Supabase.instance.client
+          .from('place_activity_insights')
+          .select('activity,spots,research_status')
+          .eq('place_id', widget.place.id);
+      final counts = <String, int>{};
+      for (final row in rows) {
+        final activity = (row['activity'] ?? '').toString();
+        final spots = row['spots'];
+        if (row['research_status'] == 'verified' && spots is List) {
+          counts[activity] = spots.length;
+        }
+      }
+      if (!mounted || request != _activityLookupNumber) return;
+      setState(() {
+        _nearbyActivityCounts
+          ..clear()
+          ..addAll(counts);
+      });
+    } catch (_) {
+      // The detail UI still works when the network is unavailable.
+    }
+  }
+
+  Future<void> _onActivitySelected(String activity) async {
+    if (_openingActivity || widget.onActivityTap == null) return;
+    _openingActivity = true;
+    try {
+      await widget.onActivityTap!(activity);
+    } finally {
+      _openingActivity = false;
+      if (mounted) await _loadNearbyActivityCounts();
+    }
+  }
 
   // Canonical options currently supported by the map and registration flow.
   static const coreServices = <String>[
@@ -175,10 +224,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   Widget serviceCard(String service, {bool business = false, bool activity = false}) {
     final p = widget.place;
     final listed = p.services.contains(service);
-    final active = isConfirmedAvailable(service);
+    final foundCount = activity ? (_nearbyActivityCounts[service] ?? 0) : 0;
+    final active = isConfirmedAvailable(service) || (activity && foundCount > 0);
     final price = (p.prices[service] ?? '').trim();
     final uncertain = listed && !active;
-    final display = !listed
+    final display = activity && foundCount > 0
+        ? '주변 $foundCount곳 확인'
+        : !listed
         ? (activity ? '활동 정보 없음' : (business || service == '전기차 충전기') ? '정보 없음' : '이용불가')
         : price.isNotEmpty
             ? price
@@ -204,7 +256,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         : const Color(0xFF205FA1);
     final ink = active ? blueText : muted;
     return InkWell(
-      onTap: activity ? () => widget.onActivityTap?.call(service) : null,
+      onTap: activity ? () => _onActivitySelected(service) : null,
       borderRadius: BorderRadius.circular(14),
       child: Container(
       constraints: BoxConstraints(minHeight: activity ? 73 : 100),
