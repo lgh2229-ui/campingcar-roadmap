@@ -8,12 +8,10 @@ import '../models/place_review.dart';
 import 'place_marker_icons.dart';
 
 
-/// Light-blue means the service is listed as available, not that its price
-/// has been confirmed. A missing price or an unknown price cannot turn a
-/// registered service into "unavailable".
-///
-/// Explicitly unverified permissions/operation remain neutral to avoid
-/// presenting potentially prohibited overnight parking as permitted.
+/// Blue marks a recorded facility or service; it does not certify that every
+/// vehicle is allowed. For formally listed campgrounds, we show blue with an
+/// informational warning when campervan access has not been confirmed.
+/// Informal parking with unverified overnight permission remains neutral.
 bool placeServiceShowsAvailable(Place place, String service) {
   final listed = service == '노지/차박'
       ? place.services.contains('노지/차박') || place.services.contains('캠핑장')
@@ -29,12 +27,22 @@ bool placeServiceShowsAvailable(Place place, String service) {
 
   if (service == '노지/차박') {
     if (place.name.contains('노지 후보')) return false;
+    // Known campgrounds are real facilities even when campervan admission
+    // still needs to be checked. The detail card labels that uncertainty.
+    // Never infer overnight permission from an ordinary parking area.
+    final campground = place.services.contains('캠핑장') ||
+        place.name.contains('야영장') ||
+        place.name.contains('캠핑장') ||
+        value.contains('유료야영장') ||
+        value.contains('유료캠핑장') ||
+        value.contains('유료오토캠핑');
     if (value.contains('현장확인필요') ||
         value.contains('공식미확인') ||
-        value.contains('개인캠핑카입장별도확인') ||
-        value.contains('차박허용여부미확인') ||
-        value.contains('캠핑카진입·차박허용여부미확인') ||
-        value.contains('캠핑카이용가능여부미확인')) return false;
+        value.contains('개인캠핑카입장별도확인')) return false;
+    if (!campground &&
+        (value.contains('차박허용여부미확인') ||
+         value.contains('캠핑카진입·차박허용여부미확인') ||
+         value.contains('캠핑카이용가능여부미확인'))) return false;
   }
 
   const unavailable = <String>[
@@ -243,6 +251,11 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     final active = isConfirmedAvailable(service) || (activity && foundCount > 0);
     final price = (p.prices[service] ??
         (service == '노지/차박' ? p.prices['캠핑장'] : null) ?? '').trim();
+    // A blue, registered campsite is not a guarantee of campervan admission.
+    final entryUnverified = service == '노지/차박' &&
+        (price.replaceAll(RegExp(r'\\s+'), '').contains('차박허용여부미확인') ||
+         price.replaceAll(RegExp(r'\\s+'), '').contains('캠핑카진입·차박허용여부미확인') ||
+         price.replaceAll(RegExp(r'\\s+'), '').contains('캠핑카이용가능여부미확인'));
     final uncertain = listed && !active;
     final display = activity && foundCount > 0
         ? '주변 $foundCount곳 확인'
@@ -298,7 +311,8 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             ),
           )),
           if (active)
-            Icon(Icons.check_circle_rounded, size: 16, color: blueText),
+            Icon(entryUnverified ? Icons.info_outline_rounded
+                : Icons.check_circle_rounded, size: 17, color: blueText),
         ]),
         SizedBox(height: activity ? 5 : 11),
         Text(
