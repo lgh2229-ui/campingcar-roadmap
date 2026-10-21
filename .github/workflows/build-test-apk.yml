@@ -11,6 +11,9 @@ on:
       - lib/widgets/activity_spot_review_sheet.dart
       - lib/widgets/place_detail_sheet.dart
       - lib/screens/home_screen.dart
+      - lib/widgets/place_marker_icons.dart
+      - tool/apply_requested_redesign.py
+      - test/place_detail_services_test.dart
 
 jobs:
   build:
@@ -121,7 +124,7 @@ jobs:
           NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
         run: |
           test -n "$NAVER_MAP_CLIENT_ID" || (echo "Missing NAVER_MAP_CLIENT_ID" && exit 1)
-          flutter build apk --release --build-name=1.9.45 --build-number=139 \
+          flutter build apk --release --build-name=1.9.46 --build-number=140 \
             --dart-define=SUPABASE_URL="$SUPABASE_URL" \
             --dart-define=SUPABASE_PUBLISHABLE_KEY="$SUPABASE_PUBLISHABLE_KEY" \
             --dart-define=NAVER_MAP_CLIENT_ID="$NAVER_MAP_CLIENT_ID"
@@ -130,7 +133,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-test-apk-1.9.45-139
+          name: campingcar-roadmap-test-apk-1.9.46-140
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
 
