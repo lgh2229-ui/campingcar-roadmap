@@ -6,7 +6,7 @@ void main() {
     final icons=PlaceMarkerIcons.fromServices(const [
       '급수','블랙탱크 비움','노지/차박','공중화장실'
     ]);
-    expect(icons,const ['💧','🚽','🅿️','🚻']);
+    expect(icons,const ['💧','DUMP','🅿️','🚻']);
     expect(PlaceMarkerIcons.columns(icons.length),2);
     expect(PlaceMarkerIcons.rows(icons.length),2);
   });
@@ -16,7 +16,7 @@ void main() {
       '급수','블랙탱크 비움','노지/차박','공중화장실',
       '매매','수리','제작','부품·용품','전기차 충전기',
     ]);
-    expect(icons,const ['💧','🚽','🅿️','🚻','🚐','🔧','🛠️','⚙️','🔌']);
+    expect(icons,const ['💧','DUMP','🅿️','🚻','🚐','🔧','🛠️','⚙️','EV']);
     expect(icons.length,9);
     expect(PlaceMarkerIcons.columns(icons.length),3);
     expect(PlaceMarkerIcons.rows(icons.length),3);
@@ -43,7 +43,7 @@ void main() {
       '공중화장실','오수','청수','급수','블랙탱크 비움',
       '수리','A/S','정비','매매',
     ]);
-    expect(icons,const ['💧','🚽','🚻','🚐','🔧']);
+    expect(icons,const ['💧','DUMP','🚻','🚐','🔧']);
   });
 
   test('other-only places remain selectable with neutral pin', () {
