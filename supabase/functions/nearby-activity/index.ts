@@ -32,7 +32,7 @@ const selectors: Record<string, string[]> = {
   "문화체험": ['["tourism"~"^(museum|gallery)$"]','["amenity"~"^(arts_centre|theatre|community_centre)$"]'],
   // Seafood retail and boat markets are part of market/shopping.
   "시장·쇼핑": ['["amenity"="marketplace"]',
-   '["shop"~"^(fishmonger|seafood|supermarket|general|convenience|mall|department_store)$"]',
+   '["shop"~"^(fishmonger|seafood|supermarket|mall|department_store)$"]',
    '["tourism"="attraction"]["name"~"선상어시장|수산시장|직매장|어판장|선상횟집"]'],
 };
 const json = (obj: unknown, status=200) => new Response(JSON.stringify(obj),{status, headers:CORS});
@@ -149,12 +149,17 @@ const discoveryKeywords:Record<string,string>=Object.fromEntries(
 async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
  if(!key)return [] as AnyObj[];
  const root=placeName.replace(/(공영주차장|주차장|노지|차박|캠핑장|야영장|주변)/g,'').trim().slice(0,30);
+ const coastal=/항|포구|선착장|방파제|어촌|해변|해수욕장|해안/.test(root);
  const targeted=root && activity==='시장·쇼핑'
-  ? [root+' 수산물직매장',root+' 선상어시장',root+' 어시장',root+' 시장']
+  ? (coastal
+      ? [root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']
+      : [root+' 전통시장',root+' 마트'])
   : root && (activity==='낚시'||activity==='해루질')
   ? [root+' '+activity,root+' 선착장'] : [];
- const count=activity==='시장·쇼핑'?9:activity==='낚시'?7:activity==='수영'||activity==='해루질'?6:4;
- const terms=[...new Set([...targeted,...(searchTerms[activity]||[activity])])].slice(0,count);
+ const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
+   '수산물센터','어시장','농산물직판장'];
+ const count=activity==='시장·쇼핑'?10:activity==='낚시'?7:activity==='수영'||activity==='해루질'?6:4;
+ const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  for(const term of terms){
   const url='https://dapi.kakao.com/v2/local/search/keyword.json?'+
