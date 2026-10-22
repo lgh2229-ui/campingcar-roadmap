@@ -9,7 +9,6 @@ const List<String> recreationActivities = <String>[
   '해루질',
   '수상레포츠',
   '지상레포츠',
-  '캠핑장',
   '카지노',
   '자전거',
   '수영',
@@ -21,4 +20,5 @@ const List<String> recreationActivities = <String>[
   '온천·스파',
   '문화체험',
   '시장·쇼핑',
+  '캠핑장',
 ];
