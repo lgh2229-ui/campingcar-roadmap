@@ -1162,7 +1162,8 @@ class _HomeScreenState extends State<HomeScreen> {
           !businessServices.contains(service) &&
           !availabilityServices.contains(service) &&
           service != '캠핑장' &&
-          !recreationActivities.contains(service)),
+          !recreationActivities.contains(service) &&
+          !mergedOrNonTourismActivities.contains(service)),
     ];
     final selected=p.services.where((x)=>x!='캠핑장').toSet();
     if(p.services.contains('캠핑장')) selected.add('노지/차박');
