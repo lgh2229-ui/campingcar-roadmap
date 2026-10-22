@@ -15,6 +15,11 @@ void main() {
     expect(recreationActivities, isNot(contains('스키·눈썰매')));
     expect(recreationActivities, isNot(contains('캠핑장')));
     expect(recreationActivities, contains('지상레포츠'));
+    for (final legacy in ['수영', '서핑', '스노클링', '카약·SUP']) {
+      expect(recreationActivities, isNot(contains(legacy)));
+      expect(mergedOrNonTourismActivities, contains(legacy));
+    }
+    expect(recreationActivities, contains('수상레포츠'));
     expect(mergedOrNonTourismActivities, containsAll(['골프','자전거','스키·눈썰매','캠핑장']));
   });
 
