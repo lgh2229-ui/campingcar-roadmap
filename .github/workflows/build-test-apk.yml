@@ -9,6 +9,7 @@ on:
       - .github/workflows/build-test-apk.yml
       - test/place_marker_icons_test.dart
       - lib/widgets/activity_spot_review_sheet.dart
+      - lib/widgets/activity_insight_sheet.dart
       - lib/widgets/place_detail_sheet.dart
       - lib/widgets/roadmap_naver_map.dart
       - lib/screens/home_screen.dart
