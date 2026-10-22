@@ -16,6 +16,7 @@ class RoadmapNaverMap extends StatefulWidget {
     required this.onMapTap,
     required this.onLongPress,
     required this.onGestureCenter,
+    required this.onCameraSettled,
     this.currentLocation,
     this.selectedSpot,
     this.activitySpot,
@@ -35,6 +36,7 @@ class RoadmapNaverMap extends StatefulWidget {
   final VoidCallback onMapTap;
   final ValueChanged<ll.LatLng> onLongPress;
   final ValueChanged<ll.LatLng> onGestureCenter;
+  final void Function(ll.LatLng center, double zoom, bool byGesture) onCameraSettled;
 
   @override
   State<RoadmapNaverMap> createState() => RoadmapNaverMapState();
@@ -203,10 +205,13 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
       },
       onCameraIdle: () {
         final controller = _controller;
-        if (controller != null &&
-            widget.locationPickMode && _cameraMovedByGesture) {
-          final point = _flutter(controller.nowCameraPosition.target);
-          widget.onGestureCenter(point);
+        if (controller != null) {
+          final camera = controller.nowCameraPosition;
+          final point = _flutter(camera.target);
+          widget.onCameraSettled(point, camera.zoom, _cameraMovedByGesture);
+          if (widget.locationPickMode && _cameraMovedByGesture) {
+            widget.onGestureCenter(point);
+          }
         }
         _cameraMovedByGesture = false;
       },
