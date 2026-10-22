@@ -152,19 +152,83 @@ const searchTerms:Record<string,string[]>={
 };
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
+
+const SEARCH_VERSION=8;
+const EMPTY_RETRY_MS=6*60*60*1000;
+const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
+function tourActivity(item:AnyObj):string|null{
+ const type=String(item.contenttypeid||'');
+ const name=String(item.title||'').toLowerCase();
+ if(/캠핑|야영|글램핑|카라반|오토캠프/.test(name))return null;
+ if(['12','14','15','25'].includes(type)){
+  if(type==='14')return '문화체험';
+  if(/낚시/.test(name))return '낚시';
+  if(/등산|등반|산행/.test(name))return '등산';
+  if(/산책|둘레길|해안길|탐방로|트레킹/.test(name))return '산책';
+  return '관광지';
+ }
+ if(type==='38')return '시장·쇼핑';
+ if(type!=='28')return null;
+ if(/낚시/.test(name))return '낚시';
+ if(/서핑|서프|카약|카누|스노클|스노쿨|수영|물놀이|요트|수상|래프팅|sup/.test(name))return '수상레포츠';
+ if(/산책|둘레길|탐방로|트레킹/.test(name))return '산책';
+ if(/등산|등반|산행/.test(name))return '등산';
+ return '지상레포츠';
+}
+// Query the tourism authority live; a one-off admin importer is not live search.
+async function tourApiSearch(lat:number,lon:number,activity:string):Promise<AnyObj[]>{
+ let key=Deno.env.get('KTO_TOUR_API_KEY')||'';
+ if(!key)throw new Error('KTO_API_KEY_NOT_CONFIGURED');
+ if(key.includes('%')){try{key=decodeURIComponent(key);}catch(_){}}
+ const results:AnyObj[]=[];
+ for(let page=1;page<=2;page++){
+  const url=new URL('https://apis.data.go.kr/B551011/KorService2/locationBasedList2');
+  for(const [field,value] of Object.entries({
+   serviceKey:key,MobileOS:'ETC',MobileApp:'CampingcarRoadmap',_type:'json',
+   mapX:String(lon),mapY:String(lat),radius:String(RANGE),
+   arrange:'E',numOfRows:'100',pageNo:String(page)
+  }))url.searchParams.set(field,value);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8500);
+  try{
+   const response=await fetch(url.toString(),{headers:{Accept:'application/json'},signal:controller.signal});
+   if(!response.ok)throw new Error('KTO HTTP '+response.status);
+   const payload=await response.json();
+   const body=payload?.response?.body, header=payload?.response?.header;
+   if(String(header?.resultCode??'0000')!=='0000')throw new Error('KTO_RESULT_'+header.resultCode);
+   const raw=body?.items?.item||[];
+   const items=Array.isArray(raw)?raw:[raw];
+   for(const item of items){
+    const classified=tourActivity(item);
+    if(classified!==activity && !(activity==='관광지' && String(item.contenttypeid)==='14'))continue;
+    const name=String(item.title||'').replace(/<[^>]*>/g,' ').trim();
+    const id=String(item.contentid||'').trim();
+    const poi=normalizePlace({
+      name,lat:item.mapy,lon:item.mapx,kind:activity,
+      address:String(item.addr1||'').slice(0,160),phone:String(item.tel||'').replace(/<[^>]*>/g,' ').trim(),
+      description:'한국관광공사 관광정보 '+(id?'(ID '+id+')':'')+'. 실제 이용·운영조건 별도 확인.',
+      source_url:KTO_SOURCE
+    },lat,lon,activity);
+    if(poi)results.push(poi);
+   }
+   if(items.length<100 || page*100>=Number(body?.totalCount||0))break;
+  }finally{clearTimeout(timer);}
+ }
+ return results;
+}
+
 async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
  if(!key)return [] as AnyObj[];
  const root=placeName.replace(/(공영주차장|주차장|노지|차박|캠핑장|야영장|주변)/g,'').trim().slice(0,30);
  const coastal=/항|포구|선착장|방파제|어촌|해변|해수욕장|해안/.test(root);
- const targeted=root && activity==='시장·쇼핑'
-  ? (coastal
-      ? [root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']
-      : [root+' 전통시장',root+' 마트'])
+ const targeted=root && activity==='관광지'
+  ? [root,root+' 관광명소',root+' 주변 관광지',root+' 해수욕장']
+  : root && activity==='시장·쇼핑'
+  ? (coastal?[root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']:[root+' 전통시장',root+' 마트'])
   : root && (activity==='낚시'||activity==='해루질')
   ? [root+' '+activity,root+' 선착장'] : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?6:4;
+ const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?6:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  for(const term of terms){
@@ -176,6 +240,9 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
    if(!r.ok)continue;
    const data=await r.json();
    for(const d of data.documents||[]){
+    if(activity==='관광지' &&
+       !/관광|여행|명소|전망대|해변|해수욕장|수목원|공원|박물관|문화재|유적|축제|정원|미술관|테마파크|포토존/i.test(
+        String(d.category_name||'')+' '+String(d.place_name||'')))continue;
     if(activity==='시장·쇼핑' &&
        !/수산|어시장|시장|직매장|어판장|선상|회뜨는|마트|쇼핑|상설|장터|활어|회센터|회센타/i.test(
         String(d.place_name||'')+' '+String(d.category_name||'')))continue;
