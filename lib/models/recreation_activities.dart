@@ -10,15 +10,17 @@ const List<String> recreationActivities = <String>[
   '수상레포츠',
   '지상레포츠',
   '카지노',
-  '자전거',
   '수영',
   '서핑',
   '카약·SUP',
   '스노클링',
-  '스키·눈썰매',
-  '골프',
   '온천·스파',
   '문화체험',
   '시장·쇼핑',
-  '캠핑장',
 ];
+
+/// Legacy category tags remain stored for older registrations, but are not
+/// independent categories in the 3km nearby-tourism card grid.
+const Set<String> mergedOrNonTourismActivities = <String>{
+  '자전거', '스키·눈썰매', '골프', '캠핑장',
+};
