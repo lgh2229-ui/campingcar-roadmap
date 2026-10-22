@@ -227,7 +227,7 @@ async function tourApiSearch(lat:number,lon:number,activity:string):Promise<AnyO
 }
 
 async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
- if(!key)return [] as AnyObj[];
+ if(!key)throw new Error('REGIONAL_MAP_KEY_NOT_CONFIGURED');
  const root=placeName.replace(/(공영주차장|주차장|노지|차박|캠핑장|야영장|주변)/g,'').trim().slice(0,30);
  const coastal=/항|포구|선착장|방파제|어촌|해변|해수욕장|해안/.test(root);
  const targeted=root && activity==='관광지'
@@ -683,7 +683,7 @@ Deno.serve(async (req:Request)=>{
       if(error)console.warn('cache-refreshed-not-saved:',error.message);
       return json({...cache,...update,cached:true,free_map_refreshed:true});
      }
-     const healthy=checks.filter(x=>x.status==='fulfilled').length;
+     const healthy=checks.slice(1).filter(x=>x.status==='fulfilled').length;
      if(healthy===0){
       return json({...cache,cached:true,temporarily_unavailable:true,search_incomplete:true,
        summary:'관광공사·지역지도·공개지도 검색이 일시적으로 실패했습니다. 검색 실패는 관광지 0곳을 뜻하지 않습니다.'});
@@ -719,7 +719,7 @@ Deno.serve(async (req:Request)=>{
    if(checks[i].status==='fulfilled')collected.push(...(checks[i] as PromiseFulfilledResult<AnyObj[]>).value);
    else errors.push(['Reviewed POIs','KTO','Regional map'][i]+' unavailable');
   }
-  let lookupSucceeded=checks.some(x=>x.status==='fulfilled');
+  let lookupSucceeded=checks.some(x=>x.status==='fulfilled' && x.value.length>0);
   if(collected.length<8){
    try{
     const elements=await overpass(lat,lon,selectors[activity]);
