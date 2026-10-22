@@ -120,14 +120,14 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
   .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
  if(error)throw error;
  let matches=(data||[]) as AnyObj[];
- // A tourist port can also be an evidence-backed fishing location.
- if(matches.length===0){
+ // Merge cross-listed coastal places even if some primary POIs are present.
+ {
   const {data:related,error:relatedError}=await db.from('verified_activity_pois').select('*')
    .contains('related_activities',[activity])
    .gte('latitude',lat-latDelta).lte('latitude',lat+latDelta)
    .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
   if(relatedError)console.warn('related activity:',String(relatedError.message).slice(0,80));
-  else matches=(related||[]) as AnyObj[];
+  else matches=[...matches,...(related||[]).filter((p:AnyObj)=>!matches.some(x=>x.poi_key===p.poi_key))] as AnyObj[];
  }
  const mapped=matches.map((p:AnyObj)=>normalizePlace({
   name:p.name,lat:p.latitude,lon:p.longitude,kind:activity,
@@ -164,7 +164,7 @@ const searchTerms:Record<string,string[]>={
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 
-const SEARCH_VERSION=9;
+const SEARCH_VERSION=10;
 const EMPTY_RETRY_MS=6*60*60*1000;
 const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
@@ -229,21 +229,38 @@ async function tourApiSearch(lat:number,lon:number,activity:string):Promise<AnyO
  return results;
 }
 
+// Extract the geographic area rather than treating a campsite's brand,
+// lot number or sector as the destination people use in tourism blog searches.
+function geographicRoots(full:string):string[]{
+ const name=full.replace(/\s+/g,'').trim();
+ const root=name
+  .replace(/(?:제?[0-9]+(?:구역|지구|캠핑존|사이트|호))$/g,'')
+  .replace(/(?:오토캠핑장|감성캠핑장|캠핑장|야영장|오토캠핑|캠핑|공영주차장|해변주차장|주차장|노지|차박|매표소|입구).*$/,'')
+  .replace(/(?:오토|감성)$/,'').trim();
+ const withPlace=name.replace(/(?:제?[0-9]+(?:구역|지구|캠핑존|사이트|호))$/g,'')
+  .replace(/(?:오토캠핑장|감성캠핑장|캠핑장|야영장|오토캠핑|캠핑|공영주차장|주차장).*$/,'').trim();
+ const items=[root,withPlace];
+ // Ports sometimes also contain a beach, but do not infer actual harvesting.
+ if(/포$/.test(root))items.push(root+'해수욕장');
+ if(/해수욕장|해변|포구|항/.test(root))items.push(root.replace(/(해수욕장|해변|포구|항)$/,''));
+ return [...new Set(items.filter(x=>x.length>=2&&x.length<=35))].slice(0,3);
+}
+
 async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
  if(!key)throw new Error('REGIONAL_MAP_KEY_NOT_CONFIGURED');
- const root=placeName.replace(/(공영주차장|주차장|노지|차박|캠핑장|야영장|주변)/g,'').trim().slice(0,30);
+ const roots=geographicRoots(placeName);
+ const root=roots[0]||placeName.slice(0,20);
  const coastal=/항|포구|선착장|방파제|어촌|해변|해수욕장|해안/.test(root);
  const targeted=root && activity==='관광지'
   ? [root,root+' 관광명소',root+' 주변 관광지',root+' 해수욕장']
   : root && activity==='시장·쇼핑'
   ? (coastal?[root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']:[root+' 전통시장',root+' 마트'])
   : root && activity==='해루질'
-  ? [root+' 맛조개',root+' 조개잡이',root+' 갯벌체험',root+' 해루질',
-     root.replace(/(해수욕장|해변|포구|주차장)$/,'')+' 맛조개',root+' 바지락']
+  ? roots.flatMap(area=>[area+' 맛조개',area+' 조개잡이',area+' 갯벌체험',area+' 해루질'])
   : root && activity==='낚시' ? [root+' 낚시',root+' 선착장'] : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?10:4;
+ const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?12:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  // Parallel bounded batches: 10 sequential 3.5-second timeouts made searches stall.
