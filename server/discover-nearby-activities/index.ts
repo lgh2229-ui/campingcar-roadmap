@@ -17,13 +17,13 @@ function classify(t:Record<string,string>):string[] {
  if(/^(sailing|surfing|canoe|kayaking|windsurfing|kitesurfing)$/.test(t.sport||""))out.add("수상레포츠");
  if(/^(climbing|paragliding|archery|motocross|skateboard)$/.test(t.sport||""))out.add("지상레포츠");
  if(t.amenity==="casino")out.add("카지노");
- if(t.route==="bicycle" || t.shop==="bicycle")out.add("자전거");
+ if(t.route==="bicycle" || t.shop==="bicycle" || t.sport==="cycling")out.add("지상레포츠");
  if(t.leisure==="swimming_pool" || t.sport==="swimming")out.add("수영");
  if(t.sport==="surfing" || t.shop==="surf")out.add("서핑");
  if(/^(canoe|kayaking|stand_up_paddle)$/.test(t.sport||""))out.add("카약·SUP");
  if(/^(snorkeling|scuba_diving)$/.test(t.sport||""))out.add("스노클링");
- if(t["piste:type"] || t.sport==="skiing")out.add("스키·눈썰매");
- if(t.leisure==="golf_course" || t.sport==="golf")out.add("골프");
+ if(t["piste:type"] || t.sport==="skiing")out.add("지상레포츠");
+ if(t.leisure==="golf_course" || t.sport==="golf")out.add("지상레포츠");
  if(t.leisure==="spa" || t.natural==="hot_spring")out.add("온천·스파");
  if(/^(museum|gallery)$/.test(t.tourism||"") || /^(arts_centre|theatre)$/.test(t.amenity||""))out.add("문화체험");
  if(t.amenity==="marketplace" || /^(mall|department_store)$/.test(t.shop||""))out.add("시장·쇼핑");
