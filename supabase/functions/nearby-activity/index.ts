@@ -4,7 +4,6 @@ const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers
 const RANGE = 3000;
 type AnyObj = Record<string, any>;
 const selectors: Record<string, string[]> = {
-  "캠핑장": ['["tourism"~"^(camp_site|caravan_site)$"]'],
   "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]', '["historic"]'],
   "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian|steps)$"]["name"]','["route"="foot"]','["tourism"="viewpoint"]'],
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
@@ -15,9 +14,11 @@ const selectors: Record<string, string[]> = {
    '["natural"="wetland"]["wetland"~"^(tidalflat|saltmarsh)$"]',
    '["tourism"="attraction"]["name"~"갯벌|해루질|조개잡이|어촌체험"]'],
   "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing)$"]', '["leisure"="marina"]'],
-  "지상레포츠": ['["sport"~"^(climbing|paragliding|archery|motocross|skateboard|horse_racing)$"]','["leisure"="sports_centre"]'],
+  // Land sports includes golf, cycling, skiing and sledding.
+  "지상레포츠": ['["sport"~"^(climbing|paragliding|archery|motocross|skateboard|horse_racing|skiing|golf|cycling)$"]',
+    '["leisure"~"^(sports_centre|golf_course)$"]','["route"="bicycle"]','["highway"="cycleway"]["name"]',
+    '["piste:type"]','["name"~"눈썰매|썰매장|스키장|파크골프|자전거체험|MTB"]'],
   "카지노": ['["amenity"="casino"]'],
-  "자전거": ['["route"="bicycle"]','["shop"="bicycle"]','["highway"="cycleway"]["name"]'],
   // Waterways are water-play candidates, NOT proof that entry is allowed.
   "수영": ['["leisure"="swimming_pool"]','["sport"="swimming"]',
    '["leisure"~"^(water_park|swimming_area|bathing_place)$"]',
@@ -27,8 +28,6 @@ const selectors: Record<string, string[]> = {
   "서핑": ['["sport"="surfing"]','["shop"="surf"]'],
   "카약·SUP": ['["sport"~"^(canoe|kayaking|stand_up_paddle)$"]','["canoe"]'],
   "스노클링": ['["sport"~"^(scuba_diving|snorkeling)$"]'],
-  "스키·눈썰매": ['["piste:type"]','["sport"="skiing"]'],
-  "골프": ['["leisure"="golf_course"]','["sport"="golf"]'],
   "온천·스파": ['["amenity"="public_bath"]','["leisure"="spa"]','["natural"="hot_spring"]'],
   "문화체험": ['["tourism"~"^(museum|gallery)$"]','["amenity"~"^(arts_centre|theatre|community_centre)$"]'],
   // Seafood retail and boat markets are part of market/shopping.
@@ -136,11 +135,10 @@ const searchTerms:Record<string,string[]>={
  '낚시':['낚시포인트','선착장','방파제','낚시터','항구','포구','워킹낚시'],
  '해루질':['해루질','갯벌체험','갯벌','어촌체험','조개잡이','바지락체험'],
  '수상레포츠':['수상레저','서핑','카약','SUP'],
- '지상레포츠':['스카이사이클','짚라인','스카이밸리','ATV','레포츠'],
- '카지노':['카지노'], '자전거':['자전거체험','스카이사이클','자전거길'],
+ '지상레포츠':['골프장','파크골프','자전거체험','자전거길','스키장','눈썰매장','짚라인','스카이사이클','ATV','레포츠'],
+ '카지노':['카지노'],
  '수영':['계곡 물놀이','강/물놀이','물놀이장','수영장','해수욕장','계곡'], '서핑':['서핑','서핑샵'],
  '카약·SUP':['카약','SUP'], '스노클링':['스노클링','다이빙'],
- '스키·눈썰매':['스키장','눈썰매'], '캠핑장':['캠핑장','오토캠핑장','글램핑장','카라반 캠핑장'], '골프':['골프장','파크골프'],
  '온천·스파':['온천','스파','목욕탕'],
  '문화체험':['문화체험','박물관','문화마을'],
  '시장·쇼핑':['수산물직매장','선상어시장','선상횟집','수산물센터','어시장','수산시장','어판장','전통시장','마트','시장']
@@ -159,7 +157,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
   ? [root+' '+activity,root+' 선착장'] : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='시장·쇼핑'?10:activity==='낚시'?7:activity==='수영'||activity==='해루질'?6:4;
+ const count=activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='낚시'?7:activity==='수영'||activity==='해루질'?6:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  for(const term of terms){
