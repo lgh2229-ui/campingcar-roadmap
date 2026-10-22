@@ -601,6 +601,14 @@ Deno.serve(async (req:Request)=>{
   if(placeError || !place)return json({error:'조회할 수 없는 장소입니다.'},403);
   const {data:cache}=await db.from('place_activity_insights').select('*').eq('place_id',placeId).eq('activity',activity).maybeSingle();
   const force=body.force_refresh===true;
+  // A normal reload actually means free-source refresh, not re-reading cache.
+  // Throttle requests to protect upstream map providers without charging AI.
+  const refreshSources=body.refresh_sources===true;
+  const cacheAge=cache?Date.now()-new Date(cache.fetched_at||0).getTime():Infinity;
+  if(refreshSources && cache && Number.isFinite(cacheAge) && cacheAge<10*60000 && !force){
+   return json({...cache,cached:true,refresh_throttled:true,
+     retry_after_seconds:Math.max(0,Math.ceil((10*60000-cacheAge)/1000))});
+  }
   let verifiedReportId:string|null=null;
   let adminId:string|null=null;
   if(force){
@@ -617,7 +625,7 @@ Deno.serve(async (req:Request)=>{
    if(!Deno.env.get('OPENAI_API_KEY'))return json({error:'OpenAI API 키가 등록되지 않아 AI 재검색을 실행할 수 없습니다.'},503);
   }
   // A negative cache must reflect newly verified POIs without extra paid AI searches.
-  if(cache && !force && (
+  if(cache && !force && !refreshSources && (
     !Array.isArray(cache.spots) || cache.spots.length===0 ||
     (Number(cache.search_version||0)>=SEARCH_VERSION &&
       Date.now()-new Date(cache.fetched_at||0).getTime()<7*86400000)
