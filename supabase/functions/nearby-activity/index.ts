@@ -617,7 +617,11 @@ Deno.serve(async (req:Request)=>{
    if(!Deno.env.get('OPENAI_API_KEY'))return json({error:'OpenAI API 키가 등록되지 않아 AI 재검색을 실행할 수 없습니다.'},503);
   }
   // A negative cache must reflect newly verified POIs without extra paid AI searches.
-  if(cache && !force){
+  if(cache && !force && (
+    !Array.isArray(cache.spots) || cache.spots.length===0 ||
+    (Number(cache.search_version||0)>=SEARCH_VERSION &&
+      Date.now()-new Date(cache.fetched_at||0).getTime()<7*86400000)
+  )){
    const cachedSpots=Array.isArray(cache.spots)?cache.spots:[];
    if(cachedSpots.length===0){
     try{
@@ -638,7 +642,7 @@ Deno.serve(async (req:Request)=>{
         '상수원 보호, 출입 통제, 수심·급류·기상·수질을 현장에서 확인하세요.']:
        ['정보 출처와 출입·운영 조건은 이용 전 확인하세요.'];
       const patch={summary,spots:fresh,providers:[],sources,tips,
-       research_status:'verified',fetched_at:now,ai_generated:false,search_version:5};
+       research_status:'verified',fetched_at:now,ai_generated:false,search_version:SEARCH_VERSION};
       const {error}=await db.from('place_activity_insights')
        .update(patch).eq('place_id',placeId).eq('activity',activity);
       if(!error)return json({...cache,...patch,cached:true,curated_refreshed:true});
@@ -702,26 +706,29 @@ Deno.serve(async (req:Request)=>{
    return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated)});
   }
   const lat=Number(place.latitude),lon=Number(place.longitude);
-  // Search our existing verified dataset first, even on the very first tap.
+  // A national tourist listing, reviewed POIs and locally contextual map search
+  // complement each other. Never depend on a single generic keyword.
+  const checks=await Promise.allSettled([
+   curatedPoi(db,lat,lon,activity),
+   tourApiSearch(lat,lon,activity),
+   kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name)
+  ]);
   let collected:AnyObj[]=[];
-  try{collected=await curatedPoi(db,lat,lon,activity);}catch(e){console.warn('curated POI lookup:',String(e));}
   const errors:string[]=[];
-  let lookupSucceeded=collected.length>0;
-  // Fresh results are persisted so subsequent opens do not repeat internet searches.
-  try{
-   const kakao=await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name);
-   if(kakao.length) {collected.push(...kakao);lookupSucceeded=true;}
-  }catch(e){errors.push('지역검색 연결 문제');}
-  if(collected.length===0 || body.force_refresh===true ||
-    ((activity==='수상레포츠'||activity==='낚시'||activity==='해루질'||activity==='시장·쇼핑') && collected.length<5)){
+  for(let i=0;i<checks.length;i++){
+   if(checks[i].status==='fulfilled')collected.push(...(checks[i] as PromiseFulfilledResult<AnyObj[]>).value);
+   else errors.push(['Reviewed POIs','KTO','Regional map'][i]+' unavailable');
+  }
+  let lookupSucceeded=checks.some(x=>x.status==='fulfilled');
+  if(collected.length<8){
    try{
     const elements=await overpass(lat,lon,selectors[activity]);
     lookupSucceeded=true;
     for(const e of elements){
-     const raw=spotFromElement(e,lat,lon,activity);
-     if(raw)collected.push(raw);
+     const spot=spotFromElement(e,lat,lon,activity);
+     if(spot)collected.push(spot);
     }
-   }catch(e){errors.push('공개지도 검색 지연');}
+   }catch(e){errors.push('OpenStreetMap unavailable');}
   }
   // Nominatim is a backup when API keys/Overpass have no matching places.
   if(collected.length===0){
@@ -730,14 +737,7 @@ Deno.serve(async (req:Request)=>{
     if(nearby.length){collected.push(...nearby);lookupSucceeded=true;}
    }catch(e){errors.push('위치 검색 지연');}
   }
-  const unique=new Map<string,AnyObj>();
-  for(const candidate of collected){
-   const item=normalizePlace(candidate,lat,lon,activity);
-   if(!item)continue;
-   const id=(item.name.trim().toLocaleLowerCase()+'-'+Math.round(item.lat*1000)+'-'+Math.round(item.lon*1000));
-   if(!unique.has(id))unique.set(id,item);
-  }
-  let spots=[...unique.values()].sort((a,b)=>a.distance_m-b.distance_m).slice(0,20);
+  let spots=dedupeSpots(collected,lat,lon,activity);
   let researched:AnyObj|null=null;
   let extraSources:AnyObj[]=[];
   let firstClaimed=false;
@@ -762,6 +762,10 @@ Deno.serve(async (req:Request)=>{
    }
   }
 
+  if(spots.length===0 && cache && Array.isArray(cache.spots) && cache.spots.length>0){
+   return json({...cache,cached:true,stale:true,search_incomplete:true,
+     summary:'현재 검색 제공자가 새로운 장소를 확인하지 못해 이전 확인 자료를 보존합니다.'});
+  }
   if(spots.length===0){
    // Source-backed candidates are distinct from verified places inside 3km.
    const suggested=(researched?.candidates||[]).map((p:AnyObj)=>({
@@ -782,7 +786,7 @@ Deno.serve(async (req:Request)=>{
      spots:[],providers:[],photos:[],sources:extraSources,suggested_places:suggested,
      tips:['확인된 자료 없음은 이용 불가를 의미하지 않습니다.','새로운 정보가 있다면 신고해주세요.'],
      fetched_at:now,photo_checked_at:now,expires_at:null,
-     research_status:'not_confirmed',ai_generated:false,search_version:5};
+     research_status:'not_confirmed',ai_generated:false,search_version:SEARCH_VERSION};
     const {error:saveError}=await db.from('place_activity_insights').upsert(item,{
       onConflict:'place_id,activity',ignoreDuplicates:true});
     if(saveError)return json({error:'조사 결과를 저장하지 못했습니다.'},503);
@@ -809,7 +813,7 @@ Deno.serve(async (req:Request)=>{
    if(researched && researched.summary && researched.sources?.length){
      // The paid initial AI second-search already ran. Do not bill a second time.
      ai={summary:researched.summary,sources:researched.sources};
-   }else if(!researched){
+   }else if(!researched && !cache){
      ai=await onlineAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY'),db,
        {placeId:place.id,reportId:verifiedReportId,adminId});
    }
@@ -830,7 +834,7 @@ Deno.serve(async (req:Request)=>{
   const record={place_id:place.id,activity,radius_m:RANGE,
    summary:ai?.summary||fallback,spots,providers,photos,tips:[caution],sources,
    fetched_at:now,photo_checked_at:now,expires_at:null,
-   research_status:'verified',ai_generated:Boolean(ai?.summary),search_version:5};
+   research_status:'verified',ai_generated:Boolean(ai?.summary),search_version:SEARCH_VERSION};
   const {error:writeError}=await db.from('place_activity_insights').upsert(record,{onConflict:'place_id,activity'});
   if(writeError){return json({...record,warning:'캐시 저장 실패: '+writeError.message,cached:false});}
   if(firstClaimed)await db.from('place_activity_first_attempts')
