@@ -4,6 +4,7 @@ const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers
 const RANGE = 3000;
 type AnyObj = Record<string, any>;
 const selectors: Record<string, string[]> = {
+  "캠핑장": ['["tourism"~"^(camp_site|caravan_site)$"]'],
   "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]', '["historic"]'],
   "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian|steps)$"]["name"]','["route"="foot"]','["tourism"="viewpoint"]'],
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
@@ -139,7 +140,7 @@ const searchTerms:Record<string,string[]>={
  '카지노':['카지노'], '자전거':['자전거체험','스카이사이클','자전거길'],
  '수영':['계곡 물놀이','강/물놀이','물놀이장','수영장','해수욕장','계곡'], '서핑':['서핑','서핑샵'],
  '카약·SUP':['카약','SUP'], '스노클링':['스노클링','다이빙'],
- '스키·눈썰매':['스키장','눈썰매'], '골프':['골프장','파크골프'],
+ '스키·눈썰매':['스키장','눈썰매'], '캠핑장':['캠핑장','오토캠핑장','글램핑장','카라반 캠핑장'], '골프':['골프장','파크골프'],
  '온천·스파':['온천','스파','목욕탕'],
  '문화체험':['문화체험','박물관','문화마을'],
  '시장·쇼핑':['수산물직매장','선상어시장','선상횟집','수산물센터','어시장','수산시장','어판장','전통시장','마트','시장']
