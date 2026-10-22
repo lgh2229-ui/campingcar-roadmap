@@ -292,7 +292,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
   : root && activity==='낚시' ? [root+' 낚시',root+' 선착장'] : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?12:4;
+ const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?8:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  // Parallel bounded batches: 10 sequential 3.5-second timeouts made searches stall.
@@ -759,7 +759,7 @@ Deno.serve(async (req:Request)=>{
      const patch={search_version:SEARCH_VERSION,fetched_at:now,research_status:'not_confirmed',
       summary:'공개 관광정보 일부 출처에서 반경 3km 이내 위치를 확인하지 못했습니다. 다른 출처가 있을 수 있으므로 주기적으로 자동 재검색합니다.'};
      await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
-     return json({...cache,...patch,cached:true,search_incomplete:healthy<3});
+     return json({...cache,...patch,cached:true,search_incomplete:true});
     }
    }
    // One-time licensed-photo enrichment, never a paid AI re-search.
@@ -771,7 +771,8 @@ Deno.serve(async (req:Request)=>{
      .eq('place_id',placeId).eq('activity',activity).is('photo_checked_at',null);
     if(!error)return json({...cache,photos:images,photo_checked_at:now,cached:true});
    }
-   return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated)});
+   return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated),
+    search_incomplete:cachedSpots.length===0});
   }
   const lat=Number(place.latitude),lon=Number(place.longitude);
   // A national tourist listing, reviewed POIs and locally contextual map search
@@ -866,7 +867,7 @@ Deno.serve(async (req:Request)=>{
     if(firstClaimed)await db.from('place_activity_first_attempts')
       .update({outcome:'not_confirmed',finished_at:now})
       .eq('place_id',placeId).eq('activity',activity);
-    return json({...item,cached:true,checked_once:true});
+    return json({...item,cached:true,checked_once:true,search_incomplete:true});
    }
    if(firstClaimed)await db.from('place_activity_first_attempts')
     .update({outcome:'error',finished_at:new Date().toISOString()})
@@ -874,7 +875,7 @@ Deno.serve(async (req:Request)=>{
    return json({summary,place_id:placeId,activity,radius_m:RANGE,
     spots:[],providers:[],photos:[],sources:[],
     tips:['서버 오류가 해결되면 관리자 신고·확인 절차를 이용해 주세요.'],
-    temporarily_unavailable:true,cached:false,ai_generated:false});
+    temporarily_unavailable:true,search_incomplete:true,cached:false,ai_generated:false});
   }
   const providers=spots.filter(s=>s.phone || s.website).slice(0,12);
   const primary=spots.slice(0,3).map(s=>s.name).join('·');
