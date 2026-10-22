@@ -7,17 +7,30 @@ const selectors: Record<string, string[]> = {
   "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]', '["historic"]'],
   "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian|steps)$"]["name"]','["route"="foot"]','["tourism"="viewpoint"]'],
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
-  "낚시": ['["sport"="fishing"]','["fishing"]','["shop"="fishing"]','["leisure"="fishing"]','["man_made"="breakwater"]["name"]','["harbour"]["name"]'],
-  "해루질": ['["natural"~"^(beach|mud)$"]','["wetland"="tidalflat"]'],
+  "낚시": ['["sport"="fishing"]','["fishing"]','["leisure"="fishing"]',
+   '["man_made"~"^(breakwater|pier)$"]["name"]','["harbour"]["name"]',
+   '["seamark:type"="harbour"]["name"]','["man_made"="quay"]["name"]'],
+  "해루질": ['["natural"~"^(beach|mud)$"]','["wetland"="tidalflat"]',
+   '["natural"="wetland"]["wetland"~"^(tidalflat|saltmarsh)$"]',
+   '["tourism"="attraction"]["name"~"갯벌|해루질|조개잡이|어촌체험"]'],
+  // Unified swimming, surfing, snorkeling, kayaking and SUP venues.
+  // Open water is a candidate location, not proof that entering the water is allowed.
   "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing|swimming|snorkeling|stand_up_paddle)$"]',
-  '["leisure"~"^(marina|swimming_pool|water_park|swimming_area|bathing_place)$"]','["shop"="surf"]','["canoe"]',
-  '["natural"="beach"]["name"]','["waterway"~"^(river|stream)$"]["name"~"물놀이|계곡|수영"]',
-  '["tourism"="attraction"]["name"~"물놀이|계곡"]'],
-  "지상레포츠": ['["sport"~"^(climbing|paragliding|archery|motocross|skateboard|horse_racing|skiing|golf|cycling)$"]','["leisure"~"^(sports_centre|golf_course)$"]','["route"="bicycle"]','["highway"="cycleway"]["name"]','["piste:type"]','["name"~"눈썰매|썰매장|스키장|파크골프|자전거체험|MTB"]'],
+    '["leisure"~"^(marina|swimming_pool|water_park|swimming_area|bathing_place)$"]','["shop"="surf"]','["canoe"]',
+    '["natural"="beach"]["name"]','["waterway"~"^(river|stream)$"]["name"~"물놀이|계곡|수영"]',
+    '["tourism"="attraction"]["name"~"물놀이|계곡"]'],
+  // Land sports includes golf, cycling, skiing and sledding.
+  "지상레포츠": ['["sport"~"^(climbing|paragliding|archery|motocross|skateboard|horse_racing|skiing|golf|cycling)$"]',
+    '["leisure"~"^(sports_centre|golf_course)$"]','["route"="bicycle"]','["highway"="cycleway"]["name"]',
+    '["piste:type"]','["name"~"눈썰매|썰매장|스키장|파크골프|자전거체험|MTB"]'],
   "카지노": ['["amenity"="casino"]'],
+  // Waterways are water-play candidates, NOT proof that entry is allowed.
   "온천·스파": ['["amenity"="public_bath"]','["leisure"="spa"]','["natural"="hot_spring"]'],
   "문화체험": ['["tourism"~"^(museum|gallery)$"]','["amenity"~"^(arts_centre|theatre|community_centre)$"]'],
-  "시장·쇼핑": ['["shop"="mall"]','["amenity"="marketplace"]','["shop"="department_store"]'],
+  // Seafood retail and boat markets are part of market/shopping.
+  "시장·쇼핑": ['["amenity"="marketplace"]',
+   '["shop"~"^(fishmonger|seafood|supermarket|mall|department_store)$"]',
+   '["tourism"="attraction"]["name"~"선상어시장|수산시장|직매장|어판장|선상횟집"]'],
 };
 const json = (obj: unknown, status=200) => new Response(JSON.stringify(obj),{status, headers:CORS});
 function distanceM(a:number,b:number,c:number,d:number) {
@@ -35,6 +48,8 @@ function label(t:AnyObj, activity:string) {
  if(t["natural"]==="peak")return "산·봉우리";
  if(t["amenity"]==="casino")return "카지노";
  if(t["leisure"]==="marina")return "마리나";
+ if(activity==="수상레포츠" && (t["waterway"]||t["natural"]==="beach"||t["tourism"]==="attraction"))
+  return "강·계곡 물놀이 후보 (안전·출입 미확인)";
  return [t.tourism,t.leisure,t.sport,t.shop,t.amenity,t.historic].find(Boolean) || "주변 활동 장소";
 }
 // An explicit POI search is best-effort; unavailable public endpoints must never
@@ -61,6 +76,16 @@ async function overpass(lat:number, lon:number, keys:string[]) {
   }catch(e){lastError=String(e);}finally{clearTimeout(timer);}
  }
  throw new Error('공개 지도 서버 일시 중단 ('+lastError.slice(0,80)+')');
+}
+function dedupeSpots(items:AnyObj[],lat:number,lon:number,activity:string):AnyObj[]{
+ const unique:AnyObj[]=[];
+ for(const raw of items){
+  const p=normalizePlace(raw,lat,lon,activity);
+  if(!p)continue;
+  if(unique.some(old=>equivalentPlace(old.name,p.name)&&distanceM(old.lat,old.lon,p.lat,p.lon)<150))continue;
+  unique.push(p);
+ }
+ return unique.sort((a,b)=>a.distance_m-b.distance_m).slice(0,25);
 }
 function validHttp(value:any):string {
  const text=String(value||'').trim();
@@ -93,17 +118,29 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
   .gte('latitude',lat-latDelta).lte('latitude',lat+latDelta)
   .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
  if(error)throw error;
- const mapped=(data||[]).map((p:AnyObj)=>normalizePlace({
+ let matches=(data||[]) as AnyObj[];
+ // A tourist port can also be an evidence-backed fishing location.
+ if(matches.length===0){
+  const {data:related,error:relatedError}=await db.from('verified_activity_pois').select('*')
+   .contains('related_activities',[activity])
+   .gte('latitude',lat-latDelta).lte('latitude',lat+latDelta)
+   .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
+  if(relatedError)console.warn('related activity:',String(relatedError.message).slice(0,80));
+  else matches=(related||[]) as AnyObj[];
+ }
+ const mapped=matches.map((p:AnyObj)=>normalizePlace({
   name:p.name,lat:p.latitude,lon:p.longitude,kind:activity,
   description:p.description,phone:p.phone,website:p.info_source_url,
   source_url:p.info_source_url||p.map_source_url,
  },lat,lon,activity)).filter(Boolean) as AnyObj[];
+ // Aquatic POIs from overlapping surf/water feeds can share a location.
+ // Keep the specific venue name while suppressing a second identical pin.
  if(activity==='수상레포츠'){
   const unique=new Map<string,AnyObj>();
   for(const p of mapped){
    const key=Number(p.lat).toFixed(5)+'/'+Number(p.lon).toFixed(5);
-   const previous=unique.get(key);
-   if(!previous || (/수상레포츠/.test(String(previous.name)) && !/수상레포츠/.test(String(p.name)))) unique.set(key,p);
+   const old=unique.get(key);
+   if(!old || (/수상레포츠/.test(String(old.name)) && !/수상레포츠/.test(String(p.name)))) unique.set(key,p);
   }
   return [...unique.values()];
  }
@@ -114,48 +151,140 @@ const searchTerms:Record<string,string[]>={
  '관광지':['관광명소','전망대','관광지'],
  '산책':['산책로','수변공원','둘레길','해안길','벽화골목'],
  '등산':['등산로','등산','둘레길'],
- '낚시':['낚시포인트','방파제','선착장','낚시터','항구'],
- '해루질':['갯벌체험','해루질','갯벌'],
+ '낚시':['낚시포인트','선착장','방파제','낚시터','항구','포구','워킹낚시'],
+ '해루질':['해루질','갯벌체험','갯벌','어촌체험','조개잡이','바지락체험'],
  '수상레포츠':['수상레저','서핑','서핑샵','수영장','물놀이장','계곡 물놀이','해수욕장','스노클링','카약','SUP','다이빙'],
  '지상레포츠':['골프장','파크골프','자전거체험','자전거길','스키장','눈썰매장','짚라인','스카이사이클','ATV','레포츠'],
  '카지노':['카지노'],
- '수영':['수영장','해수욕장'], '서핑':['서핑','서핑샵'],
-
-
  '온천·스파':['온천','스파','목욕탕'],
  '문화체험':['문화체험','박물관','문화마을'],
- '시장·쇼핑':['수산시장','전통시장','시장','쇼핑']
+ '시장·쇼핑':['수산물직매장','선상어시장','선상횟집','수산물센터','어시장','수산시장','어판장','전통시장','마트','시장']
 };
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
-async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined){
- if(!key)return [] as AnyObj[];
- const terms=(searchTerms[activity]||[activity]).slice(0,4);
+
+const SEARCH_VERSION=8;
+const EMPTY_RETRY_MS=6*60*60*1000;
+const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
+function tourActivity(item:AnyObj):string|null{
+ const type=String(item.contenttypeid||'');
+ const name=String(item.title||'').toLowerCase();
+ if(/캠핑|야영|글램핑|카라반|오토캠프/.test(name))return null;
+ if(['12','14','15','25'].includes(type)){
+  if(type==='14')return '문화체험';
+  if(/낚시/.test(name))return '낚시';
+  if(/등산|등반|산행/.test(name))return '등산';
+  if(/산책|둘레길|해안길|탐방로|트레킹/.test(name))return '산책';
+  return '관광지';
+ }
+ if(type==='38')return '시장·쇼핑';
+ if(type!=='28')return null;
+ if(/낚시/.test(name))return '낚시';
+ if(/서핑|서프|카약|카누|스노클|스노쿨|수영|물놀이|요트|수상|래프팅|sup/.test(name))return '수상레포츠';
+ if(/산책|둘레길|탐방로|트레킹/.test(name))return '산책';
+ if(/등산|등반|산행/.test(name))return '등산';
+ return '지상레포츠';
+}
+// Query the tourism authority live; a one-off admin importer is not live search.
+async function tourApiSearch(lat:number,lon:number,activity:string):Promise<AnyObj[]>{
+ let key=Deno.env.get('KTO_TOUR_API_KEY')||'';
+ if(!key)throw new Error('KTO_API_KEY_NOT_CONFIGURED');
+ if(key.includes('%')){try{key=decodeURIComponent(key);}catch(_){}}
+ const results:AnyObj[]=[];
+ for(let page=1;page<=2;page++){
+  const url=new URL('https://apis.data.go.kr/B551011/KorService2/locationBasedList2');
+  for(const [field,value] of Object.entries({
+   serviceKey:key,MobileOS:'ETC',MobileApp:'CampingcarRoadmap',_type:'json',
+   mapX:String(lon),mapY:String(lat),radius:String(RANGE),
+   arrange:'E',numOfRows:'100',pageNo:String(page)
+  }))url.searchParams.set(field,value);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8500);
+  try{
+   const response=await fetch(url.toString(),{headers:{Accept:'application/json'},signal:controller.signal});
+   if(!response.ok)throw new Error('KTO HTTP '+response.status);
+   const payload=await response.json();
+   const body=payload?.response?.body, header=payload?.response?.header;
+   if(String(header?.resultCode??'0000')!=='0000')throw new Error('KTO_RESULT_'+header.resultCode);
+   const raw=body?.items?.item||[];
+   const items=Array.isArray(raw)?raw:[raw];
+   for(const item of items){
+    const classified=tourActivity(item);
+    if(classified!==activity && !(activity==='관광지' && String(item.contenttypeid)==='14'))continue;
+    const name=String(item.title||'').replace(/<[^>]*>/g,' ').trim();
+    const id=String(item.contentid||'').trim();
+    const poi=normalizePlace({
+      name,lat:item.mapy,lon:item.mapx,kind:activity,
+      address:String(item.addr1||'').slice(0,160),phone:String(item.tel||'').replace(/<[^>]*>/g,' ').trim(),
+      description:'한국관광공사 관광정보 '+(id?'(ID '+id+')':'')+'. 실제 이용·운영조건 별도 확인.',
+      source_url:KTO_SOURCE
+    },lat,lon,activity);
+    if(poi)results.push(poi);
+   }
+   if(items.length<100 || page*100>=Number(body?.totalCount||0))break;
+  }finally{clearTimeout(timer);}
+ }
+ return results;
+}
+
+async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
+ if(!key)throw new Error('REGIONAL_MAP_KEY_NOT_CONFIGURED');
+ const root=placeName.replace(/(공영주차장|주차장|노지|차박|캠핑장|야영장|주변)/g,'').trim().slice(0,30);
+ const coastal=/항|포구|선착장|방파제|어촌|해변|해수욕장|해안/.test(root);
+ const targeted=root && activity==='관광지'
+  ? [root,root+' 관광명소',root+' 주변 관광지',root+' 해수욕장']
+  : root && activity==='시장·쇼핑'
+  ? (coastal?[root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']:[root+' 전통시장',root+' 마트'])
+  : root && (activity==='낚시'||activity==='해루질')
+  ? [root+' '+activity,root+' 선착장'] : [];
+ const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
+   '수산물센터','어시장','농산물직판장'];
+ const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?6:4;
+ const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  for(const term of terms){
   const url='https://dapi.kakao.com/v2/local/search/keyword.json?'+
     new URLSearchParams({query:term,x:String(lon),y:String(lat),radius:String(RANGE),size:'15',sort:'distance'});
-  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),3500);
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),activity==='시장·쇼핑'?2800:3500);
   try{
    const r=await fetch(url,{headers:{Authorization:'KakaoAK '+key},signal:ctrl.signal});
    if(!r.ok)continue;
    const data=await r.json();
    for(const d of data.documents||[]){
+    if(activity==='관광지' &&
+       !/관광|여행|명소|전망대|해변|해수욕장|수목원|공원|박물관|문화재|유적|축제|정원|미술관|테마파크|포토존/i.test(
+        String(d.category_name||'')+' '+String(d.place_name||'')))continue;
+    if(activity==='시장·쇼핑' &&
+       !/수산|어시장|시장|직매장|어판장|선상|회뜨는|마트|쇼핑|상설|장터|활어|회센터|회센타/i.test(
+        String(d.place_name||'')+' '+String(d.category_name||'')))continue;
     const kind=activity==='낚시'&&/방파제|선착장|항구/.test(term)
       ? '낚시 관련 해안시설 후보 (출입·낚시 허용 여부 현장 확인)'
       : activity;
-    const spot=normalizePlace({name:d.place_name,lat:d.y,lon:d.x,kind,
+    const waterCandidate=activity==='수상레포츠' && /계곡|강변|하천|유원지|물놀이|해수욕장/i.test(String(d.place_name||''));
+    const candidateKind=activity==='시장·쇼핑'
+      ? '시장·직매장 관련 시설 (판매·영업 조건 확인)'
+      : activity==='해루질'
+      ? '갯벌·해루질 장소 후보 (채취·출입 허가 미확인)'
+      : activity==='낚시'
+      ? '낚시 관련 항만시설 후보 (출입·낚시 허가 미확인)'
+      : waterCandidate?'강·계곡 물놀이 후보 (안전·출입 미확인)':kind;
+    const spot=normalizePlace({name:d.place_name,lat:d.y,lon:d.x,kind:candidateKind,
       address:d.road_address_name||d.address_name,phone:d.phone,
       website:d.place_url,source_url:d.place_url,
       description:activity==='낚시'?
        '지도에 등록된 항만 관련 시설입니다. 낚시 가능 여부 및 출입통제 여부는 현장 확인이 필요합니다.':
-       '지도에 등록된 주변 장소입니다.'
+       waterCandidate?
+       '강·계곡 물놀이 관련 지도 장소 후보입니다. 실제 수영·입수 허용, 수심·급류·수질·출입 통제는 현장 안내를 확인하세요.':
+       activity==='해루질'
+        ? '지도에 등록된 갯벌·해루질 후보입니다. 실제 출입·채취 허가와 어촌계 관리, 갯골·물때를 확인하세요.'
+        : activity==='시장·쇼핑'
+          ? '시장·어시장·직매장 관련 지도 장소입니다. 판매 품목, 운영시간과 가격을 확인하세요.'
+          : '지도에 등록된 주변 장소입니다.'
     },lat,lon,activity);
     if(spot&&!found.some(x=>x.name===spot.name))found.push(spot);
    }
   }catch(e){console.warn('Kakao keyword lookup:',String(e).slice(0,80));}
   finally{clearTimeout(timer);}
-  if(found.length>=15)break;
+  if(found.length>=15 && activity!=='시장·쇼핑')break;
  }
  return found.slice(0,20);
 }
@@ -193,7 +322,11 @@ function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
  const phone=String(t['contact:phone']||t.phone||'').trim().slice(0,90);
  const website=String(t['contact:website']||t.website||'').trim();
  const safeWebsite=/^https?:\/\//i.test(website)?website:'';
- return {name,lat:la,lon:lo,distance_m:meters,kind:label(t,activity),address:String(t['addr:full']||t['addr:street']||'').slice(0,160),phone,website:safeWebsite,opening_hours:String(t.opening_hours||'').slice(0,120),fee:String(t.fee||'').slice(0,45),description:String(t['description:ko']||t.description||'').slice(0,250),source_url:url,photo_hint:String(t.wikimedia_commons||'').startsWith('File:')?String(t.wikimedia_commons):''};
+ return {name,lat:la,lon:lo,distance_m:meters,kind:label(t,activity),address:String(t['addr:full']||t['addr:street']||'').slice(0,160),phone,website:safeWebsite,opening_hours:String(t.opening_hours||'').slice(0,120),fee:String(t.fee||'').slice(0,45),description:String(t['description:ko']||t.description||(
+  activity==='수상레포츠' && (t.waterway||t.natural==='beach'||t.tourism==='attraction')
+   ? '강·계곡·하천 물놀이 관련 지형 후보입니다. 수영 허용 여부, 급류·수심·수질·기상 상황을 현장에서 확인하세요.'
+   : ''
+ )).slice(0,250),source_url:url,photo_hint:String(t.wikimedia_commons||'').startsWith('File:')?String(t.wikimedia_commons):''};
 }
 // AI searches fresh public web sources only when a server-side API key is configured.
 // It may enrich descriptions of independently geolocated POIs, but must not create
@@ -348,7 +481,7 @@ async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:
    '산책은 벽화골목·해안길·수변공원, 낚시는 내항·방파제·선착장, 지상레포츠는 와이어 자전거·스카이사이클·짚라인까지 조사하세요.',
    '장소 이름과 출처를 최대 5곳 반환하고, 근거 없이 장소·좌표·연락처·어종을 지어내지 마세요. 일부 검색사이트는 접근이 제한될 수 있습니다.',
    '낚시 가능 구간은 출입금지·위험 테트라포드와 구분하고, 실제 어획은 보장하지 마세요.',
-   '응답은 반드시 JSON 객체로만: {"summary":"한국어 요약","places":[{"name":"실제 시설명","source_url":"https://원문"}]}',
+    'JSON 객체 형식으로만 응답하세요. summary는 검색 근거 요약, places는 확인된 실제 장소 고유명칭과 열리는 출처 URL 배열입니다. 안내 예시 텍스트를 장소명 또는 URL로 복사하지 마세요.',
    '후보의 좌표·3km 이내 여부는 다른 지도 제공자가 최종 확인합니다.'
   ].join('\\n');
   const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',
@@ -374,7 +507,15 @@ async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:
   catch(_){return {summary:'',sources:[...sources.values()],candidates:[]};}
   const candidates=(Array.isArray(parsed.places)?parsed.places:[]).slice(0,5)
    .map((p:AnyObj)=>({name:String(p.name||'').slice(0,90),source_url:validHttp(p.source_url)}))
-   .filter((p:AnyObj)=>p.name.length>1 && (p.source_url||sources.size));
+   .filter((p:AnyObj)=>{
+    const label=p.name.trim().toLowerCase();
+    if(label.length<3 || /실제.?시설명|고유명칭|예시|장소명|시설명|^낚시포인트$|^주변장소$|^test$/i.test(label))return false;
+    try{
+     const url=new URL(p.source_url);
+     return (url.protocol==='https:'||url.protocol==='http:') &&
+      url.hostname.includes('.') && !/원문|예시|example|localhost|\.invalid/i.test(p.source_url);
+    }catch(_){return false;}
+   });
   return {summary:String(parsed.summary||'').slice(0,500),sources:[...sources.values()],candidates};
  }catch(e){console.warn('AI discovery unavailable:',String(e).slice(0,90));if(!settled)await settle(false,0,0,0,0,'','request_error');return null;}
  finally{clearTimeout(timer);}
@@ -460,6 +601,14 @@ Deno.serve(async (req:Request)=>{
   if(placeError || !place)return json({error:'조회할 수 없는 장소입니다.'},403);
   const {data:cache}=await db.from('place_activity_insights').select('*').eq('place_id',placeId).eq('activity',activity).maybeSingle();
   const force=body.force_refresh===true;
+  // A normal reload actually means free-source refresh, not re-reading cache.
+  // Throttle requests to protect upstream map providers without charging AI.
+  const refreshSources=body.refresh_sources===true;
+  const cacheAge=cache?Date.now()-new Date(cache.fetched_at||0).getTime():Infinity;
+  if(refreshSources && cache && Number.isFinite(cacheAge) && cacheAge<10*60000 && !force){
+   return json({...cache,cached:true,refresh_throttled:true,
+     retry_after_seconds:Math.max(0,Math.ceil((10*60000-cacheAge)/1000))});
+  }
   let verifiedReportId:string|null=null;
   let adminId:string|null=null;
   if(force){
@@ -475,8 +624,84 @@ Deno.serve(async (req:Request)=>{
    verifiedReportId=reportId;
    if(!Deno.env.get('OPENAI_API_KEY'))return json({error:'OpenAI API 키가 등록되지 않아 AI 재검색을 실행할 수 없습니다.'},503);
   }
-  // Cached results never expire automatically. A normal user cannot force-refresh.
-  if(cache && !force){
+  // A negative cache must reflect newly verified POIs without extra paid AI searches.
+  if(cache && !force && !refreshSources && (
+    !Array.isArray(cache.spots) || cache.spots.length===0 ||
+    (Number(cache.search_version||0)>=SEARCH_VERSION &&
+      Date.now()-new Date(cache.fetched_at||0).getTime()<7*86400000)
+  )){
+   const cachedSpots=Array.isArray(cache.spots)?cache.spots:[];
+   if(cachedSpots.length===0){
+    try{
+     const fresh=await curatedPoi(db,Number(place.latitude),Number(place.longitude),activity);
+     if(fresh.length>0){
+      const now=new Date().toISOString();
+      const names=fresh.slice(0,3).map(s=>s.name).join(' · ');
+      const summary=place.name+' 주변 3km 이내 공개자료에서 '+activity+
+       ' 관련 장소 '+fresh.length+'곳을 확인했습니다: '+names+
+       '. 활동 관련 장소 위치가 확인됐으나 실제 출입·채취 허가와 안전은 현장에서 별도 확인하세요.';
+      const sources=fresh.filter(s=>Boolean(validHttp(s.source_url)))
+       .map(s=>({name:s.name,url:s.source_url}));
+      const tips=activity==='해루질'
+       ? ['해루질 관련 위치는 현재 채취·출입 허가를 뜻하지 않습니다. 어촌계·마을어장 규정을 확인하세요.',
+          '갯골·물때·기상과 안전장비를 확인하세요.']
+       : activity==='수상레포츠'?
+       ['물놀이 관련 장소 후보는 수영 허가·안전 확인을 의미하지 않습니다.',
+        '상수원 보호, 출입 통제, 수심·급류·기상·수질을 현장에서 확인하세요.']:
+       ['정보 출처와 출입·운영 조건은 이용 전 확인하세요.'];
+      const patch={summary,spots:fresh,providers:[],sources,tips,
+       research_status:'verified',fetched_at:now,ai_generated:false,search_version:SEARCH_VERSION};
+      const {error}=await db.from('place_activity_insights')
+       .update(patch).eq('place_id',placeId).eq('activity',activity);
+      if(!error)return json({...cache,...patch,cached:true,curated_refreshed:true});
+      console.warn('curated-cache-write:',error.message);
+     }
+    }catch(e){console.warn('curated-cache-lookup:',String(e).slice(0,100));}
+   }
+   // Failures are not permanent 0-result findings; retry empty caches after
+   // six hours and immediately after a search-provider version update.
+   if(cachedSpots.length===0){
+    const age=Date.now()-new Date(cache.fetched_at||0).getTime();
+    if(Number(cache.search_version||0)<SEARCH_VERSION || !Number.isFinite(age) || age>EMPTY_RETRY_MS){
+     const lat=Number(place.latitude),lon=Number(place.longitude);
+     const checks=await Promise.allSettled([
+      tourApiSearch(lat,lon,activity),
+      kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name),
+      overpass(lat,lon,selectors[activity])
+     ]);
+     const raw:AnyObj[]=[];
+     if(checks[0].status==='fulfilled')raw.push(...checks[0].value);
+     if(checks[1].status==='fulfilled')raw.push(...checks[1].value);
+     if(checks[2].status==='fulfilled')for(const element of checks[2].value){
+      const spot=spotFromElement(element,lat,lon,activity);if(spot)raw.push(spot);
+     }
+     if(raw.length===0){
+      try{raw.push(...await nominatimSearch(lat,lon,activity,place.name));}
+      catch(e){console.warn('cached-name-search:',String(e).slice(0,70));}
+     }
+     const found=dedupeSpots(raw,lat,lon,activity),now=new Date().toISOString();
+     if(found.length>0){
+      const update={
+       spots:found,summary:place.name+' 주변 3km 이내 공개 관광·지도 자료에서 '+activity+' 관련 '+found.length+'곳을 확인했습니다. 입장·운영조건은 방문 전 확인하세요.',
+       sources:found.filter(p=>Boolean(validHttp(p.source_url))).map(p=>({name:p.name,url:p.source_url})),
+       providers:found.filter(p=>p.phone||p.website),research_status:'verified',ai_generated:false,
+       fetched_at:now,search_version:SEARCH_VERSION
+      };
+      const {error}=await db.from('place_activity_insights').update(update).eq('place_id',placeId).eq('activity',activity);
+      if(error)console.warn('cache-refreshed-not-saved:',error.message);
+      return json({...cache,...update,cached:true,free_map_refreshed:true});
+     }
+     const healthy=checks.slice(1).filter(x=>x.status==='fulfilled').length;
+     if(healthy===0){
+      return json({...cache,cached:true,temporarily_unavailable:true,search_incomplete:true,
+       summary:'관광공사·지역지도·공개지도 검색이 일시적으로 실패했습니다. 검색 실패는 관광지 0곳을 뜻하지 않습니다.'});
+     }
+     const patch={search_version:SEARCH_VERSION,fetched_at:now,research_status:'not_confirmed',
+      summary:'공개 관광정보 일부 출처에서 반경 3km 이내 위치를 확인하지 못했습니다. 다른 출처가 있을 수 있으므로 주기적으로 자동 재검색합니다.'};
+     await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
+     return json({...cache,...patch,cached:true,search_incomplete:healthy<3});
+    }
+   }
    // One-time licensed-photo enrichment, never a paid AI re-search.
    if(!cache.photo_checked_at){
     const images=await photoList(Array.isArray(cache.spots)?cache.spots:[]);
@@ -489,25 +714,29 @@ Deno.serve(async (req:Request)=>{
    return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated)});
   }
   const lat=Number(place.latitude),lon=Number(place.longitude);
-  // Search our existing verified dataset first, even on the very first tap.
+  // A national tourist listing, reviewed POIs and locally contextual map search
+  // complement each other. Never depend on a single generic keyword.
+  const checks=await Promise.allSettled([
+   curatedPoi(db,lat,lon,activity),
+   tourApiSearch(lat,lon,activity),
+   kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name)
+  ]);
   let collected:AnyObj[]=[];
-  try{collected=await curatedPoi(db,lat,lon,activity);}catch(e){console.warn('curated POI lookup:',String(e));}
   const errors:string[]=[];
-  let lookupSucceeded=collected.length>0;
-  // Fresh results are persisted so subsequent opens do not repeat internet searches.
-  try{
-   const kakao=await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'));
-   if(kakao.length) {collected.push(...kakao);lookupSucceeded=true;}
-  }catch(e){errors.push('지역검색 연결 문제');}
-  if(collected.length===0 || body.force_refresh===true){
+  for(let i=0;i<checks.length;i++){
+   if(checks[i].status==='fulfilled')collected.push(...(checks[i] as PromiseFulfilledResult<AnyObj[]>).value);
+   else errors.push(['Reviewed POIs','KTO','Regional map'][i]+' unavailable');
+  }
+  let lookupSucceeded=checks.some(x=>x.status==='fulfilled' && x.value.length>0);
+  if(collected.length<8){
    try{
     const elements=await overpass(lat,lon,selectors[activity]);
     lookupSucceeded=true;
     for(const e of elements){
-     const raw=spotFromElement(e,lat,lon,activity);
-     if(raw)collected.push(raw);
+     const spot=spotFromElement(e,lat,lon,activity);
+     if(spot)collected.push(spot);
     }
-   }catch(e){errors.push('공개지도 검색 지연');}
+   }catch(e){errors.push('OpenStreetMap unavailable');}
   }
   // Nominatim is a backup when API keys/Overpass have no matching places.
   if(collected.length===0){
@@ -516,14 +745,7 @@ Deno.serve(async (req:Request)=>{
     if(nearby.length){collected.push(...nearby);lookupSucceeded=true;}
    }catch(e){errors.push('위치 검색 지연');}
   }
-  const unique=new Map<string,AnyObj>();
-  for(const candidate of collected){
-   const item=normalizePlace(candidate,lat,lon,activity);
-   if(!item)continue;
-   const id=(item.name.trim().toLocaleLowerCase()+'-'+Math.round(item.lat*1000)+'-'+Math.round(item.lon*1000));
-   if(!unique.has(id))unique.set(id,item);
-  }
-  let spots=[...unique.values()].sort((a,b)=>a.distance_m-b.distance_m).slice(0,20);
+  let spots=dedupeSpots(collected,lat,lon,activity);
   let researched:AnyObj|null=null;
   let extraSources:AnyObj[]=[];
   let firstClaimed=false;
@@ -532,15 +754,10 @@ Deno.serve(async (req:Request)=>{
     const {data:claimed,error:claimError}=await db.rpc('claim_activity_initial_research',
       {p_place_id:placeId,p_activity:activity});
     if(claimError)return json({error:'최초 검색 상태 확인 오류'},503);
-    if(claimed!==true)return json({
-      summary:'이 장소의 주변 활동은 이미 최초 조사했거나 현재 조사 중입니다. 새로운 정보는 신고해 주세요.',
-      spots:[],providers:[],photos:[],sources:[],
-      tips:['정보가 확인되지 않았다고 활동이 불가능하다는 뜻은 아닙니다.'],
-      cached:true,checked_once:true,ai_generated:false
-    });
-    firstClaimed=true;
+    // A previous initial attempt blocks only paid AI, not free map searching.
+    if(claimed===true)firstClaimed=true;
    }
-   researched=await aiFallback(db,place,activity);
+   researched=firstClaimed ? await aiFallback(db,place,activity) : null;
    if(researched){
     extraSources=researched.sources||[];
     for(const candidate of researched.candidates||[]){
@@ -553,6 +770,10 @@ Deno.serve(async (req:Request)=>{
    }
   }
 
+  if(spots.length===0 && cache && Array.isArray(cache.spots) && cache.spots.length>0){
+   return json({...cache,cached:true,stale:true,search_incomplete:true,
+     summary:'현재 검색 제공자가 새로운 장소를 확인하지 못해 이전 확인 자료를 보존합니다.'});
+  }
   if(spots.length===0){
    // Source-backed candidates are distinct from verified places inside 3km.
    const suggested=(researched?.candidates||[]).map((p:AnyObj)=>({
@@ -573,7 +794,7 @@ Deno.serve(async (req:Request)=>{
      spots:[],providers:[],photos:[],sources:extraSources,suggested_places:suggested,
      tips:['확인된 자료 없음은 이용 불가를 의미하지 않습니다.','새로운 정보가 있다면 신고해주세요.'],
      fetched_at:now,photo_checked_at:now,expires_at:null,
-     research_status:'not_confirmed',ai_generated:false};
+     research_status:'not_confirmed',ai_generated:false,search_version:SEARCH_VERSION};
     const {error:saveError}=await db.from('place_activity_insights').upsert(item,{
       onConflict:'place_id,activity',ignoreDuplicates:true});
     if(saveError)return json({error:'조사 결과를 저장하지 못했습니다.'},503);
@@ -600,7 +821,7 @@ Deno.serve(async (req:Request)=>{
    if(researched && researched.summary && researched.sources?.length){
      // The paid initial AI second-search already ran. Do not bill a second time.
      ai={summary:researched.summary,sources:researched.sources};
-   }else if(!researched){
+   }else if(!researched && !cache){
      ai=await onlineAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY'),db,
        {placeId:place.id,reportId:verifiedReportId,adminId});
    }
@@ -611,6 +832,8 @@ Deno.serve(async (req:Request)=>{
   if(force && !ai?.summary)return json({error:'AI 검색 또는 출처 확인이 완료되지 않았습니다. 신고는 대기 상태로 유지됩니다.'},503);
   const caution=(activity==='해루질'||activity==='낚시')
    ? '채취·낚시 가능 구역, 출입 제한, 금어기, 기상 및 물때를 현장에서 반드시 확인하세요. 위치 정보만으로 합법적인 이용이 보장되지 않습니다.'
+   : activity==='수상레포츠'
+   ? '서핑·수영·스노클링·카약·SUP 정보를 통합해 제공합니다. 해수욕장·강·계곡 물놀이는 후보일 수 있으며 입수·출입 허용 여부, 파도·급류·수심·수질 및 기상을 현장에서 확인하세요.'
    : '운영시간·요금·예약·입장 가능 여부는 출발 전 공식 안내 또는 해당 업체에 확인하세요.';
   const sources=[...spots.map(s=>({name:s.name,url:s.source_url})),...extraSources,...(ai?.sources||[])]
     .filter((s:AnyObj)=>Boolean(validHttp(s.url))).slice(0,26);
@@ -619,7 +842,7 @@ Deno.serve(async (req:Request)=>{
   const record={place_id:place.id,activity,radius_m:RANGE,
    summary:ai?.summary||fallback,spots,providers,photos,tips:[caution],sources,
    fetched_at:now,photo_checked_at:now,expires_at:null,
-   research_status:'verified',ai_generated:Boolean(ai?.summary)};
+   research_status:'verified',ai_generated:Boolean(ai?.summary),search_version:SEARCH_VERSION};
   const {error:writeError}=await db.from('place_activity_insights').upsert(record,{onConflict:'place_id,activity'});
   if(writeError){return json({...record,warning:'캐시 저장 실패: '+writeError.message,cached:false});}
   if(firstClaimed)await db.from('place_activity_first_attempts')
