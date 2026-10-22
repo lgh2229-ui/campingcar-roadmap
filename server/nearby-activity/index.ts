@@ -9,13 +9,12 @@ const selectors: Record<string, string[]> = {
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
   "낚시": ['["sport"="fishing"]','["fishing"]','["shop"="fishing"]','["leisure"="fishing"]','["man_made"="breakwater"]["name"]','["harbour"]["name"]'],
   "해루질": ['["natural"~"^(beach|mud)$"]','["wetland"="tidalflat"]'],
-  "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing)$"]', '["leisure"="marina"]'],
+  "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing|swimming|snorkeling|stand_up_paddle)$"]',
+  '["leisure"~"^(marina|swimming_pool|water_park|swimming_area|bathing_place)$"]','["shop"="surf"]','["canoe"]',
+  '["natural"="beach"]["name"]','["waterway"~"^(river|stream)$"]["name"~"물놀이|계곡|수영"]',
+  '["tourism"="attraction"]["name"~"물놀이|계곡"]'],
   "지상레포츠": ['["sport"~"^(climbing|paragliding|archery|motocross|skateboard|horse_racing|skiing|golf|cycling)$"]','["leisure"~"^(sports_centre|golf_course)$"]','["route"="bicycle"]','["highway"="cycleway"]["name"]','["piste:type"]','["name"~"눈썰매|썰매장|스키장|파크골프|자전거체험|MTB"]'],
   "카지노": ['["amenity"="casino"]'],
-  "수영": ['["leisure"="swimming_pool"]','["sport"="swimming"]'],
-  "서핑": ['["sport"="surfing"]','["shop"="surf"]'],
-  "카약·SUP": ['["sport"~"^(canoe|kayaking|stand_up_paddle)$"]','["canoe"]'],
-  "스노클링": ['["sport"~"^(scuba_diving|snorkeling)$"]'],
   "온천·스파": ['["amenity"="public_bath"]','["leisure"="spa"]','["natural"="hot_spring"]'],
   "문화체험": ['["tourism"~"^(museum|gallery)$"]','["amenity"~"^(arts_centre|theatre|community_centre)$"]'],
   "시장·쇼핑": ['["shop"="mall"]','["amenity"="marketplace"]','["shop"="department_store"]'],
@@ -94,11 +93,21 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
   .gte('latitude',lat-latDelta).lte('latitude',lat+latDelta)
   .gte('longitude',lon-lonDelta).lte('longitude',lon+lonDelta).limit(75);
  if(error)throw error;
- return (data||[]).map((p:AnyObj)=>normalizePlace({
+ const mapped=(data||[]).map((p:AnyObj)=>normalizePlace({
   name:p.name,lat:p.latitude,lon:p.longitude,kind:activity,
   description:p.description,phone:p.phone,website:p.info_source_url,
   source_url:p.info_source_url||p.map_source_url,
  },lat,lon,activity)).filter(Boolean) as AnyObj[];
+ if(activity==='수상레포츠'){
+  const unique=new Map<string,AnyObj>();
+  for(const p of mapped){
+   const key=Number(p.lat).toFixed(5)+'/'+Number(p.lon).toFixed(5);
+   const previous=unique.get(key);
+   if(!previous || (/수상레포츠/.test(String(previous.name)) && !/수상레포츠/.test(String(p.name)))) unique.set(key,p);
+  }
+  return [...unique.values()];
+ }
+ return mapped;
 }
 // Search the names people actually use, not just abstract category labels.
 const searchTerms:Record<string,string[]>={
@@ -107,11 +116,11 @@ const searchTerms:Record<string,string[]>={
  '등산':['등산로','등산','둘레길'],
  '낚시':['낚시포인트','방파제','선착장','낚시터','항구'],
  '해루질':['갯벌체험','해루질','갯벌'],
- '수상레포츠':['수상레저','서핑','카약','SUP'],
+ '수상레포츠':['수상레저','서핑','서핑샵','수영장','물놀이장','계곡 물놀이','해수욕장','스노클링','카약','SUP','다이빙'],
  '지상레포츠':['골프장','파크골프','자전거체험','자전거길','스키장','눈썰매장','짚라인','스카이사이클','ATV','레포츠'],
  '카지노':['카지노'],
  '수영':['수영장','해수욕장'], '서핑':['서핑','서핑샵'],
- '카약·SUP':['카약','SUP'], '스노클링':['스노클링','다이빙'],
+
 
  '온천·스파':['온천','스파','목욕탕'],
  '문화체험':['문화체험','박물관','문화마을'],
