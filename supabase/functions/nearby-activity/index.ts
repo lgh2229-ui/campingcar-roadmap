@@ -246,6 +246,38 @@ function geographicRoots(full:string):string[]{
  return [...new Set(items.filter(x=>x.length>=2&&x.length<=35))].slice(0,3);
 }
 
+// Search snippets are supporting evidence, never proof of an exact map pin.
+async function naverBlogEvidence(placeName:string,activity:string):Promise<AnyObj[]>{
+ if(activity!=='해루질')return [];
+ const clientId=Deno.env.get('NAVER_SEARCH_CLIENT_ID')||'';
+ const clientSecret=Deno.env.get('NAVER_SEARCH_CLIENT_SECRET')||'';
+ if(!clientId||!clientSecret)throw new Error('NAVER_SEARCH_CREDENTIALS_MISSING');
+ const areas=geographicRoots(placeName);
+ const queries=[...new Set(areas.flatMap(area=>[area+' 맛조개',area+' 갯벌체험 해루질']))].slice(0,4);
+ const responses=await Promise.allSettled(queries.map(async query=>{
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),3200);
+  try{
+   const url='https://openapi.naver.com/v1/search/blog.json?'+new URLSearchParams({query,display:'10',sort:'sim'});
+   const result=await fetch(url,{headers:{'X-Naver-Client-Id':clientId,'X-Naver-Client-Secret':clientSecret},signal:controller.signal});
+   if(!result.ok)throw new Error('NAVER_SEARCH_'+result.status);
+   const body=await result.json();
+   return (Array.isArray(body.items)?body.items:[]).map((x:AnyObj)=>({
+    name:String(x.title||'').replace(/<[^>]*>/g,' ').slice(0,110),
+    source_url:validHttp(x.link),
+    description:String(x.description||'').replace(/<[^>]*>/g,' ').slice(0,230),
+    published_at:String(x.postdate||'').slice(0,8),
+    location_verified:false,
+    note:'관련 블로그 문서입니다. 상세 좌표와 현재 채취 허가를 검증하지 않았습니다.'
+   })).filter((x:AnyObj)=>x.source_url&&
+     /맛조개|조개|갯벌|해루질|동죽|바지락/.test(x.name+' '+x.description)&&
+     areas.some(area=>(x.name+' '+x.description).replace(/\\s+/g,'').includes(area.replace(/\\s+/g,''))));
+  }finally{clearTimeout(timeout);}
+ }));
+ if(responses.every(x=>x.status==='rejected'))throw new Error('NAVER_BLOG_SEARCH_UNAVAILABLE');
+ const found=responses.flatMap(x=>x.status==='fulfilled'?x.value:[]);
+ return [...new Map(found.map((x:AnyObj)=>[x.source_url,x])).values()].slice(0,6);
+}
+
 async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
  if(!key)throw new Error('REGIONAL_MAP_KEY_NOT_CONFIGURED');
  const roots=geographicRoots(placeName);
@@ -803,20 +835,25 @@ Deno.serve(async (req:Request)=>{
      summary:'현재 검색 제공자가 새로운 장소를 확인하지 못해 이전 확인 자료를 보존합니다.'});
   }
   if(spots.length===0){
+   let naverRelated:AnyObj[]=[];
+   if(activity==='해루질'){
+    try{naverRelated=await naverBlogEvidence(place.name,activity);}
+    catch(error){errors.push('Naver blog API not configured or unavailable');console.warn('Naver source:',String(error).slice(0,70));}
+   }
    // Source-backed candidates are distinct from verified places inside 3km.
-   const suggested=(researched?.candidates||[]).map((p:AnyObj)=>({
+   const suggested=[...naverRelated,...(researched?.candidates||[]).map((p:AnyObj)=>({
     name:String(p.name||'').slice(0,100),source_url:validHttp(p.source_url),
     location_verified:false,
     note:'공개 웹자료에서 찾은 후보입니다. 3km 이내 위치는 확인되지 않았습니다.'
-   })).slice(0,5);
-   const summary=researched
+   }))].slice(0,6);
+   const summary=(researched || naverRelated.length>0)
     ? (suggested.length>0
        ? '주변 관련 정보를 재검색해 '+suggested.map((p:AnyObj)=>p.name).join(' · ')+
          ' 등의 자료를 찾았습니다. 다만 위치 데이터가 확인되지 않아 반경 3km 확정 목록에는 포함하지 않았습니다. 출처에서 직접 확인하거나 변경 신고를 남겨주세요.'
        : 'AI 웹검색을 시도했으나 반경 3km 이내에서 위치까지 검증된 '+activity+' 장소는 아직 확인하지 못했습니다. 이용 불가라는 뜻은 아닙니다.')
     : '현재 공개지도·AI 확인이 원활하지 않습니다. 정보가 있다면 신고해주세요.';
    if(force)return json({error:'관리자 AI 재검색에서 확인된 장소가 없어 이전 기록을 유지했습니다.'},503);
-   if(researched){
+   if(researched || naverRelated.length>0){
     const now=new Date().toISOString();
     const item={place_id:placeId,activity,radius_m:RANGE,summary,
      spots:[],providers:[],photos:[],sources:extraSources,suggested_places:suggested,
