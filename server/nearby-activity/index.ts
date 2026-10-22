@@ -12,7 +12,8 @@ const selectors: Record<string, string[]> = {
    '["seamark:type"="harbour"]["name"]','["man_made"="quay"]["name"]'],
   "해루질": ['["natural"~"^(beach|mud)$"]','["wetland"="tidalflat"]',
    '["natural"="wetland"]["wetland"~"^(tidalflat|saltmarsh)$"]',
-   '["tourism"="attraction"]["name"~"갯벌|해루질|조개잡이|어촌체험"]'],
+   '["tourism"="attraction"]["name"~"갯벌|해루질|맛조개|바지락|동죽|조개잡이|어촌체험"]',
+   '["name"~"맛조개|바지락|조개잡이|갯벌체험|해루질"]'],
   // Unified swimming, surfing, snorkeling, kayaking and SUP venues.
   // Open water is a candidate location, not proof that entering the water is allowed.
   "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing|swimming|snorkeling|stand_up_paddle)$"]',
@@ -63,7 +64,7 @@ async function overpass(lat:number, lon:number, keys:string[]) {
  ];
  let lastError='';
  for(const url of urls) {
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8500);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5500);
   try {
    // GET avoids several public proxies rejecting form-encoded POST with HTTP 406.
    const response=await fetch(url+'?data='+encodeURIComponent(query),{
@@ -152,7 +153,7 @@ const searchTerms:Record<string,string[]>={
  '산책':['산책로','수변공원','둘레길','해안길','벽화골목'],
  '등산':['등산로','등산','둘레길'],
  '낚시':['낚시포인트','선착장','방파제','낚시터','항구','포구','워킹낚시'],
- '해루질':['해루질','갯벌체험','갯벌','어촌체험','조개잡이','바지락체험'],
+ '해루질':['맛조개','맛조개잡이','조개잡이','갯벌체험','해루질','바지락','동죽','백합','낙지','소라','꽃게','어촌체험','조개채취','갯벌'],
  '수상레포츠':['수상레저','서핑','서핑샵','수영장','물놀이장','계곡 물놀이','해수욕장','스노클링','카약','SUP','다이빙'],
  '지상레포츠':['골프장','파크골프','자전거체험','자전거길','스키장','눈썰매장','짚라인','스카이사이클','ATV','레포츠'],
  '카지노':['카지노'],
@@ -163,7 +164,7 @@ const searchTerms:Record<string,string[]>={
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 
-const SEARCH_VERSION=8;
+const SEARCH_VERSION=9;
 const EMPTY_RETRY_MS=6*60*60*1000;
 const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
@@ -173,6 +174,7 @@ function tourActivity(item:AnyObj):string|null{
  if(['12','14','15','25'].includes(type)){
   if(type==='14')return '문화체험';
   if(/낚시/.test(name))return '낚시';
+  if(/해루질|갯벌|조개잡이|맛조개|바지락|동죽|백합|어촌체험/.test(name))return '해루질';
   if(/등산|등반|산행/.test(name))return '등산';
   if(/산책|둘레길|해안길|탐방로|트레킹/.test(name))return '산책';
   return '관광지';
@@ -180,6 +182,7 @@ function tourActivity(item:AnyObj):string|null{
  if(type==='38')return '시장·쇼핑';
  if(type!=='28')return null;
  if(/낚시/.test(name))return '낚시';
+ if(/해루질|갯벌|조개잡이|맛조개|바지락|동죽|백합|어촌체험/.test(name))return '해루질';
  if(/서핑|서프|카약|카누|스노클|스노쿨|수영|물놀이|요트|수상|래프팅|sup/.test(name))return '수상레포츠';
  if(/산책|둘레길|탐방로|트레킹/.test(name))return '산책';
  if(/등산|등반|산행/.test(name))return '등산';
@@ -234,25 +237,32 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
   ? [root,root+' 관광명소',root+' 주변 관광지',root+' 해수욕장']
   : root && activity==='시장·쇼핑'
   ? (coastal?[root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']:[root+' 전통시장',root+' 마트'])
-  : root && (activity==='낚시'||activity==='해루질')
-  ? [root+' '+activity,root+' 선착장'] : [];
+  : root && activity==='해루질'
+  ? [root+' 맛조개',root+' 조개잡이',root+' 갯벌체험',root+' 해루질',
+     root.replace(/(해수욕장|해변|포구|주차장)$/,'')+' 맛조개',root+' 바지락']
+  : root && activity==='낚시' ? [root+' 낚시',root+' 선착장'] : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?6:4;
+ const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?10:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
- for(const term of terms){
+ // Parallel bounded batches: 10 sequential 3.5-second timeouts made searches stall.
+ for(let batch=0;batch<terms.length;batch+=3){
+  await Promise.all(terms.slice(batch,batch+3).map(async (term)=>{
   const url='https://dapi.kakao.com/v2/local/search/keyword.json?'+
     new URLSearchParams({query:term,x:String(lon),y:String(lat),radius:String(RANGE),size:'15',sort:'distance'});
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),activity==='시장·쇼핑'?2800:3500);
   try{
    const r=await fetch(url,{headers:{Authorization:'KakaoAK '+key},signal:ctrl.signal});
-   if(!r.ok)continue;
+   if(!r.ok)return;
    const data=await r.json();
    for(const d of data.documents||[]){
     if(activity==='관광지' &&
        !/관광|여행|명소|전망대|해변|해수욕장|수목원|공원|박물관|문화재|유적|축제|정원|미술관|테마파크|포토존/i.test(
         String(d.category_name||'')+' '+String(d.place_name||'')))continue;
+    if(activity==='해루질' &&
+       !/갯벌|해루질|맛조개|바지락|동죽|백합|조개|어촌체험|체험마을|해변|해수욕장|해안|낙지|소라|꽃게/i.test(
+         String(d.place_name||'')+' '+String(d.category_name||'')))continue;
     if(activity==='시장·쇼핑' &&
        !/수산|어시장|시장|직매장|어판장|선상|회뜨는|마트|쇼핑|상설|장터|활어|회센터|회센타/i.test(
         String(d.place_name||'')+' '+String(d.category_name||'')))continue;
@@ -284,6 +294,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
    }
   }catch(e){console.warn('Kakao keyword lookup:',String(e).slice(0,80));}
   finally{clearTimeout(timer);}
+  }));
   if(found.length>=15 && activity!=='시장·쇼핑')break;
  }
  return found.slice(0,20);
@@ -691,7 +702,7 @@ Deno.serve(async (req:Request)=>{
       if(error)console.warn('cache-refreshed-not-saved:',error.message);
       return json({...cache,...update,cached:true,free_map_refreshed:true});
      }
-     const healthy=checks.slice(1).filter(x=>x.status==='fulfilled').length;
+     const healthy=checks.filter(x=>x.status==='fulfilled').length;
      if(healthy===0){
       return json({...cache,cached:true,temporarily_unavailable:true,search_incomplete:true,
        summary:'관광공사·지역지도·공개지도 검색이 일시적으로 실패했습니다. 검색 실패는 관광지 0곳을 뜻하지 않습니다.'});
