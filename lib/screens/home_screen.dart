@@ -57,7 +57,16 @@ class _HomeScreenState extends State<HomeScreen> {
   final map = MapController();
   final GlobalKey<RoadmapNaverMapState> _naverMapKey = GlobalKey<RoadmapNaverMapState>();
   double _mapZoom = 14;
+  // Save the actual camera, not just the most recent search/GPS target.
+  // Both Naver and the fallback map report their settled/changed camera here.
+  bool _mapNavigatedByUser = false;
+  void _rememberMapCamera(LatLng point, double zoom, bool userGesture) {
+    center = point;
+    _mapZoom = zoom;
+    if (userGesture) _mapNavigatedByUser = true;
+  }
   void _moveMap(LatLng target, double zoom) {
+    _mapNavigatedByUser = true;
     center = target;
     _mapZoom = zoom;
     if (AppConfig.naverMapEnabled) {
@@ -117,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _load();
-    _locate();
+    _locate(initial: true);
   }
 
   @override
@@ -140,16 +149,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _locate() async {
+  Future<void> _locate({bool initial = false}) async {
     try {
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
       final p = await Geolocator.getCurrentPosition();
-      center = LatLng(p.latitude, p.longitude);
-      currentLocation = center;
-      _moveMap(center, 15);
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      final gps = LatLng(p.latitude, p.longitude);
+      currentLocation = gps;
+      // The asynchronous initial GPS fix must not override a location the
+      // user has already panned to or chosen through search.
+      if (!initial || !_mapNavigatedByUser) _moveMap(gps, 15);
+      setState(() {});
     } catch (_) {}
   }
 
@@ -522,7 +534,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final pages = [_mapPage(), _savedPage(), _myPlacesPage(), _profilePage()];
     return Scaffold(
-      body: SafeArea(child: pages[tab]),
+      // Keep the live map mounted when switching to Saved / My Places.
+      // Recreating its native view would otherwise reset the camera.
+      body: SafeArea(child: IndexedStack(index: tab, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (i) => setState(() => tab = i),
@@ -559,10 +573,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     setState(() => selectedSpot = point);
                   }
                 },
+                onCameraSettled: _rememberMapCamera,
               )
             : FlutterMap(
           mapController: map,
-          options: MapOptions(initialCenter: center, initialZoom: 14, interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate), onTap: (_, __) { if (_showSearchSuggestions) _hideSearchSuggestions(); }, onLongPress: (_, p) => _selectSpot(p),onPositionChanged:(camera,hasGesture){if(locationPickMode&&hasGesture&&mounted)setState(()=>selectedSpot=camera.center);}),
+          options: MapOptions(initialCenter: center, initialZoom: _mapZoom, interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate), onTap: (_, __) { if (_showSearchSuggestions) _hideSearchSuggestions(); }, onLongPress: (_, p) => _selectSpot(p),onPositionChanged:(camera,hasGesture){_rememberMapCamera(camera.center,camera.zoom,hasGesture);if(locationPickMode&&hasGesture&&mounted)setState(()=>selectedSpot=camera.center);}),
           children: [
             TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'kr.co.campingcarroadmap.app'),
             MarkerLayer(markers: [
@@ -664,7 +679,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (selectedSpot != null)
           Positioned(left:12,right:12,bottom:86,child:Card(child:ListTile(leading:const Icon(Icons.location_pin,color:Colors.red),title:Text('${selectedSpot!.latitude.toStringAsFixed(6)}, ${selectedSpot!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12)),trailing:locationPickMode?Wrap(spacing:4,children:[TextButton(onPressed:(){setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;});},child:const Text('취소')),FilledButton(onPressed:()async{final target=editingLocationPlace,spot=selectedSpot;if(target==null||spot==null)return;final a=await _reverseAddress(spot);target.latitude=spot.latitude;target.longitude=spot.longitude;target.address=a;try{await widget.data.updatePlace(target);await _load();if(!mounted)return;setState((){locationPickMode=false;editingLocationPlace=null;selectedSpot=null;center=spot;});_moveMap(spot,17);_msg('위치와 주소를 반영했습니다.');}catch(e){_msg('위치 수정에 실패했습니다: $e');}},child:const Text('확인'))]):IconButton(tooltip:'위치 지정 취소',onPressed:_cancelSpotSelection,icon:const Icon(Icons.close))))),
         Positioned(right:14,bottom:18,child:Column(children:[
-          if(!locationPickMode) FloatingActionButton.small(heroTag:'loc',onPressed:_locate,child:const Icon(Icons.my_location)),
+          if(!locationPickMode) FloatingActionButton.small(heroTag:'loc',onPressed:()=>_locate(),child:const Icon(Icons.my_location)),
           if(!locationPickMode) const SizedBox(height:10),
           if(!locationPickMode) FloatingActionButton.extended(heroTag: 'add', onPressed: () {
             if (selectedSpot == null) return _msg('지도에서 등록할 위치를 길게 눌러 빨간 핀을 먼저 찍어주세요.');
