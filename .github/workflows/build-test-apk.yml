@@ -13,6 +13,7 @@ on:
       - lib/widgets/place_detail_sheet.dart
       - lib/widgets/roadmap_naver_map.dart
       - lib/screens/home_screen.dart
+      - pubspec.yaml
       - lib/screens/vehicle_market_screen.dart
       - lib/widgets/place_marker_icons.dart
       - tool/apply_requested_redesign.py
