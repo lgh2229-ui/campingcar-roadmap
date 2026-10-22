@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const code = readFileSync('supabase/functions/nearby-activity/index.ts','utf8');
+
+function geographicRootsFromSource() {
+  const found = code.match(/function geographicRoots\(full:string\):string\[\]\{[\s\S]*?\n\}/);
+  assert.ok(found, 'geographicRoots must exist in live edge function');
+  const js = found[0]
+    .replace('full:string', 'full')
+    .replace('):string[]{', '){');
+  return new Function('return (' + js + ')')();
+}
+
+test('campground identifiers resolve to the coastal location rather than lot names', () => {
+  const roots = geographicRootsFromSource();
+  assert.deepEqual(roots('몽산포오토캠핑장2구역'), ['몽산포','몽산포해수욕장']);
+  assert.deepEqual(roots('몽산포감성캠핑장'), ['몽산포','몽산포해수욕장']);
+  assert.deepEqual(roots('청포대해수욕장 주차장'), ['청포대해수욕장','청포대']);
+});
+
+test('coastal and fishing locations remain identifiable', () => {
+  const roots=geographicRootsFromSource();
+  assert.deepEqual(roots('삼길포항'),['삼길포항','삼길포']);
+  assert.deepEqual(roots('당암포구'),['당암포구','당암']);
+});
+
+test('gleaning searches include shellfish, not just generic tourism labels', () => {
+  for(const keyword of ['해루질','맛조개','동죽','바지락','백합','갯벌체험','조개잡이']){
+    assert.ok(code.includes(keyword), 'search index must include '+keyword);
+  }
+});
+
+test('unverified blog evidence cannot be turned into a fabricated map pin', () => {
+  assert.ok(code.includes('naverBlogEvidence('));
+  assert.ok(code.includes('location_verified:false'));
+  assert.ok(code.includes('NAVER_SEARCH_CLIENT_ID'));
+  assert.ok(code.includes('NAVER_SEARCH_CLIENT_SECRET'));
+  assert.ok(code.includes('geographicRoots(placeName)'));
+});
+
+test('empty cache is incomplete and rechecked after search provider changes', () => {
+  assert.match(code,/SEARCH_VERSION=10/);
+  assert.ok(code.includes('search_incomplete:cachedSpots.length===0'));
+  assert.ok(code.includes('Number(cache.search_version||0)<SEARCH_VERSION'));
+});
