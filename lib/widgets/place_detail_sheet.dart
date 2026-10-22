@@ -441,7 +441,8 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         !businessServices.contains(service) &&
         !extraBusinessAliases.contains(service) &&
         service != '캠핑장' &&
-        !recreationActivities.contains(service)).toList();
+        !recreationActivities.contains(service) &&
+        !mergedOrNonTourismActivities.contains(service)).toList();
     final businessExtras = p.services.where((service) =>
         extraBusinessAliases.contains(service)).toList();
     final facilities = <String>[...coreServices, ...otherServices.where(
