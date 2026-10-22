@@ -16,11 +16,11 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   late Future<Map<String, dynamic>> result;
   @override void initState() { super.initState(); result = _search(); }
 
-  Future<Map<String, dynamic>> _search() async {
+  Future<Map<String, dynamic>> _search({bool refresh = false}) async {
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'nearby-activity',
-        body: {'place_id': widget.place.id, 'activity': widget.activity},
+        body: {'place_id': widget.place.id, 'activity': widget.activity, if (refresh) 'refresh_sources': true},
       );
       if (response.data is! Map) throw StateError('검색 결과 형식이 올바르지 않습니다.');
       final data = Map<String, dynamic>.from(response.data as Map);
@@ -38,7 +38,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   }
   // Standard user reloads only the permanent cache. Only admins may
   // execute a paid AI refresh associated with a pending member report.
-  void _refresh() => setState(() => result = _search());
+  void _refresh() => setState(() => result = _search(refresh: true));
   Future<void> _reportIssue() async {
     final controller=TextEditingController();
     final reason=await showDialog<String>(
@@ -416,6 +416,14 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
           padding:const EdgeInsets.only(top:8),
           child:Text('저장된 기존 정보를 표시하고 있습니다.',
             style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
+        if(data['refresh_throttled']==true)Padding(
+          padding:const EdgeInsets.only(top:8),
+          child:Text('방금 확인한 정보입니다. 지도 제공자 보호를 위해 10분 간격으로 재검색할 수 있습니다.',
+            style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
+        if(data['search_incomplete']==true)Padding(
+          padding:const EdgeInsets.only(top:8),
+          child:Text('일부 검색 출처가 응답하지 않아 결과가 누락됐을 수 있습니다. 0곳이 이용 불가나 정보 부재를 뜻하지 않습니다.',
+            style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
         if(data['temporarily_unavailable']==true)Padding(
           padding:const EdgeInsets.only(top:8),
           child:Text('검색 서버 연결이 원활하지 않습니다. 기존 정보는 유지됩니다.',
@@ -565,7 +573,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
                 style:TextStyle(fontSize:12,
                   color:Theme.of(context).colorScheme.onSurfaceVariant)),
             ])),
-            IconButton(tooltip:'저장된 정보 다시 보기',onPressed:_refresh,
+            IconButton(tooltip:'지도·관광정보 다시 검색',onPressed:_refresh,
               icon:const Icon(Icons.refresh_rounded)),
             IconButton(tooltip:'닫기',onPressed:()=>Navigator.pop(context),
               icon:const Icon(Icons.close_rounded)),
