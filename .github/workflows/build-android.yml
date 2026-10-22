@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Use Java 17 for Gradle 8.x
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - name: Patch review comments method
         run: python tool/fix_home_review_comments.py
       - name: Patch place registration screen
@@ -49,6 +54,8 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Force Flutter to use Java 17
+        run: flutter config --jdk-dir="$JAVA_HOME"
       - name: Generate Android platform files
         run: flutter create . --platforms=android --org kr.co.campingcarroadmap --project-name campingcar_roadmap
       - name: Pin Android toolchain for Mobile Ads compatibility
