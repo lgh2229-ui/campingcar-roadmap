@@ -22,14 +22,14 @@ function activityOf(i:Obj):string|null{
  const name=trim(i.title).toLowerCase();
  // TourAPI content type 28 includes camping, golf and snow sports too.
  if(type==="28" || type==="12"){
-  if(/캠핑|야영|글램핑|카라반|오토캠프|캠프장|캠프농장|힐링캠프/.test(name))return "캠핑장";
-  if(/골프|golf|(?:^|[^a-z])(?:gc|cc)(?:$|[^a-z])|컨트리클럽/i.test(name))return "골프";
+  if(/캠핑|야영|글램핑|카라반|오토캠프|캠프장|캠프농장|힐링캠프/.test(name))return null; // Campsites are not tourism activities.
+  if(/골프|golf|(?:^|[^a-z])(?:gc|cc)(?:$|[^a-z])|컨트리클럽/i.test(name))return "지상레포츠";
  }
  if(type==="28"){
   if(/서핑|서프|수상|카약|요트|카누|수상스키|래프팅|스노클|sup/.test(name))return "수상레포츠";
   if(/낚시/.test(name))return "낚시";
-  if(/스키|스노우|스노보드|눈썰매/.test(name))return "스키·눈썰매";
-  if(/산악자전거|자전거|바이크|레일바이크|사이클|mtb/.test(name))return "자전거";
+  if(/스키|스노우|스노보드|눈썰매/.test(name))return "지상레포츠";
+  if(/산악자전거|자전거|바이크|레일바이크|사이클|mtb/.test(name))return "지상레포츠";
   if(/등산|등반|산행/.test(name))return "등산";
   if(/산책|트레킹|둘레길|해파랑길|바우길|평화길|영남길|탐방로|걷기|호숫길|하늘길/.test(name))return "산책";
   return "지상레포츠";
