@@ -192,6 +192,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     final scheme=Theme.of(context).colorScheme;
     final summary=(data['summary']??'').toString().trim();
     final ai=data['ai_generated']==true;
+    final incomplete=(data['temporarily_unavailable']==true || data['search_incomplete']==true) && spotCount==0;
     return Container(
       width:double.infinity,
       padding:const EdgeInsets.all(16),
@@ -206,7 +207,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
           const SizedBox(width:8),
           const Expanded(child:Text('주변 한눈에 보기',
             style:TextStyle(fontSize:15,fontWeight:FontWeight.w800))),
-          _tag('$spotCount곳 확인'),
+          _tag(incomplete?'검색 미완료':'$spotCount곳 확인'),
         ]),
         const SizedBox(height:11),
         Text(summary.isEmpty?'확인된 주변 정보가 아직 없습니다.':summary,
@@ -403,6 +404,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     final when=DateTime.tryParse((data['fetched_at']??'').toString())?.toLocal();
     final date=when==null?'':('${when.year}.${when.month.toString().padLeft(2,'0')}.${when.day.toString().padLeft(2,'0')}');
     final scheme=Theme.of(context).colorScheme;
+    final incomplete=(data['temporarily_unavailable']==true || data['search_incomplete']==true) && spots.isEmpty;
     return ListView(
       padding:const EdgeInsets.fromLTRB(16,13,16,30),
       children:[
@@ -435,7 +437,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         const SizedBox(height:13),
         _summaryCard(data,spots.length),
 
-        _heading('주변 즐길 거리',detail:'${spots.length}곳'),
+        _heading('주변 즐길 거리',detail:incomplete?'검색 미완료':'${spots.length}곳'),
         if(spots.isEmpty)Container(
           padding:const EdgeInsets.symmetric(horizontal:14,vertical:16),
           decoration:BoxDecoration(
@@ -444,9 +446,11 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
           child:Row(children:[
             Icon(Icons.info_outline,color:scheme.onSurfaceVariant),
             const SizedBox(width:10),
-            const Expanded(child:Text(
-              '현재 확인된 장소가 없습니다. 실제 이용할 수 없다는 뜻은 아닙니다.',
-              style:TextStyle(fontSize:13,height:1.4))),
+            Expanded(child:Text(
+              incomplete
+                ? '검색 제공자가 일부 또는 전부 응답하지 않았습니다. 검색 완료 후 장소 수를 확정할 수 있습니다.'
+                : '현재 위치까지 확인된 장소는 없습니다. 실제 이용할 수 없다는 뜻은 아닙니다.',
+              style:const TextStyle(fontSize:13,height:1.4))),
           ]),
         ),
         ...spots.map(_spot),
