@@ -616,7 +616,7 @@ Deno.serve(async (req:Request)=>{
   // Throttle requests to protect upstream map providers without charging AI.
   const refreshSources=body.refresh_sources===true;
   const cacheAge=cache?Date.now()-new Date(cache.fetched_at||0).getTime():Infinity;
-  if(refreshSources && cache && Number.isFinite(cacheAge) && cacheAge<10*60000 && !force){
+  if(refreshSources && cache && Array.isArray(cache.spots) && cache.spots.length>0 && Number.isFinite(cacheAge) && cacheAge<10*60000 && !force){
    return json({...cache,cached:true,refresh_throttled:true,
      retry_after_seconds:Math.max(0,Math.ceil((10*60000-cacheAge)/1000))});
   }
