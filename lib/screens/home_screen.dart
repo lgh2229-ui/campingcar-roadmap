@@ -80,6 +80,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String savedFilter = '전체';
   LatLng center = const LatLng(37.5665, 126.9780);
   LatLng? selectedSpot;
+  LatLng? nearbyMapSpot;
+  String? nearbyMapSpotName;
   LatLng? currentLocation;
   Place? editingLocationPlace;
   bool locationPickMode = false;
@@ -543,10 +545,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 initialZoom: _mapZoom,
                 currentLocation: currentLocation,
                 selectedSpot: selectedSpot,
+                activitySpot: nearbyMapSpot,
+                activitySpotName: nearbyMapSpotName,
                 locationPickMode: locationPickMode,
                 onGroupTap: _showPlaceGroup,
                 onMapTap: () {
                   if (_showSearchSuggestions) _hideSearchSuggestions();
+                  if (nearbyMapSpot != null) setState(() { nearbyMapSpot = null; nearbyMapSpotName = null; });
                 },
                 onLongPress: _selectSpot,
                 onGestureCenter: (point) {
@@ -578,6 +583,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
               }),
+              if (nearbyMapSpot != null)
+                Marker(
+                  point: nearbyMapSpot!, width: 180, height: 78,
+                  alignment: Alignment.topCenter,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                      child: Text(nearbyMapSpotName ?? '주변 장소', maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    const Icon(Icons.location_on, size: 38, color: Colors.deepOrange),
+                  ]),
+                ),
               if (currentLocation != null)
                 Marker(point: currentLocation!, width: 34, height: 34, child: Container(decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: Colors.blue, width: 3), boxShadow: const [BoxShadow(blurRadius: 4, color: Colors.black38)]), child: const Center(child: Icon(Icons.circle, color: Colors.blue, size: 14)))),
               if (selectedSpot != null)
@@ -994,7 +1012,27 @@ class _HomeScreenState extends State<HomeScreen> {
               useSafeArea: true,
               isScrollControlled: true,
               showDragHandle: true,
-              builder: (_) => ActivityInsightSheet(place: p, activity: activity),
+              builder: (_) => ActivityInsightSheet(
+                place: p,
+                activity: activity,
+                onShowOnMap: (latitude, longitude, name) {
+                  final point = LatLng(latitude, longitude);
+                  // Close both the activity and place detail sheets before
+                  // focusing the existing in-app Naver map.
+                  Navigator.of(ctx, rootNavigator: true).pop();
+                  Navigator.of(ctx).pop();
+                  if (!mounted) return;
+                  setState(() {
+                    tab = 0;
+                    center = point;
+                    nearbyMapSpot = point;
+                    nearbyMapSpotName = name;
+                  });
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _moveMap(point, 17);
+                  });
+                },
+              ),
             );
           },
           reviews: reviews,
