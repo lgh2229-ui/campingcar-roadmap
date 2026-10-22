@@ -18,6 +18,8 @@ class RoadmapNaverMap extends StatefulWidget {
     required this.onGestureCenter,
     this.currentLocation,
     this.selectedSpot,
+    this.activitySpot,
+    this.activitySpotName,
     this.locationPickMode = false,
   });
 
@@ -26,6 +28,8 @@ class RoadmapNaverMap extends StatefulWidget {
   final double initialZoom;
   final ll.LatLng? currentLocation;
   final ll.LatLng? selectedSpot;
+  final ll.LatLng? activitySpot;
+  final String? activitySpotName;
   final bool locationPickMode;
   final void Function(List<Place>) onGroupTap;
   final VoidCallback onMapTap;
@@ -58,6 +62,8 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.groups != widget.groups ||
         oldWidget.selectedSpot != widget.selectedSpot ||
+        oldWidget.activitySpot != widget.activitySpot ||
+        oldWidget.activitySpotName != widget.activitySpotName ||
         oldWidget.currentLocation != widget.currentLocation ||
         oldWidget.locationPickMode != widget.locationPickMode) {
       _scheduleOverlays();
@@ -150,6 +156,16 @@ class RoadmapNaverMapState extends State<RoadmapNaverMap> {
           caption: NOverlayCaption(
             text: widget.locationPickMode ? '수정 위치' : '등록 위치',
           ),
+        ));
+      }
+      final activitySpot = widget.activitySpot;
+      if (activitySpot != null && generation == _overlayGeneration && mounted) {
+        overlays.add(NMarker(
+          id: 'nearby_activity_spot',
+          position: _native(activitySpot),
+          size: const Size(70, 80),
+          icon: await _selectedIcon(),
+          caption: NOverlayCaption(text: widget.activitySpotName ?? '주변 장소'),
         ));
       }
       if (generation != _overlayGeneration || !mounted) return;
