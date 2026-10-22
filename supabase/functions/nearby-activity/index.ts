@@ -118,11 +118,23 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
   if(relatedError)console.warn('related activity:',String(relatedError.message).slice(0,80));
   else matches=(related||[]) as AnyObj[];
  }
- return matches.map((p:AnyObj)=>normalizePlace({
+ const mapped=matches.map((p:AnyObj)=>normalizePlace({
   name:p.name,lat:p.latitude,lon:p.longitude,kind:activity,
   description:p.description,phone:p.phone,website:p.info_source_url,
   source_url:p.info_source_url||p.map_source_url,
  },lat,lon,activity)).filter(Boolean) as AnyObj[];
+ // Aquatic POIs from overlapping surf/water feeds can share a location.
+ // Keep the specific venue name while suppressing a second identical pin.
+ if(activity==='수상레포츠'){
+  const unique=new Map<string,AnyObj>();
+  for(const p of mapped){
+   const key=Number(p.lat).toFixed(5)+'/'+Number(p.lon).toFixed(5);
+   const old=unique.get(key);
+   if(!old || (/수상레포츠/.test(String(old.name)) && !/수상레포츠/.test(String(p.name)))) unique.set(key,p);
+  }
+  return [...unique.values()];
+ }
+ return mapped;
 }
 // Search the names people actually use, not just abstract category labels.
 const searchTerms:Record<string,string[]>={
