@@ -1222,7 +1222,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
 
 
   Widget _detailHeading(IconData icon, String label) => Padding(
-    padding: const EdgeInsets.fromLTRB(0, 22, 0, 11),
+    padding: const EdgeInsets.fromLTRB(0, 18, 0, 9),
     child: Row(children: [
       Icon(icon, size: 20, color: Theme.of(context).colorScheme.primary),
       const SizedBox(width: 9),
@@ -1231,7 +1231,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   );
 
   Widget _detailPanel(Widget body) => Container(
-    width: double.infinity, padding: const EdgeInsets.all(15),
+    width: double.infinity, padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(15),
       border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
@@ -1241,33 +1241,33 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
   Widget _detailFeature(String label, String value, IconData icon, bool present) {
     final c = Theme.of(context).colorScheme;
     return Container(
-      constraints: const BoxConstraints(minHeight: 90),
-      padding: const EdgeInsets.all(13),
+      constraints: const BoxConstraints(minHeight: 68),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
       decoration: BoxDecoration(
         color: present ? c.primaryContainer.withValues(alpha: .35) : c.surface,
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(11),
         border: Border.all(color: present ? c.primary.withValues(alpha: .25) : c.outlineVariant),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Icon(icon, size: 18, color: present ? c.primary : c.onSurfaceVariant),
-          const SizedBox(width: 7),
+          Icon(icon, size: 17, color: present ? c.primary : c.onSurfaceVariant),
+          const SizedBox(width: 6),
           Expanded(child: Text(label, style: TextStyle(
               color: c.onSurfaceVariant, fontWeight: FontWeight.w600, fontSize: 12))),
         ]),
-        const SizedBox(height: 10),
+        const SizedBox(height: 5),
         Text(value, style: TextStyle(
             color: present ? c.onSurface : c.onSurfaceVariant,
-            fontWeight: FontWeight.w700, fontSize: 14, height: 1.4)),
+            fontWeight: FontWeight.w700, fontSize: 14, height: 1.2)),
       ]),
     );
   }
 
   Widget _detailFeatureGrid(List<Widget> children) => LayoutBuilder(
     builder: (context, constraints) => Wrap(
-      spacing: 10, runSpacing: 10,
+      spacing: 8, runSpacing: 8,
       children: children.map((child) => SizedBox(
-        width: (constraints.maxWidth - 10) / 2, child: child,
+        width: (constraints.maxWidth - 8) / 2, child: child,
       )).toList(),
     ),
   );
@@ -1377,7 +1377,7 @@ class _VehicleMarketScreenState extends State<VehicleMarketScreen> {
             if (description.isNotEmpty) ...[
               _detailHeading(Icons.notes_outlined, '차량 설명 및 추가 옵션'),
               _detailPanel(Text(description, style: const TextStyle(
-                fontSize: 14, height: 1.7))),
+                fontSize: 14, height: 1.5))),
             ],
             _detailHeading(Icons.person_outline, '판매자 정보'),
             _detailPanel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
