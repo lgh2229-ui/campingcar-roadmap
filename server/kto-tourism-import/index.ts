@@ -26,7 +26,7 @@ function activityOf(i:Obj):string|null{
   if(/골프|golf|(?:^|[^a-z])(?:gc|cc)(?:$|[^a-z])|컨트리클럽/i.test(name))return "지상레포츠";
  }
  if(type==="28"){
-  if(/서핑|서프|수상|카약|요트|카누|수상스키|래프팅|스노클|sup/.test(name))return "수상레포츠";
+  if(/서핑|서프|수상|카약|요트|카누|수상스키|래프팅|스노클|스노쿨|수영|물놀이|워터파크|sup/.test(name))return "수상레포츠";
   if(/낚시/.test(name))return "낚시";
   if(/스키|스노우|스노보드|눈썰매/.test(name))return "지상레포츠";
   if(/산악자전거|자전거|바이크|레일바이크|사이클|mtb/.test(name))return "지상레포츠";
