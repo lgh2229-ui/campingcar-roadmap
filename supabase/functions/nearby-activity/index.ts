@@ -77,6 +77,16 @@ async function overpass(lat:number, lon:number, keys:string[]) {
  }
  throw new Error('공개 지도 서버 일시 중단 ('+lastError.slice(0,80)+')');
 }
+function dedupeSpots(items:AnyObj[],lat:number,lon:number,activity:string):AnyObj[]{
+ const unique:AnyObj[]=[];
+ for(const raw of items){
+  const p=normalizePlace(raw,lat,lon,activity);
+  if(!p)continue;
+  if(unique.some(old=>equivalentPlace(old.name,p.name)&&distanceM(old.lat,old.lon,p.lat,p.lon)<150))continue;
+  unique.push(p);
+ }
+ return unique.sort((a,b)=>a.distance_m-b.distance_m).slice(0,25);
+}
 function validHttp(value:any):string {
  const text=String(value||'').trim();
  return (text.startsWith('https://')||text.startsWith('http://'))?text.slice(0,400):'';
@@ -636,53 +646,48 @@ Deno.serve(async (req:Request)=>{
      }
     }catch(e){console.warn('curated-cache-lookup:',String(e).slice(0,100));}
    }
-   // Old empty caches get one free revised map search (then every 30 days).
-   // This must never run the paid AI model.
+   // Failures are not permanent 0-result findings; retry empty caches after
+   // six hours and immediately after a search-provider version update.
    if(cachedSpots.length===0){
     const age=Date.now()-new Date(cache.fetched_at||0).getTime();
-    if(Number(cache.search_version||0)<5 || !Number.isFinite(age) || age>30*86400000){
-     const lat=Number(place.latitude),lon=Number(place.longitude),items:AnyObj[]=[];
-     try{items.push(...await kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name));}
-     catch(e){console.warn('cached-local-search:',String(e).slice(0,80));}
-     if(items.length===0){
-      try{for(const element of await overpass(lat,lon,selectors[activity])){
-       const match=spotFromElement(element,lat,lon,activity);
-       if(match)items.push(match);
-      }}catch(e){console.warn('cached-osm-search:',String(e).slice(0,80));}
+    if(Number(cache.search_version||0)<SEARCH_VERSION || !Number.isFinite(age) || age>EMPTY_RETRY_MS){
+     const lat=Number(place.latitude),lon=Number(place.longitude);
+     const checks=await Promise.allSettled([
+      tourApiSearch(lat,lon,activity),
+      kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name),
+      overpass(lat,lon,selectors[activity])
+     ]);
+     const raw:AnyObj[]=[];
+     if(checks[0].status==='fulfilled')raw.push(...checks[0].value);
+     if(checks[1].status==='fulfilled')raw.push(...checks[1].value);
+     if(checks[2].status==='fulfilled')for(const element of checks[2].value){
+      const spot=spotFromElement(element,lat,lon,activity);if(spot)raw.push(spot);
      }
-     if(items.length===0){
-      try{items.push(...await nominatimSearch(lat,lon,activity,place.name));}
-      catch(e){console.warn('cached-name-search:',String(e).slice(0,80));}
+     if(raw.length===0){
+      try{raw.push(...await nominatimSearch(lat,lon,activity,place.name));}
+      catch(e){console.warn('cached-name-search:',String(e).slice(0,70));}
      }
-     const unique=new Map<string,AnyObj>();
-     for(const candidate of items){
-      const p=normalizePlace(candidate,lat,lon,activity);
-      if(p)unique.set(p.name.toLowerCase()+'-'+Math.round(p.lat*1000)+'-'+Math.round(p.lon*1000),p);
-     }
-     const found=[...unique.values()].sort((a,b)=>a.distance_m-b.distance_m).slice(0,20);
-     const now=new Date().toISOString();
+     const found=dedupeSpots(raw,lat,lon,activity),now=new Date().toISOString();
      if(found.length>0){
-      const summary=place.name+' 주변 3km 이내 '+activity+' 관련 장소 '+found.length+
-       '곳이 공개 지도에서 검색됐습니다. 위치만으로 실제 활동·출입·채취 허가가 확인된 것은 아닙니다.';
-      const sources=found.filter(p=>Boolean(validHttp(p.source_url)))
-       .map(p=>({name:p.name,url:p.source_url}));
-      const tips=activity==='해루질'
-       ? ['해루질 후보 위치는 현재 채취·출입 허가를 뜻하지 않습니다. 어촌계·마을어장 규정과 금어기를 확인하세요.',
-          '갯골·물때·기상과 안전장비를 확인하세요.']
-       : activity==='수상레포츠'
-       ? ['강·계곡의 수영·물놀이는 출입 허용, 수심·급류·수질·기상 확인이 필요합니다.']
-       : ['현장 운영·출입 조건을 확인하세요.'];
-      const update={spots:found,summary,sources,tips,providers:found.filter(p=>p.phone||p.website),
-       research_status:'verified',ai_generated:false,fetched_at:now,search_version:5};
-      const {error}=await db.from('place_activity_insights')
-       .update(update).eq('place_id',placeId).eq('activity',activity);
-      if(!error)return json({...cache,...update,cached:true,free_map_refreshed:true});
-      console.warn('cached-refresh-save:',error.message);
-     }else{
-      await db.from('place_activity_insights')
-       .update({search_version:5,fetched_at:now})
-       .eq('place_id',placeId).eq('activity',activity);
+      const update={
+       spots:found,summary:place.name+' 주변 3km 이내 공개 관광·지도 자료에서 '+activity+' 관련 '+found.length+'곳을 확인했습니다. 입장·운영조건은 방문 전 확인하세요.',
+       sources:found.filter(p=>Boolean(validHttp(p.source_url))).map(p=>({name:p.name,url:p.source_url})),
+       providers:found.filter(p=>p.phone||p.website),research_status:'verified',ai_generated:false,
+       fetched_at:now,search_version:SEARCH_VERSION
+      };
+      const {error}=await db.from('place_activity_insights').update(update).eq('place_id',placeId).eq('activity',activity);
+      if(error)console.warn('cache-refreshed-not-saved:',error.message);
+      return json({...cache,...update,cached:true,free_map_refreshed:true});
      }
+     const healthy=checks.filter(x=>x.status==='fulfilled').length;
+     if(healthy===0){
+      return json({...cache,cached:true,temporarily_unavailable:true,search_incomplete:true,
+       summary:'관광공사·지역지도·공개지도 검색이 일시적으로 실패했습니다. 검색 실패는 관광지 0곳을 뜻하지 않습니다.'});
+     }
+     const patch={search_version:SEARCH_VERSION,fetched_at:now,research_status:'not_confirmed',
+      summary:'공개 관광정보 일부 출처에서 반경 3km 이내 위치를 확인하지 못했습니다. 다른 출처가 있을 수 있으므로 주기적으로 자동 재검색합니다.'};
+     await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
+     return json({...cache,...patch,cached:true,search_incomplete:healthy<3});
     }
    }
    // One-time licensed-photo enrichment, never a paid AI re-search.
