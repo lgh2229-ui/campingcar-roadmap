@@ -10,6 +10,12 @@ void main() {
       '해루질', '수상레포츠', '지상레포츠', '카지노',
     ]);
     expect(recreationActivities.toSet().length, recreationActivities.length);
+    expect(recreationActivities, isNot(contains('골프')));
+    expect(recreationActivities, isNot(contains('자전거')));
+    expect(recreationActivities, isNot(contains('스키·눈썰매')));
+    expect(recreationActivities, isNot(contains('캠핑장')));
+    expect(recreationActivities, contains('지상레포츠'));
+    expect(mergedOrNonTourismActivities, containsAll(['골프','자전거','스키·눈썰매','캠핑장']));
   });
 
   test('Activity tags round-trip in services without a database migration', () {
