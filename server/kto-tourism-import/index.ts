@@ -28,6 +28,7 @@ function activityOf(i:Obj):string|null{
  if(type==="28"){
   if(/서핑|서프|수상|카약|요트|카누|수상스키|래프팅|스노클|스노쿨|수영|물놀이|워터파크|sup/.test(name))return "수상레포츠";
   if(/낚시/.test(name))return "낚시";
+ if(/해루질|갯벌|조개잡이|맛조개|바지락|동죽|백합|어촌체험/.test(name))return "해루질";
   if(/스키|스노우|스노보드|눈썰매/.test(name))return "지상레포츠";
   if(/산악자전거|자전거|바이크|레일바이크|사이클|mtb/.test(name))return "지상레포츠";
   if(/등산|등반|산행/.test(name))return "등산";
@@ -38,6 +39,7 @@ function activityOf(i:Obj):string|null{
  if(type==="38")return "시장·쇼핑";
  if(type!=="12")return null;
  if(/낚시/.test(name))return "낚시";
+ if(/해루질|갯벌|조개잡이|맛조개|바지락|동죽|백합|어촌체험/.test(name))return "해루질";
  if(/산책|둘레길|해안길|해변길|탐방로|걷기|트레킹|수변공원|벽화길/.test(name))return "산책";
  if(/등산|등반|산행/.test(name))return "등산";
  return "관광지";
