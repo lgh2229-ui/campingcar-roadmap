@@ -542,20 +542,6 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         const SizedBox(height: 24),
         heading(Icons.handyman_outlined, '캠핑카 서비스'),
         serviceGrid(businesses, business: true),
-        const SizedBox(height: 24),
-        heading(Icons.explore_outlined, '주변 관광·레저'),
-        serviceGrid(activities, activity: true),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: () => setState(() => showAllActivities = !showAllActivities),
-            icon: Icon(showAllActivities ? Icons.expand_less : Icons.expand_more, size: 18),
-            label: Text(showAllActivities ? '접기' : '활동 더 보기'),
-          ),
-        ),
-        Text('카드를 누르면 이 장소에서 3km 이내의 관광·레저 정보를 확인할 수 있습니다.', style: TextStyle(fontSize: 12, color: muted)),
-        Text('현장 이용 가능 여부, 허가, 운영시간 및 요금은 방문 전 확인하세요.',
-            style: TextStyle(fontSize: 12, height: 1.4, color: muted)),
         if (others.isNotEmpty) ...[
           const SizedBox(height: 24),
           heading(Icons.grid_view_rounded, '기타 서비스'),
@@ -601,6 +587,20 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
           heading(Icons.info_outline, '이용 안내 및 주의사항'),
           panel(Text(note, style: const TextStyle(fontSize: 14, height: 1.65))),
         ],
+        const SizedBox(height: 24),
+        heading(Icons.explore_outlined, '주변 관광·레저'),
+        serviceGrid(activities, activity: true),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => setState(() => showAllActivities = !showAllActivities),
+            icon: Icon(showAllActivities ? Icons.expand_less : Icons.expand_more, size: 18),
+            label: Text(showAllActivities ? '접기' : '활동 더 보기'),
+          ),
+        ),
+        Text('카드를 누르면 이 장소에서 3km 이내의 관광·레저 정보를 확인할 수 있습니다.', style: TextStyle(fontSize: 12, color: muted)),
+        Text('현장 이용 가능 여부, 허가, 운영시간 및 요금은 방문 전 확인하세요.',
+            style: TextStyle(fontSize: 12, height: 1.4, color: muted)),
         if (!p.isApproved) ...[
           const SizedBox(height: 16),
           panel(Text(
