@@ -13,21 +13,18 @@ const selectors: Record<string, string[]> = {
   "해루질": ['["natural"~"^(beach|mud)$"]','["wetland"="tidalflat"]',
    '["natural"="wetland"]["wetland"~"^(tidalflat|saltmarsh)$"]',
    '["tourism"="attraction"]["name"~"갯벌|해루질|조개잡이|어촌체험"]'],
-  "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing)$"]', '["leisure"="marina"]'],
+  // Unified swimming, surfing, snorkeling, kayaking and SUP venues.
+  // Open water is a candidate location, not proof that entering the water is allowed.
+  "수상레포츠": ['["sport"~"^(sailing|surfing|canoe|kayaking|kitesurfing|scuba_diving|windsurfing|swimming|snorkeling|stand_up_paddle)$"]',
+    '["leisure"~"^(marina|swimming_pool|water_park|swimming_area|bathing_place)$"]','["shop"="surf"]','["canoe"]',
+    '["natural"="beach"]["name"]','["waterway"~"^(river|stream)$"]["name"~"물놀이|계곡|수영"]',
+    '["tourism"="attraction"]["name"~"물놀이|계곡"]'],
   // Land sports includes golf, cycling, skiing and sledding.
   "지상레포츠": ['["sport"~"^(climbing|paragliding|archery|motocross|skateboard|horse_racing|skiing|golf|cycling)$"]',
     '["leisure"~"^(sports_centre|golf_course)$"]','["route"="bicycle"]','["highway"="cycleway"]["name"]',
     '["piste:type"]','["name"~"눈썰매|썰매장|스키장|파크골프|자전거체험|MTB"]'],
   "카지노": ['["amenity"="casino"]'],
   // Waterways are water-play candidates, NOT proof that entry is allowed.
-  "수영": ['["leisure"="swimming_pool"]','["sport"="swimming"]',
-   '["leisure"~"^(water_park|swimming_area|bathing_place)$"]',
-   '["natural"="beach"]["name"]',
-   '["waterway"~"^(river|stream)$"]["name"~"물놀이|계곡|수영"]',
-   '["tourism"="attraction"]["name"~"물놀이|계곡"]'],
-  "서핑": ['["sport"="surfing"]','["shop"="surf"]'],
-  "카약·SUP": ['["sport"~"^(canoe|kayaking|stand_up_paddle)$"]','["canoe"]'],
-  "스노클링": ['["sport"~"^(scuba_diving|snorkeling)$"]'],
   "온천·스파": ['["amenity"="public_bath"]','["leisure"="spa"]','["natural"="hot_spring"]'],
   "문화체험": ['["tourism"~"^(museum|gallery)$"]','["amenity"~"^(arts_centre|theatre|community_centre)$"]'],
   // Seafood retail and boat markets are part of market/shopping.
@@ -51,7 +48,7 @@ function label(t:AnyObj, activity:string) {
  if(t["natural"]==="peak")return "산·봉우리";
  if(t["amenity"]==="casino")return "카지노";
  if(t["leisure"]==="marina")return "마리나";
- if(activity==="수영" && (t["waterway"]||t["natural"]==="beach"||t["tourism"]==="attraction"))
+ if(activity==="수상레포츠" && (t["waterway"]||t["natural"]==="beach"||t["tourism"]==="attraction"))
   return "강·계곡 물놀이 후보 (안전·출입 미확인)";
  return [t.tourism,t.leisure,t.sport,t.shop,t.amenity,t.historic].find(Boolean) || "주변 활동 장소";
 }
@@ -134,11 +131,9 @@ const searchTerms:Record<string,string[]>={
  '등산':['등산로','등산','둘레길'],
  '낚시':['낚시포인트','선착장','방파제','낚시터','항구','포구','워킹낚시'],
  '해루질':['해루질','갯벌체험','갯벌','어촌체험','조개잡이','바지락체험'],
- '수상레포츠':['수상레저','서핑','카약','SUP'],
+ '수상레포츠':['수상레저','서핑','서핑샵','수영장','물놀이장','계곡 물놀이','해수욕장','스노클링','카약','SUP','다이빙'],
  '지상레포츠':['골프장','파크골프','자전거체험','자전거길','스키장','눈썰매장','짚라인','스카이사이클','ATV','레포츠'],
  '카지노':['카지노'],
- '수영':['계곡 물놀이','강/물놀이','물놀이장','수영장','해수욕장','계곡'], '서핑':['서핑','서핑샵'],
- '카약·SUP':['카약','SUP'], '스노클링':['스노클링','다이빙'],
  '온천·스파':['온천','스파','목욕탕'],
  '문화체험':['문화체험','박물관','문화마을'],
  '시장·쇼핑':['수산물직매장','선상어시장','선상횟집','수산물센터','어시장','수산시장','어판장','전통시장','마트','시장']
@@ -157,7 +152,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
   ? [root+' '+activity,root+' 선착장'] : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='낚시'?7:activity==='수영'||activity==='해루질'?6:4;
+ const count=activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?6:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  for(const term of terms){
@@ -175,7 +170,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
     const kind=activity==='낚시'&&/방파제|선착장|항구/.test(term)
       ? '낚시 관련 해안시설 후보 (출입·낚시 허용 여부 현장 확인)'
       : activity;
-    const waterCandidate=activity==='수영' && /계곡|강변|하천|유원지|물놀이/i.test(String(d.place_name||''));
+    const waterCandidate=activity==='수상레포츠' && /계곡|강변|하천|유원지|물놀이|해수욕장/i.test(String(d.place_name||''));
     const candidateKind=activity==='시장·쇼핑'
       ? '시장·직매장 관련 시설 (판매·영업 조건 확인)'
       : activity==='해루질'
@@ -239,7 +234,7 @@ function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
  const website=String(t['contact:website']||t.website||'').trim();
  const safeWebsite=/^https?:\/\//i.test(website)?website:'';
  return {name,lat:la,lon:lo,distance_m:meters,kind:label(t,activity),address:String(t['addr:full']||t['addr:street']||'').slice(0,160),phone,website:safeWebsite,opening_hours:String(t.opening_hours||'').slice(0,120),fee:String(t.fee||'').slice(0,45),description:String(t['description:ko']||t.description||(
-  activity==='수영' && (t.waterway||t.natural==='beach'||t.tourism==='attraction')
+  activity==='수상레포츠' && (t.waterway||t.natural==='beach'||t.tourism==='attraction')
    ? '강·계곡·하천 물놀이 관련 지형 후보입니다. 수영 허용 여부, 급류·수심·수질·기상 상황을 현장에서 확인하세요.'
    : ''
  )).slice(0,250),source_url:url,photo_hint:String(t.wikimedia_commons||'').startsWith('File:')?String(t.wikimedia_commons):''};
@@ -549,7 +544,7 @@ Deno.serve(async (req:Request)=>{
       const tips=activity==='해루질'
        ? ['해루질 관련 위치는 현재 채취·출입 허가를 뜻하지 않습니다. 어촌계·마을어장 규정을 확인하세요.',
           '갯골·물때·기상과 안전장비를 확인하세요.']
-       : activity==='수영'?
+       : activity==='수상레포츠'?
        ['물놀이 관련 장소 후보는 수영 허가·안전 확인을 의미하지 않습니다.',
         '상수원 보호, 출입 통제, 수심·급류·기상·수질을 현장에서 확인하세요.']:
        ['정보 출처와 출입·운영 조건은 이용 전 확인하세요.'];
@@ -595,7 +590,7 @@ Deno.serve(async (req:Request)=>{
       const tips=activity==='해루질'
        ? ['해루질 후보 위치는 현재 채취·출입 허가를 뜻하지 않습니다. 어촌계·마을어장 규정과 금어기를 확인하세요.',
           '갯골·물때·기상과 안전장비를 확인하세요.']
-       : activity==='수영'
+       : activity==='수상레포츠'
        ? ['강·계곡의 수영·물놀이는 출입 허용, 수심·급류·수질·기상 확인이 필요합니다.']
        : ['현장 운영·출입 조건을 확인하세요.'];
       const update={spots:found,summary,sources,tips,providers:found.filter(p=>p.phone||p.website),
@@ -634,7 +629,7 @@ Deno.serve(async (req:Request)=>{
    if(kakao.length) {collected.push(...kakao);lookupSucceeded=true;}
   }catch(e){errors.push('지역검색 연결 문제');}
   if(collected.length===0 || body.force_refresh===true ||
-    ((activity==='수영'||activity==='낚시'||activity==='해루질'||activity==='시장·쇼핑') && collected.length<5)){
+    ((activity==='수상레포츠'||activity==='낚시'||activity==='해루질'||activity==='시장·쇼핑') && collected.length<5)){
    try{
     const elements=await overpass(lat,lon,selectors[activity]);
     lookupSucceeded=true;
@@ -741,8 +736,8 @@ Deno.serve(async (req:Request)=>{
   if(force && !ai?.summary)return json({error:'AI 검색 또는 출처 확인이 완료되지 않았습니다. 신고는 대기 상태로 유지됩니다.'},503);
   const caution=(activity==='해루질'||activity==='낚시')
    ? '채취·낚시 가능 구역, 출입 제한, 금어기, 기상 및 물때를 현장에서 반드시 확인하세요. 위치 정보만으로 합법적인 이용이 보장되지 않습니다.'
-   : activity==='수영'
-   ? '강·계곡·하천 물놀이 관련 장소는 후보입니다. 실제 수영 허용 여부, 수심·급류·수질·출입통제 및 기상을 반드시 현장에서 확인하세요.'
+   : activity==='수상레포츠'
+   ? '서핑·수영·스노클링·카약·SUP 정보를 통합해 제공합니다. 해수욕장·강·계곡 물놀이는 후보일 수 있으며 입수·출입 허용 여부, 파도·급류·수심·수질 및 기상을 현장에서 확인하세요.'
    : '운영시간·요금·예약·입장 가능 여부는 출발 전 공식 안내 또는 해당 업체에 확인하세요.';
   const sources=[...spots.map(s=>({name:s.name,url:s.source_url})),...extraSources,...(ai?.sources||[])]
     .filter((s:AnyObj)=>Boolean(validHttp(s.url))).slice(0,26);
