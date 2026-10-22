@@ -1,0 +1,16 @@
+name: Nearby Search Regression Checks
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/nearby-activity/index.ts'
+      - 'tool/test_nearby_search_regression.mjs'
+      - '.github/workflows/nearby-search-checks.yml'
+jobs:
+  nearby-search-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test coastal place names and search cache rules
+        run: node --test tool/test_nearby_search_regression.mjs
