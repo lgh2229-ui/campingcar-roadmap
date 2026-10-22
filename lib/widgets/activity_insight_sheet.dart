@@ -5,9 +5,10 @@ import '../models/place.dart';
 import 'activity_spot_review_sheet.dart';
 
 class ActivityInsightSheet extends StatefulWidget {
-  const ActivityInsightSheet({super.key, required this.place, required this.activity});
+  const ActivityInsightSheet({super.key, required this.place, required this.activity, required this.onShowOnMap});
   final Place place;
   final String activity;
+  final void Function(double latitude, double longitude, String name) onShowOnMap;
   @override State<ActivityInsightSheet> createState() => _ActivityInsightSheetState();
 }
 
@@ -317,7 +318,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
           const SizedBox(height:5),
           Wrap(spacing:2,runSpacing:0,children:[
             if(lat is num && lon is num)TextButton.icon(
-              onPressed:()=>_open('https://www.google.com/maps/search/?api=1&query=$lat,$lon'),
+              onPressed:()=>widget.onShowOnMap(lat.toDouble(), lon.toDouble(), name),
               icon:const Icon(Icons.map_outlined,size:17),label:const Text('지도')),
             if(phone.isNotEmpty)TextButton.icon(
               onPressed:()=>_open('tel:$phone'),
