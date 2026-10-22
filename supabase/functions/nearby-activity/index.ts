@@ -270,7 +270,7 @@ async function naverBlogEvidence(placeName:string,activity:string):Promise<AnyOb
     note:'관련 블로그 문서입니다. 상세 좌표와 현재 채취 허가를 검증하지 않았습니다.'
    })).filter((x:AnyObj)=>x.source_url&&
      /맛조개|조개|갯벌|해루질|동죽|바지락/.test(x.name+' '+x.description)&&
-     areas.some(area=>(x.name+' '+x.description).replace(/\\s+/g,'').includes(area.replace(/\\s+/g,''))));
+     areas.some(area=>(x.name+' '+x.description).replace(/\s+/g,'').includes(area.replace(/\s+/g,''))));
   }finally{clearTimeout(timeout);}
  }));
  if(responses.every(x=>x.status==='rejected'))throw new Error('NAVER_BLOG_SEARCH_UNAVAILABLE');
