@@ -735,7 +735,7 @@ Deno.serve(async (req:Request)=>{
   let adminId:string|null=null;
   if(force){
    const {data:isAdmin,error:roleError}=await userDb.rpc('is_admin');
-   if(roleError||isAdmin!==true)return json({error:'AI 재검색은 관리자만 실행할 수 있습니다.'},403);
+   if(roleError||isAdmin!==true)return json({error:'관리자 재검색 권한이 없습니다.'},403);
    adminId=(await userDb.auth.getUser()).data.user?.id||null;
    const reportId=String(body.report_id||'');
    if(!/^[0-9a-f-]{36}$/i.test(reportId))return json({error:'사용자 신고가 있어야 재검색할 수 있습니다.'},403);
@@ -744,7 +744,7 @@ Deno.serve(async (req:Request)=>{
     .eq('activity',activity).eq('status','pending').maybeSingle();
    if(reportError||!report)return json({error:'이 장소와 활동에 대한 미처리 신고가 없습니다.'},403);
    verifiedReportId=reportId;
-   if(!Deno.env.get('OPENAI_API_KEY'))return json({error:'OpenAI API 키가 등록되지 않아 AI 재검색을 실행할 수 없습니다.'},503);
+   // No OpenAI API key is needed for manual free-source refresh.
   }
   // A negative cache must reflect newly verified POIs without extra paid AI searches.
   if(cache && !force && !refreshSources && (
@@ -907,7 +907,7 @@ Deno.serve(async (req:Request)=>{
     // A previous initial attempt blocks only paid AI, not free map searching.
     if(claimed===true)firstClaimed=true;
    }
-   researched=firstClaimed ? await aiFallback(db,place,activity) : null;
+   researched=null; // Paid OpenAI search is disabled in all nearby searches.
    if(researched){
     extraSources=researched.sources||[];
     for(const candidate of researched.candidates||[]){
@@ -963,9 +963,9 @@ Deno.serve(async (req:Request)=>{
     ? (suggested.length>0
        ? '주변 관련 정보를 재검색해 '+suggested.map((p:AnyObj)=>p.name).join(' · ')+
          ' 등의 자료를 찾았습니다. 다만 위치 데이터가 확인되지 않아 반경 3km 확정 목록에는 포함하지 않았습니다. 출처에서 직접 확인하거나 변경 신고를 남겨주세요.'
-       : 'AI 웹검색을 시도했으나 반경 3km 이내에서 위치까지 검증된 '+activity+' 장소는 아직 확인하지 못했습니다. 이용 불가라는 뜻은 아닙니다.')
-    : '현재 공개지도·AI 확인이 원활하지 않습니다. 정보가 있다면 신고해주세요.';
-   if(force)return json({error:'관리자 AI 재검색에서 확인된 장소가 없어 이전 기록을 유지했습니다.'},503);
+       : '공개 관광·지도 자료에서 반경 3km 이내 위치가 확인된 '+activity+' 장소는 아직 찾지 못했습니다. 이용 불가라는 뜻은 아닙니다.')
+    : '일부 공개 관광·지도 제공자 검색이 원활하지 않습니다. 검색 실패는 주변 정보가 없다는 뜻이 아닙니다.';
+   if(force)return json({error:'공개 지도·관광자료에서 위치를 확인하지 못해 이전 기록을 유지했습니다.'},503);
    if(researched || naverRelated.length>0){
     const now=new Date().toISOString();
     const item={place_id:placeId,activity,radius_m:RANGE,summary,
@@ -994,20 +994,8 @@ Deno.serve(async (req:Request)=>{
   const fallback=spots.length>0
    ? (place.name+' 주변 3km 이내 공개지도에 '+spots.length+'곳의 '+activity+' 관련 장소가 확인됩니다. 가까운 곳: '+primary+'.')
    : (place.name+' 주변 3km 이내 공개지도에서 '+activity+' 관련 장소를 확인하지 못했습니다. 정보가 없다는 뜻이지 이용이 불가능하다는 뜻은 아닙니다.');
-  let ai:{summary:string,sources:AnyObj[]}|null=null;
-  try{
-   if(researched && researched.summary && researched.sources?.length){
-     // The paid initial AI second-search already ran. Do not bill a second time.
-     ai={summary:researched.summary,sources:researched.sources};
-   }else if(!researched && !cache){
-     ai=await onlineAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY'),db,
-       {placeId:place.id,reportId:verifiedReportId,adminId});
-   }
-  }catch(e){
-   if(force)return json({error:String(e).replace(/^Error:\s*/,''),budget_blocked:true},429);
-   console.warn('AI lookup skipped:',String(e).slice(0,100));
-  }
-  if(force && !ai?.summary)return json({error:'AI 검색 또는 출처 확인이 완료되지 않았습니다. 신고는 대기 상태로 유지됩니다.'},503);
+  // Show sourced information directly. No charged OpenAI Responses API calls.
+  const ai:{summary:string,sources:AnyObj[]}|null=null;
   const caution=(activity==='해루질'||activity==='낚시')
    ? '채취·낚시 가능 구역, 출입 제한, 금어기, 기상 및 물때를 현장에서 반드시 확인하세요. 위치 정보만으로 합법적인 이용이 보장되지 않습니다.'
    : activity==='수상레포츠'
@@ -1018,9 +1006,9 @@ Deno.serve(async (req:Request)=>{
   const photos=await photoList(spots);
   const now=new Date().toISOString();
   const record={place_id:place.id,activity,radius_m:RANGE,
-   summary:ai?.summary||fallback,spots,providers,photos,tips:[caution],sources,
+   summary:fallback,spots,providers,photos,tips:[caution],sources,
    fetched_at:now,photo_checked_at:now,expires_at:null,
-   research_status:'verified',ai_generated:Boolean(ai?.summary),search_version:SEARCH_VERSION};
+   research_status:'verified',ai_generated:false,search_version:SEARCH_VERSION};
   const {error:writeError}=await db.from('place_activity_insights').upsert(record,{onConflict:'place_id,activity'});
   if(writeError){return json({...record,warning:'캐시 저장 실패: '+writeError.message,cached:false});}
   if(firstClaimed)await db.from('place_activity_first_attempts')
