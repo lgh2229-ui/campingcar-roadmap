@@ -51,10 +51,13 @@ test('unverified blog evidence cannot be turned into a fabricated map pin', () =
   assert.ok(code.includes('geographicRoots(placeName)'));
 });
 
-test('empty cache is incomplete and rechecked after search provider changes', () => {
+test('saved search results bypass external providers regardless of age or version', () => {
   assert.match(code,/SEARCH_VERSION=13/);
-  assert.ok(code.includes('search_incomplete:cachedSpots.length===0'));
-  assert.ok(code.includes('Number(cache.search_version||0)<SEARCH_VERSION'));
+  assert.ok(code.includes('if(cache && !force && !refreshSources)'));
+  assert.ok(code.includes('return json({...cache,cached:true,search_incomplete:saved.length===0'));
+  assert.ok(code.includes('if(body.cache_only===true)'));
+  assert.ok(code.includes('return json({cache_miss:true'));
+  assert.ok(!code.includes('Number(cache.search_version||0)<SEARCH_VERSION'));
 });
 
 test('nearby activities cannot make paid OpenAI API calls', () => {
