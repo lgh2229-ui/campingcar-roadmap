@@ -164,7 +164,7 @@ const searchTerms:Record<string,string[]>={
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 
-const SEARCH_VERSION=10;
+const SEARCH_VERSION=11;
 const EMPTY_RETRY_MS=6*60*60*1000;
 const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
@@ -235,7 +235,7 @@ function geographicRoots(full:string):string[]{
  const name=full.replace(/\s+/g,'').trim();
  const root=name
   .replace(/(?:제?[0-9]+(?:구역|지구|캠핑존|사이트|호))$/g,'')
-  .replace(/(?:오토캠핑장|감성캠핑장|캠핑장|야영장|오토캠핑|캠핑|공영주차장|해변주차장|주차장|노지|차박|매표소|입구).*$/,'')
+  .replace(/(?:오토캠핑장|감성캠핑장|캠핑장|야영장|오토캠핑|캠핑|공영주차장|해변주차장|주차장|선착장|방파제|물양장|낚시터|노지|차박|매표소|입구).*$/,'')
   .replace(/(?:오토|감성)$/,'').trim();
  const withPlace=name.replace(/(?:제?[0-9]+(?:구역|지구|캠핑존|사이트|호))$/g,'')
   .replace(/(?:오토캠핑장|감성캠핑장|캠핑장|야영장|오토캠핑|캠핑|공영주차장|주차장).*$/,'').trim();
@@ -248,12 +248,14 @@ function geographicRoots(full:string):string[]{
 
 // Search snippets are supporting evidence, never proof of an exact map pin.
 async function naverBlogEvidence(placeName:string,activity:string):Promise<AnyObj[]>{
- if(activity!=='해루질')return [];
+ if(activity!=='해루질' && activity!=='낚시')return [];
  const clientId=Deno.env.get('NAVER_SEARCH_CLIENT_ID')||'';
  const clientSecret=Deno.env.get('NAVER_SEARCH_CLIENT_SECRET')||'';
  if(!clientId||!clientSecret)throw new Error('NAVER_SEARCH_CREDENTIALS_MISSING');
  const areas=geographicRoots(placeName);
- const queries=[...new Set(areas.flatMap(area=>[area+' 맛조개',area+' 갯벌체험 해루질']))].slice(0,4);
+ const queries=[...new Set(areas.flatMap(area=>activity==='낚시'
+  ? [area+' 낚시 포인트',area+' 선착장 원투 루어']
+  : [area+' 맛조개',area+' 갯벌체험 해루질']))].slice(0,4);
  const responses=await Promise.allSettled(queries.map(async query=>{
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),3200);
   try{
@@ -267,9 +269,11 @@ async function naverBlogEvidence(placeName:string,activity:string):Promise<AnyOb
     description:String(x.description||'').replace(/<[^>]*>/g,' ').slice(0,230),
     published_at:String(x.postdate||'').slice(0,8),
     location_verified:false,
-    note:'관련 블로그 문서입니다. 상세 좌표와 현재 채취 허가를 검증하지 않았습니다.'
+    note:'관련 블로그 문서입니다. 정확한 활동 위치와 현재 출입·낚시·채취 허가를 검증하지 않았습니다.'
    })).filter((x:AnyObj)=>x.source_url&&
-     /맛조개|조개|갯벌|해루질|동죽|바지락/.test(x.name+' '+x.description)&&
+     (activity==='낚시'
+  ? /낚시|원투|루어|방파제|조황|갯바위|찌낚시/.test(x.name+' '+x.description)
+  : /맛조개|조개|갯벌|해루질|동죽|바지락/.test(x.name+' '+x.description))&&
      areas.some(area=>(x.name+' '+x.description).replace(/\s+/g,'').includes(area.replace(/\s+/g,''))));
   }finally{clearTimeout(timeout);}
  }));
@@ -289,10 +293,11 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
   ? (coastal?[root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']:[root+' 전통시장',root+' 마트'])
   : root && activity==='해루질'
   ? roots.flatMap(area=>[area+' 맛조개',area+' 조개잡이',area+' 갯벌체험',area+' 해루질'])
-  : root && activity==='낚시' ? [root+' 낚시',root+' 선착장'] : [];
+  : root && activity==='낚시'
+  ? roots.flatMap(area=>[area+' 낚시',area+' 원투낚시',area+' 방파제 낚시',area+' 선착장']) : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?7:activity==='해루질'?8:4;
+ const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?10:activity==='해루질'?8:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  // Parallel bounded batches: 10 sequential 3.5-second timeouts made searches stall.
