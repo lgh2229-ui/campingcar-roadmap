@@ -52,7 +52,7 @@ test('unverified blog evidence cannot be turned into a fabricated map pin', () =
 });
 
 test('empty cache is incomplete and rechecked after search provider changes', () => {
-  assert.match(code,/SEARCH_VERSION=12/);
+  assert.match(code,/SEARCH_VERSION=13/);
   assert.ok(code.includes('search_incomplete:cachedSpots.length===0'));
   assert.ok(code.includes('Number(cache.search_version||0)<SEARCH_VERSION'));
 });
@@ -62,4 +62,14 @@ test('nearby activities cannot make paid OpenAI API calls', () => {
   assert.doesNotMatch(code, /OPENAI_API_KEY/);
   assert.doesNotMatch(code, /reserve_camping_ai_budget/);
   assert.ok(!code.includes('await aiFallback(') && !code.includes('await onlineAISummary('));
+});
+
+test('scenic lake and bridge discovery is not restricted to POI business categories', () => {
+  assert.ok(code.includes('["natural"="water"]["water"~"^(lake|reservoir)$"]["name"]'));
+  assert.ok(code.includes('["man_made"="bridge"]["name"~"출렁다리|구름다리"]'));
+  assert.ok(code.includes("region+' 호수'"));
+  assert.ok(code.includes("region+' 수변길'"));
+  assert.ok(code.includes("region+' 출렁다리'"));
+  assert.ok(code.includes('place.address||'));
+  assert.ok(code.includes('호수·저수지의 지도 중심점입니다.'));
 });
