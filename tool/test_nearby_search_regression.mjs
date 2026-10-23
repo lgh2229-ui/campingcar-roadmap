@@ -52,7 +52,7 @@ test('unverified blog evidence cannot be turned into a fabricated map pin', () =
 });
 
 test('empty cache is incomplete and rechecked after search provider changes', () => {
-  assert.match(code,/SEARCH_VERSION=10/);
+  assert.match(code,/SEARCH_VERSION=11/);
   assert.ok(code.includes('search_incomplete:cachedSpots.length===0'));
   assert.ok(code.includes('Number(cache.search_version||0)<SEARCH_VERSION'));
 });
