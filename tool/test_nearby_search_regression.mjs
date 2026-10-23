@@ -61,5 +61,5 @@ test('nearby activities cannot make paid OpenAI API calls', () => {
   assert.doesNotMatch(code, /api\\.openai\\.com/i);
   assert.doesNotMatch(code, /OPENAI_API_KEY/);
   assert.doesNotMatch(code, /reserve_camping_ai_budget/);
-  assert.doesNotMatch(code, /await (aiFallback|onlineAISummary)\\(/);
+  assert.ok(!code.includes('await aiFallback(') && !code.includes('await onlineAISummary('));
 });
