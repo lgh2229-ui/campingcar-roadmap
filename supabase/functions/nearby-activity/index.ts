@@ -282,6 +282,60 @@ async function naverBlogEvidence(placeName:string,activity:string):Promise<AnyOb
  return [...new Map(found.map((x:AnyObj)=>[x.source_url,x])).values()].slice(0,6);
 }
 
+// YouTube is documentary evidence only. Video descriptions have no trusted GPS.
+async function youtubeFishingEvidence(placeName:string,activity:string):Promise<AnyObj[]>{
+ if(activity!=='낚시')return [];
+ const key=Deno.env.get('YOUTUBE_DATA_API_KEY')||'';
+ if(!key)throw new Error('YOUTUBE_DATA_API_KEY_NOT_CONFIGURED');
+ const roots=geographicRoots(placeName),area=roots[0];
+ if(!area)return [];
+ const url='https://www.googleapis.com/youtube/v3/search?'+new URLSearchParams({
+  part:'snippet',type:'video',q:area+' 방파제 선착장 낚시',maxResults:'10',
+  regionCode:'KR',relevanceLanguage:'ko',key
+ });
+ const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),4500);
+ try{
+  const response=await fetch(url,{signal:controller.signal});
+  if(!response.ok)throw new Error('YOUTUBE_SEARCH_'+response.status);
+  const data=await response.json();
+  return (Array.isArray(data.items)?data.items:[])
+   .map((item:AnyObj)=>({
+    name:String(item.snippet?.title||'').slice(0,110),
+    source_url:item.id?.videoId?'https://www.youtube.com/watch?v='+encodeURIComponent(String(item.id.videoId)):'',
+    description:String(item.snippet?.description||'').slice(0,230),
+    published_at:String(item.snippet?.publishedAt||''),
+    location_verified:false,
+    note:'관련 유튜브 영상입니다. 촬영 장소 세부 좌표·현재 출입과 낚시 허가를 확인하지 않았습니다.'
+   }))
+   .filter((item:AnyObj)=>item.source_url &&
+      /낚시|원투|루어|조황|갯바위|방파제|선착장/.test(item.name+' '+item.description) &&
+      roots.some(root=>(item.name+' '+item.description).replace(/\s+/g,'').includes(root.replace(/\s+/g,''))))
+   .slice(0,6);
+ }finally{clearTimeout(timeout);}
+}
+
+// A source naming the same registered port supports a port-level candidate pin,
+// not a claim that a specific pier, tetrapod or restricted zone permits fishing.
+function fishingPortAnchor(place:AnyObj,docs:AnyObj[],lat:number,lon:number):AnyObj|null{
+ const name=String(place.name||'');
+ if(!/(항|포구|선착장|방파제)/.test(name))return null;
+ const roots=geographicRoots(name);
+ const match=docs.find(d=>{
+  const desc=(String(d.name||'')+' '+String(d.description||'')).replace(/\s+/g,'');
+  return validHttp(d.source_url) &&
+   roots.some(root=>root.length>=3&&/(항|포구)$/.test(root)&&desc.includes(root)) &&
+   /낚시|원투|루어|조황|갯바위|방파제|선착장/.test(desc) &&
+   !/낚시\s*금지|출입\s*금지|낚시금지/.test(desc);
+ });
+ if(!match)return null;
+ return normalizePlace({
+  name:(roots.find(root=>/(항|포구)$/.test(root))||name)+' 주변 낚시 정보 후보',
+  lat,lon,kind:'항구 위치 확인 · 낚시 가능 구역/허가 미확인',
+  description:'주변 낚시 사례를 공개 문서에서 발견했습니다. 표시 핀은 기존 항구의 대표 위치이며 실제 낚시 자리·허가를 확인한 것이 아닙니다.',
+  source_url:match.source_url,website:match.source_url
+ },lat,lon,'낚시');
+}
+
 async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
  if(!key)throw new Error('REGIONAL_MAP_KEY_NOT_CONFIGURED');
  const roots=geographicRoots(placeName);
@@ -842,9 +896,32 @@ Deno.serve(async (req:Request)=>{
   }
   if(spots.length===0){
    let naverRelated:AnyObj[]=[];
-   if(activity==='해루질'){
-    try{naverRelated=await naverBlogEvidence(place.name,activity);}
-    catch(error){errors.push('Naver blog API not configured or unavailable');console.warn('Naver source:',String(error).slice(0,70));}
+   if(activity==='해루질'||activity==='낚시'){
+    const research=await Promise.allSettled([
+     naverBlogEvidence(place.name,activity),
+     youtubeFishingEvidence(place.name,activity)
+    ]);
+    if(research[0].status==='fulfilled')naverRelated.push(...research[0].value);
+    else errors.push('Naver blog search unavailable');
+    if(research[1].status==='fulfilled')naverRelated.push(...research[1].value);
+    else if(activity==='낚시')errors.push('YouTube search unavailable');
+    naverRelated=[...new Map(naverRelated.map(d=>[d.source_url,d])).values()].slice(0,8);
+   }
+   const anchor=activity==='낚시'?fishingPortAnchor(place,naverRelated,lat,lon):null;
+   if(anchor && !force){
+    const now=new Date().toISOString();
+    const update={spots:[anchor],
+     summary:'항구 주변 낚시 관련 문서를 확인했지만 실제 낚시가 허용된 상세 구역은 아직 검증되지 않았습니다. 핀은 항구 대표 위치입니다.',
+     suggested_places:naverRelated,
+     sources:[{name:anchor.name,url:anchor.source_url}],
+     research_status:'candidate',ai_generated:false,
+     search_version:SEARCH_VERSION,fetched_at:now
+    };
+    const {error}=await db.from('place_activity_insights').upsert({
+     place_id:placeId,activity,radius_m:RANGE,...update
+    },{onConflict:'place_id,activity'});
+    if(error)console.warn('fishing-anchor-cache:',error.message);
+    return json({...cache,...update,cached:true,source_candidate:true});
    }
    // Source-backed candidates are distinct from verified places inside 3km.
    const suggested=[...naverRelated,...(researched?.candidates||[]).map((p:AnyObj)=>({
