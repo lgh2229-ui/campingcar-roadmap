@@ -4,7 +4,12 @@ const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers
 const RANGE = 3000;
 type AnyObj = Record<string, any>;
 const selectors: Record<string, string[]> = {
-  "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]', '["historic"]'],
+  // Include named natural scenic sites and suspension bridges, not just businesses.
+  // Water polygon centers are informational; they are not public entry points.
+  "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]',
+    '["historic"]','["natural"="water"]["water"~"^(lake|reservoir)$"]["name"]',
+    '["man_made"="bridge"]["name"~"출렁다리|구름다리"]',
+    '["leisure"="park"]["name"]'],
   "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian|steps)$"]["name"]','["route"="foot"]','["tourism"="viewpoint"]'],
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
   "낚시": ['["sport"="fishing"]','["fishing"]','["leisure"="fishing"]',
@@ -46,6 +51,8 @@ function label(t:AnyObj, activity:string) {
  if(activity==="해루질")return "갯벌·해변 후보 (채취 허가 여부 미확인)";
  if(t["tourism"]==="viewpoint")return "전망대";
  if(t["leisure"]==="park")return "공원";
+ if(t["natural"]==="water" && /^(lake|reservoir)$/.test(String(t["water"]||"")))return "호수·저수지 (입구·출입 제한 별도 확인)";
+ if(t["man_made"]==="bridge" && /출렁다리|구름다리/.test(String(t.name||"")))return "출렁다리";
  if(t["natural"]==="peak")return "산·봉우리";
  if(t["amenity"]==="casino")return "카지노";
  if(t["leisure"]==="marina")return "마리나";
@@ -149,7 +156,7 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
 }
 // Search the names people actually use, not just abstract category labels.
 const searchTerms:Record<string,string[]>={
- '관광지':['관광명소','전망대','관광지'],
+ '관광지':['관광명소','호수','저수지','출렁다리','수변길','관광공원','전망대','관광지'],
  '산책':['산책로','수변공원','둘레길','해안길','벽화골목'],
  '등산':['등산로','등산','둘레길'],
  '낚시':['낚시포인트','선착장','방파제','낚시터','항구','포구','워킹낚시'],
@@ -164,7 +171,7 @@ const searchTerms:Record<string,string[]>={
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 
-const SEARCH_VERSION=12;
+const SEARCH_VERSION=13;
 const EMPTY_RETRY_MS=6*60*60*1000;
 const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
@@ -336,13 +343,20 @@ function fishingPortAnchor(place:AnyObj,docs:AnyObj[],lat:number,lon:number):Any
  },lat,lon,'낚시');
 }
 
-async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName=''){
+async function kakaoSearch(lat:number,lon:number,activity:string,key:string|undefined,placeName='',placeAddress=''){
  if(!key)throw new Error('REGIONAL_MAP_KEY_NOT_CONFIGURED');
  const roots=geographicRoots(placeName);
  const root=roots[0]||placeName.slice(0,20);
+ // Facility marketing names often hide nearby lakes, trails and local landmarks.
+ // Geographic address terms provide an independent area-based search.
+ const regionParts=String(placeAddress||'').match(/([가-힣]+(?:시|군|구))\s+([가-힣]+(?:읍|면|동))/);
+ const region=regionParts?.[1]||'';
+ const locality=regionParts?.[2]||'';
  const coastal=/항|포구|선착장|방파제|어촌|해변|해수욕장|해안/.test(root);
  const targeted=root && activity==='관광지'
-  ? [root,root+' 관광명소',root+' 주변 관광지',root+' 해수욕장']
+  ? [root,root+' 주변 관광지',
+     ...(region?[region+' 관광명소',region+' 호수',region+' 수변길',region+' 출렁다리',region+' 공원']:[]),
+     ...(region&&locality?[region+' '+locality+' 관광지']:[])]
   : root && activity==='시장·쇼핑'
   ? (coastal?[root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']:[root+' 전통시장',root+' 마트'])
   : root && activity==='해루질'
@@ -351,7 +365,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
   ? roots.flatMap(area=>[area+' 낚시',area+' 원투낚시',area+' 방파제 낚시',area+' 선착장']) : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?10:activity==='해루질'?8:4;
+ const count=activity==='관광지'?10:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?10:activity==='해루질'?8:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  let successes=0, failures=0;
@@ -368,7 +382,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
    const data=await r.json();
    for(const d of data.documents||[]){
     if(activity==='관광지' &&
-       !/관광|여행|명소|전망대|해변|해수욕장|수목원|공원|박물관|문화재|유적|축제|정원|미술관|테마파크|포토존/i.test(
+       !/관광|여행|명소|전망대|해변|해수욕장|수목원|공원|박물관|문화재|유적|축제|정원|미술관|테마파크|포토존|호수|저수지|수변길|둘레길|출렁다리|구름다리/i.test(
         String(d.category_name||'')+' '+String(d.place_name||'')))continue;
     if(activity==='해루질' &&
        !/갯벌|해루질|맛조개|바지락|동죽|백합|조개|어촌체험|체험마을|해변|해수욕장|해안|낙지|소라|꽃게/i.test(
@@ -444,7 +458,9 @@ function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
  const phone=String(t['contact:phone']||t.phone||'').trim().slice(0,90);
  const website=String(t['contact:website']||t.website||'').trim();
  const safeWebsite=/^https?:\/\//i.test(website)?website:'';
- return {name,lat:la,lon:lo,distance_m:meters,kind:label(t,activity),address:String(t['addr:full']||t['addr:street']||'').slice(0,160),phone,website:safeWebsite,opening_hours:String(t.opening_hours||'').slice(0,120),fee:String(t.fee||'').slice(0,45),description:String(t['description:ko']||t.description||(
+ return {name,lat:la,lon:lo,distance_m:meters,kind:label(t,activity),address:String(t['addr:full']||t['addr:street']||'').slice(0,160),phone,website:safeWebsite,opening_hours:String(t.opening_hours||'').slice(0,120),fee:String(t.fee||'').slice(0,45),description:String(t['description:ko']||t.description||
+   ((t.natural==='water' && /^(lake|reservoir)$/.test(String(t.water||'')))
+     ? '호수·저수지의 지도 중심점입니다. 관광객 진입로·시설 개방·출입 가능 구역은 별도 확인하세요.' : '')||(
   activity==='수상레포츠' && (t.waterway||t.natural==='beach'||t.tourism==='attraction')
    ? '강·계곡·하천 물놀이 관련 지형 후보입니다. 수영 허용 여부, 급류·수심·수질·기상 상황을 현장에서 확인하세요.'
    : ''
@@ -578,7 +594,7 @@ Deno.serve(async (req:Request)=>{
   const placeId=String(body.place_id||'');
   const activity=String(body.activity||'');
   if(!/^[0-9a-f-]{36}$/i.test(placeId) || !selectors[activity])return json({error:'장소 또는 활동이 올바르지 않습니다.'},400);
-  const {data:place,error:placeError}=await userDb.from('places').select('id,name,latitude,longitude').eq('id',placeId).maybeSingle();
+  const {data:place,error:placeError}=await userDb.from('places').select('id,name,latitude,longitude,address').eq('id',placeId).maybeSingle();
   if(placeError || !place)return json({error:'조회할 수 없는 장소입니다.'},403);
   const {data:cache}=await db.from('place_activity_insights').select('*').eq('place_id',placeId).eq('activity',activity).maybeSingle();
   const force=body.force_refresh===true;
@@ -647,7 +663,7 @@ Deno.serve(async (req:Request)=>{
      const lat=Number(place.latitude),lon=Number(place.longitude);
      const checks=await Promise.allSettled([
       tourApiSearch(lat,lon,activity),
-      kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name),
+      kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name,place.address||''),
       overpass(lat,lon,selectors[activity])
      ]);
      const raw:AnyObj[]=[];
@@ -728,7 +744,7 @@ Deno.serve(async (req:Request)=>{
   const checks=await Promise.allSettled([
    curatedPoi(db,lat,lon,activity),
    tourApiSearch(lat,lon,activity),
-   kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name)
+   kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name,place.address||'')
   ]);
   let collected:AnyObj[]=[];
   const errors:string[]=[];
