@@ -193,6 +193,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     final summary=(data['summary']??'').toString().trim();
     final ai=data['ai_generated']==true;
     final incomplete=(data['temporarily_unavailable']==true || data['search_incomplete']==true) && spotCount==0;
+    final candidate=data['research_status']=='candidate' || data['source_candidate']==true;
     return Container(
       width:double.infinity,
       padding:const EdgeInsets.all(16),
@@ -207,7 +208,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
           const SizedBox(width:8),
           const Expanded(child:Text('주변 한눈에 보기',
             style:TextStyle(fontSize:15,fontWeight:FontWeight.w800))),
-          _tag(incomplete?'검색 미완료':'$spotCount곳 확인'),
+          _tag(incomplete?'검색 미완료':candidate?'후보 $spotCount곳':'$spotCount곳 확인'),
         ]),
         const SizedBox(height:11),
         Text(summary.isEmpty?'확인된 주변 정보가 아직 없습니다.':summary,
@@ -405,6 +406,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
     final date=when==null?'':('${when.year}.${when.month.toString().padLeft(2,'0')}.${when.day.toString().padLeft(2,'0')}');
     final scheme=Theme.of(context).colorScheme;
     final incomplete=(data['temporarily_unavailable']==true || data['search_incomplete']==true) && spots.isEmpty;
+    final candidate=data['research_status']=='candidate' || data['source_candidate']==true;
     return ListView(
       padding:const EdgeInsets.fromLTRB(16,13,16,30),
       children:[
@@ -430,6 +432,10 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
           padding:const EdgeInsets.only(top:8),
           child:Text('검색 서버 연결이 원활하지 않습니다. 기존 정보는 유지됩니다.',
             style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
+        if(candidate)Padding(
+          padding:const EdgeInsets.only(top:8),
+          child:Text('낚시 자료가 있는 항구의 위치 후보입니다. 실제 낚시 자리·출입 허가는 아직 확인되지 않았습니다.',
+            style:TextStyle(fontSize:12,color:scheme.onSurfaceVariant))),
         if(data['research_status']=='not_confirmed')Padding(
           padding:const EdgeInsets.only(top:8),
           child:Text('위치가 검증된 정보가 아직 없습니다. 이용 불가를 뜻하지 않습니다.',
@@ -437,7 +443,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         const SizedBox(height:13),
         _summaryCard(data,spots.length),
 
-        _heading('주변 즐길 거리',detail:incomplete?'검색 미완료':'${spots.length}곳'),
+        _heading('주변 즐길 거리',detail:incomplete?'검색 미완료':candidate?'후보 ${spots.length}곳':'${spots.length}곳'),
         if(spots.isEmpty)Container(
           padding:const EdgeInsets.symmetric(horizontal:14,vertical:16),
           decoration:BoxDecoration(
