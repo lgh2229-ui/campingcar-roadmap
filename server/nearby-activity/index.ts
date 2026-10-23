@@ -164,7 +164,7 @@ const searchTerms:Record<string,string[]>={
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 
-const SEARCH_VERSION=11;
+const SEARCH_VERSION=12;
 const EMPTY_RETRY_MS=6*60*60*1000;
 const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
@@ -453,83 +453,7 @@ function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
 // AI searches fresh public web sources only when a server-side API key is configured.
 // It may enrich descriptions of independently geolocated POIs, but must not create
 // map points or phone numbers from its own unverified text.
-async function onlineAISummary(
- name:string, activity:string, spots:AnyObj[], key:string|undefined, db:any,
- ctx:{placeId:string,reportId:string|null,adminId:string|null}
-):Promise<{summary:string,sources:AnyObj[]}|null>{
- if(!key || spots.length===0)return null;
- const requestId=crypto.randomUUID();
- const reserve=await db.rpc('reserve_camping_ai_budget',{
-  p_request_id:requestId,p_place_id:ctx.placeId,p_activity:activity,
-  p_report_id:ctx.reportId,p_admin_id:ctx.adminId
- });
- if(reserve.error)throw new Error('AI 예산 검증 오류');
- if(reserve.data!==true)throw new Error('AI 월간 예산 30,000원에 도달했거나 남은 예산이 부족합니다.');
- const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),17000);
- let settled=false;
- const settle=async(ok:boolean,krw:number,inputs:number,outputs:number,calls:number,responseId:string,errorCode:string)=>{
-  try{
-   const {error}=await db.rpc('settle_camping_ai_budget',{
-    p_request_id:requestId,p_completed:ok,p_actual_krw:krw,
-    p_input_tokens:inputs,p_output_tokens:outputs,p_web_search_calls:calls,
-    p_response_id:responseId,p_error_code:errorCode
-   });
-   if(error)console.error('AI usage settlement failed:',error.message);
-   else settled=true;
-  }catch(e){console.error('AI usage settlement transport error:',String(e));}
- };
- try{
-  const nearby=spots.slice(0,8).map(s=>({name:s.name,kind:s.kind,distance_m:s.distance_m,
-   website:s.website,source_url:s.source_url}));
-  const prompt=[
-   '한국 캠핑카 여행 정보 사이트의 최신 주변 활동 요약을 작성하세요.',
-   '장소: '+name,'활동: '+activity,'허용 검색반경: 중심 기준 직선거리 3km.',
-   '제공된 좌표 확인 장소만 설명하며 새로운 장소, 업체, 전화번호, 낚시 포인트를 만들지 마세요.',
-   '공식출처 없는 운영시간·가격·출항여부·합법적 해루질 허가를 추정하지 마세요.',
-   '웹에서 최신 출처를 확인하고 2~4문장 한국어로 정리하세요.',
-   '좌표 확인 장소: '+JSON.stringify(nearby)
-  ].join('\\n');
-  const response=await fetch('https://api.openai.com/v1/responses',{
-   method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
-   body:JSON.stringify({model:'gpt-4.1-mini',tools:[{type:'web_search',search_context_size:'low'}],
-    tool_choice:'required',max_output_tokens:350,input:prompt}),signal:controller.signal
-  });
-  if(!response.ok){
-   await settle(false,0,0,0,0,'','openai_http_'+response.status);
-   console.warn('OpenAI HTTP '+response.status);
-   return null;
-  }
-  const body=await response.json();
-  const contents=(body.output||[]).flatMap((x:AnyObj)=>Array.isArray(x.content)?x.content:[])
-   .filter((x:AnyObj)=>x.type==='output_text');
-  const summary=contents.map((x:AnyObj)=>String(x.text||'')).join(' ').trim().slice(0,900);
-  const citations=new Map<string,AnyObj>();
-  for(const item of contents)for(const c of item.annotations||[]){
-   if(c.type!=='url_citation')continue;
-   const url=validHttp(c.url);
-   if(url&&!citations.has(url))citations.set(url,{name:String(c.title||'웹 검색 출처').slice(0,90),url});
-  }
-  const inputTokens=Math.max(0,Number(body.usage?.input_tokens||0));
-  const outputTokens=Math.max(0,Number(body.usage?.output_tokens||0));
-  const calls=Math.max(1,(body.output||[]).filter((v:AnyObj)=>v.type==='web_search_call').length);
-  // OpenAI search tool is $10/1k calls and GPT-4.1 mini is $0.40/$1.60 per 1M
-  // input/output tokens. Add the 8k-token search-content block conservatively.
-  // This is an estimate, not a guarantee of the external OpenAI invoice total.
-  const estimatedUsd=calls*.01+(inputTokens+8000*calls)*.40/1000000+outputTokens*1.60/1000000;
-  const estimatedKrw=Math.max(1,Math.ceil(estimatedUsd*1500));
-  await settle(true,estimatedKrw,inputTokens,outputTokens,calls,String(body.id||''),'');
-  if(!settled)throw new Error('AI 사용량 기록에 실패했습니다.');
-  if(!summary||citations.size===0)return null;
-  return {summary,sources:[...citations.values()].slice(0,8)};
- }catch(e){
-  if(!settled)await settle(false,0,0,0,0,'',String(e).slice(0,100));
-  if(String(e).includes('AI 사용량'))throw e;
-  console.warn('AI web search unavailable:',String(e).slice(0,150));
-  return null;
- }finally{clearTimeout(timer);}
-}
-
-
+// No paid OpenAI summary. Display the verified place details and citations directly.
 function metaText(x:unknown):string {
  return String(x||'').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim().slice(0,180);
 }
@@ -579,72 +503,7 @@ async function photoList(spots:AnyObj[]):Promise<AnyObj[]>{
  return items;
 }
 // AI is only a candidate finder; locations must be independently re-geocoded.
-async function aiFallback(db:any,place:AnyObj,activity:string):Promise<{summary:string,sources:AnyObj[],candidates:AnyObj[]}|null>{
- const key=Deno.env.get('OPENAI_API_KEY');
- if(!key)return null;
- const id=crypto.randomUUID();
- const hold=await db.rpc('reserve_camping_ai_budget',{
-  p_request_id:id,p_place_id:place.id,p_activity:activity,p_report_id:null,p_admin_id:null});
- if(hold.error || hold.data!==true)return null;
- let settled=false;
- const settle=async(ok:boolean,cost:number,inputs:number,outputs:number,calls:number,responseId:string,err:string)=>{
-  const {error}=await db.rpc('settle_camping_ai_budget',{
-   p_request_id:id,p_completed:ok,p_actual_krw:cost,p_input_tokens:inputs,
-   p_output_tokens:outputs,p_web_search_calls:calls,p_response_id:responseId,p_error_code:err});
-  settled=!error;
- };
- const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),17000);
- try{
-  const input=[
-   '대한민국 캠핑카 여행 장소의 3km 이내 활동을 다양한 공개 웹정보로 조사하세요.',
-   '장소: '+place.name+' 위도 '+place.latitude+' 경도 '+place.longitude,
-   '활동: '+activity+' / 구체 검색어: '+(searchTerms[activity]||[activity]).join(', '),
-   '한 가지 추상 분류어만 검색하지 마세요. 지자체 관광, 한국관광공사, 국내 지역 블로그·낚시 조황 및 지도 안내 등 서로 다른 출처로 교차 검증하세요.',
-   '산책은 벽화골목·해안길·수변공원, 낚시는 내항·방파제·선착장, 지상레포츠는 와이어 자전거·스카이사이클·짚라인까지 조사하세요.',
-   '장소 이름과 출처를 최대 5곳 반환하고, 근거 없이 장소·좌표·연락처·어종을 지어내지 마세요. 일부 검색사이트는 접근이 제한될 수 있습니다.',
-   '낚시 가능 구간은 출입금지·위험 테트라포드와 구분하고, 실제 어획은 보장하지 마세요.',
-    'JSON 객체 형식으로만 응답하세요. summary는 검색 근거 요약, places는 확인된 실제 장소 고유명칭과 열리는 출처 URL 배열입니다. 안내 예시 텍스트를 장소명 또는 URL로 복사하지 마세요.',
-   '후보의 좌표·3km 이내 여부는 다른 지도 제공자가 최종 확인합니다.'
-  ].join('\\n');
-  const r=await fetch('https://api.openai.com/v1/responses',{method:'POST',
-   headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},
-   body:JSON.stringify({model:'gpt-4.1-mini',tools:[{type:'web_search',search_context_size:'low'}],
-    tool_choice:'required',max_output_tokens:850,input}),signal:ctrl.signal});
-  if(!r.ok){await settle(false,0,0,0,0,'','http_'+r.status);return null;}
-  const body=await r.json();
-  const texts=(body.output||[]).flatMap((x:AnyObj)=>x.content||[]).filter((x:AnyObj)=>x.type==='output_text');
-  const raw=texts.map((x:AnyObj)=>String(x.text||'')).join('');
-  const sources=new Map<string,AnyObj>();
-  for(const x of texts)for(const c of x.annotations||[]){
-   if(c.type==='url_citation' && validHttp(c.url))sources.set(c.url,{name:String(c.title||'AI 검색 출처'),url:c.url});
-  }
-  const inputs=Math.max(0,Number(body.usage?.input_tokens||0));
-  const outputs=Math.max(0,Number(body.usage?.output_tokens||0));
-  const calls=Math.max(1,(body.output||[]).filter((x:AnyObj)=>x.type==='web_search_call').length);
-  const estimate=Math.ceil((calls*.01+(inputs+8000*calls)*.4/1000000+outputs*1.6/1000000)*1500);
-  await settle(true,estimate,inputs,outputs,calls,String(body.id||''),'');
-  if(!settled)return null;
-  let parsed:AnyObj={};
-  try{parsed=JSON.parse(raw.slice(raw.indexOf('{'),raw.lastIndexOf('}')+1));}
-  catch(_){return {summary:'',sources:[...sources.values()],candidates:[]};}
-  const candidates=(Array.isArray(parsed.places)?parsed.places:[]).slice(0,5)
-   .map((p:AnyObj)=>({name:String(p.name||'').slice(0,90),source_url:validHttp(p.source_url)}))
-   .filter((p:AnyObj)=>{
-    const label=p.name.trim().toLowerCase();
-    if(label.length<3 || /실제.?시설명|고유명칭|예시|장소명|시설명|^낚시포인트$|^주변장소$|^test$/i.test(label))return false;
-    try{
-     const url=new URL(p.source_url);
-     return (url.protocol==='https:'||url.protocol==='http:') &&
-      url.hostname.includes('.') && !/원문|예시|example|localhost|\.invalid/i.test(p.source_url);
-    }catch(_){return false;}
-   });
-  return {summary:String(parsed.summary||'').slice(0,500),sources:[...sources.values()],candidates};
- }catch(e){console.warn('AI discovery unavailable:',String(e).slice(0,90));if(!settled)await settle(false,0,0,0,0,'','request_error');return null;}
- finally{clearTimeout(timer);}
-}
-// Match meaningful place-name tokens, not only exact map label text.
-// "도째비골 스카이사이클" and "도째비골 스카이밸리" can reference
-// the same venue even when their full strings differ.
+// Paid initial AI candidate search removed. Only free/official sources are used.
 function equivalentPlace(a:string,b:string):boolean{
  const n=(x:string)=>x.toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu,'');
  const x=n(a),y=n(b);
@@ -735,7 +594,7 @@ Deno.serve(async (req:Request)=>{
   let adminId:string|null=null;
   if(force){
    const {data:isAdmin,error:roleError}=await userDb.rpc('is_admin');
-   if(roleError||isAdmin!==true)return json({error:'AI 재검색은 관리자만 실행할 수 있습니다.'},403);
+   if(roleError||isAdmin!==true)return json({error:'관리자 재검색 권한이 없습니다.'},403);
    adminId=(await userDb.auth.getUser()).data.user?.id||null;
    const reportId=String(body.report_id||'');
    if(!/^[0-9a-f-]{36}$/i.test(reportId))return json({error:'사용자 신고가 있어야 재검색할 수 있습니다.'},403);
@@ -744,7 +603,7 @@ Deno.serve(async (req:Request)=>{
     .eq('activity',activity).eq('status','pending').maybeSingle();
    if(reportError||!report)return json({error:'이 장소와 활동에 대한 미처리 신고가 없습니다.'},403);
    verifiedReportId=reportId;
-   if(!Deno.env.get('OPENAI_API_KEY'))return json({error:'OpenAI API 키가 등록되지 않아 AI 재검색을 실행할 수 없습니다.'},503);
+   // No OpenAI API key is needed for manual free-source refresh.
   }
   // A negative cache must reflect newly verified POIs without extra paid AI searches.
   if(cache && !force && !refreshSources && (
@@ -907,7 +766,7 @@ Deno.serve(async (req:Request)=>{
     // A previous initial attempt blocks only paid AI, not free map searching.
     if(claimed===true)firstClaimed=true;
    }
-   researched=firstClaimed ? await aiFallback(db,place,activity) : null;
+   researched=null; // Paid OpenAI search is disabled in all nearby searches.
    if(researched){
     extraSources=researched.sources||[];
     for(const candidate of researched.candidates||[]){
@@ -963,9 +822,9 @@ Deno.serve(async (req:Request)=>{
     ? (suggested.length>0
        ? '주변 관련 정보를 재검색해 '+suggested.map((p:AnyObj)=>p.name).join(' · ')+
          ' 등의 자료를 찾았습니다. 다만 위치 데이터가 확인되지 않아 반경 3km 확정 목록에는 포함하지 않았습니다. 출처에서 직접 확인하거나 변경 신고를 남겨주세요.'
-       : 'AI 웹검색을 시도했으나 반경 3km 이내에서 위치까지 검증된 '+activity+' 장소는 아직 확인하지 못했습니다. 이용 불가라는 뜻은 아닙니다.')
-    : '현재 공개지도·AI 확인이 원활하지 않습니다. 정보가 있다면 신고해주세요.';
-   if(force)return json({error:'관리자 AI 재검색에서 확인된 장소가 없어 이전 기록을 유지했습니다.'},503);
+       : '공개 관광·지도 자료에서 반경 3km 이내 위치가 확인된 '+activity+' 장소는 아직 찾지 못했습니다. 이용 불가라는 뜻은 아닙니다.')
+    : '일부 공개 관광·지도 제공자 검색이 원활하지 않습니다. 검색 실패는 주변 정보가 없다는 뜻이 아닙니다.';
+   if(force)return json({error:'공개 지도·관광자료에서 위치를 확인하지 못해 이전 기록을 유지했습니다.'},503);
    if(researched || naverRelated.length>0){
     const now=new Date().toISOString();
     const item={place_id:placeId,activity,radius_m:RANGE,summary,
@@ -994,33 +853,20 @@ Deno.serve(async (req:Request)=>{
   const fallback=spots.length>0
    ? (place.name+' 주변 3km 이내 공개지도에 '+spots.length+'곳의 '+activity+' 관련 장소가 확인됩니다. 가까운 곳: '+primary+'.')
    : (place.name+' 주변 3km 이내 공개지도에서 '+activity+' 관련 장소를 확인하지 못했습니다. 정보가 없다는 뜻이지 이용이 불가능하다는 뜻은 아닙니다.');
-  let ai:{summary:string,sources:AnyObj[]}|null=null;
-  try{
-   if(researched && researched.summary && researched.sources?.length){
-     // The paid initial AI second-search already ran. Do not bill a second time.
-     ai={summary:researched.summary,sources:researched.sources};
-   }else if(!researched && !cache){
-     ai=await onlineAISummary(place.name,activity,spots,Deno.env.get('OPENAI_API_KEY'),db,
-       {placeId:place.id,reportId:verifiedReportId,adminId});
-   }
-  }catch(e){
-   if(force)return json({error:String(e).replace(/^Error:\s*/,''),budget_blocked:true},429);
-   console.warn('AI lookup skipped:',String(e).slice(0,100));
-  }
-  if(force && !ai?.summary)return json({error:'AI 검색 또는 출처 확인이 완료되지 않았습니다. 신고는 대기 상태로 유지됩니다.'},503);
+  // Show sourced information directly. No charged OpenAI Responses API calls.
   const caution=(activity==='해루질'||activity==='낚시')
    ? '채취·낚시 가능 구역, 출입 제한, 금어기, 기상 및 물때를 현장에서 반드시 확인하세요. 위치 정보만으로 합법적인 이용이 보장되지 않습니다.'
    : activity==='수상레포츠'
    ? '서핑·수영·스노클링·카약·SUP 정보를 통합해 제공합니다. 해수욕장·강·계곡 물놀이는 후보일 수 있으며 입수·출입 허용 여부, 파도·급류·수심·수질 및 기상을 현장에서 확인하세요.'
    : '운영시간·요금·예약·입장 가능 여부는 출발 전 공식 안내 또는 해당 업체에 확인하세요.';
-  const sources=[...spots.map(s=>({name:s.name,url:s.source_url})),...extraSources,...(ai?.sources||[])]
+  const sources=[...spots.map(s=>({name:s.name,url:s.source_url})),...extraSources]
     .filter((s:AnyObj)=>Boolean(validHttp(s.url))).slice(0,26);
   const photos=await photoList(spots);
   const now=new Date().toISOString();
   const record={place_id:place.id,activity,radius_m:RANGE,
-   summary:ai?.summary||fallback,spots,providers,photos,tips:[caution],sources,
+   summary:fallback,spots,providers,photos,tips:[caution],sources,
    fetched_at:now,photo_checked_at:now,expires_at:null,
-   research_status:'verified',ai_generated:Boolean(ai?.summary),search_version:SEARCH_VERSION};
+   research_status:'verified',ai_generated:false,search_version:SEARCH_VERSION};
   const {error:writeError}=await db.from('place_activity_insights').upsert(record,{onConflict:'place_id,activity'});
   if(writeError){return json({...record,warning:'캐시 저장 실패: '+writeError.message,cached:false});}
   if(firstClaimed)await db.from('place_activity_first_attempts')
