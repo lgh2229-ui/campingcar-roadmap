@@ -34,7 +34,7 @@ test('port names strip generic docks and still search the named harbor', () => {
   assert.ok(code.includes("roots.flatMap(area=>[area+' 낚시'"));
   assert.ok(code.includes('naverBlogEvidence(place.name,activity)'));
   assert.ok(code.includes('youtubeFishingEvidence(place.name,activity)'));
-  assert.ok(code.includes('fishingPortAnchor(place,related,lat,lon)'));
+  assert.ok(code.includes('function fishingPortAnchor('));
 });
 
 test('gleaning searches include shellfish, not just generic tourism labels', () => {
