@@ -621,122 +621,17 @@ Deno.serve(async (req:Request)=>{
    verifiedReportId=reportId;
    // No OpenAI API key is needed for manual free-source refresh.
   }
-  // A negative cache must reflect newly verified POIs without extra paid AI searches.
-  if(cache && !force && !refreshSources && (
-    !Array.isArray(cache.spots) || cache.spots.length===0 ||
-    (Number(cache.search_version||0)>=SEARCH_VERSION &&
-      Date.now()-new Date(cache.fetched_at||0).getTime()<7*86400000)
-  )){
-   const cachedSpots=Array.isArray(cache.spots)?cache.spots:[];
-   if(cachedSpots.length===0){
-    try{
-     const fresh=await curatedPoi(db,Number(place.latitude),Number(place.longitude),activity);
-     if(fresh.length>0){
-      const now=new Date().toISOString();
-      const names=fresh.slice(0,3).map(s=>s.name).join(' · ');
-      const summary=place.name+' 주변 3km 이내 공개자료에서 '+activity+
-       ' 관련 장소 '+fresh.length+'곳을 확인했습니다: '+names+
-       '. 활동 관련 장소 위치가 확인됐으나 실제 출입·채취 허가와 안전은 현장에서 별도 확인하세요.';
-      const sources=fresh.filter(s=>Boolean(validHttp(s.source_url)))
-       .map(s=>({name:s.name,url:s.source_url}));
-      const tips=activity==='해루질'
-       ? ['해루질 관련 위치는 현재 채취·출입 허가를 뜻하지 않습니다. 어촌계·마을어장 규정을 확인하세요.',
-          '갯골·물때·기상과 안전장비를 확인하세요.']
-       : activity==='수상레포츠'?
-       ['물놀이 관련 장소 후보는 수영 허가·안전 확인을 의미하지 않습니다.',
-        '상수원 보호, 출입 통제, 수심·급류·기상·수질을 현장에서 확인하세요.']:
-       ['정보 출처와 출입·운영 조건은 이용 전 확인하세요.'];
-      const patch={summary,spots:fresh,providers:[],sources,tips,
-       research_status:'verified',fetched_at:now,ai_generated:false,search_version:SEARCH_VERSION};
-      const {error}=await db.from('place_activity_insights')
-       .update(patch).eq('place_id',placeId).eq('activity',activity);
-      if(!error)return json({...cache,...patch,cached:true,curated_refreshed:true});
-      console.warn('curated-cache-write:',error.message);
-     }
-    }catch(e){console.warn('curated-cache-lookup:',String(e).slice(0,100));}
-   }
-   // Failures are not permanent 0-result findings; retry empty caches after
-   // six hours and immediately after a search-provider version update.
-   if(cachedSpots.length===0){
-    const age=Date.now()-new Date(cache.fetched_at||0).getTime();
-    if(Number(cache.search_version||0)<SEARCH_VERSION || !Number.isFinite(age) || age>EMPTY_RETRY_MS){
-     const lat=Number(place.latitude),lon=Number(place.longitude);
-     const checks=await Promise.allSettled([
-      tourApiSearch(lat,lon,activity),
-      kakaoSearch(lat,lon,activity,Deno.env.get('KAKAO_REST_API_KEY'),place.name,place.address||''),
-      overpass(lat,lon,selectors[activity])
-     ]);
-     const raw:AnyObj[]=[];
-     if(checks[0].status==='fulfilled')raw.push(...checks[0].value);
-     if(checks[1].status==='fulfilled')raw.push(...checks[1].value);
-     if(checks[2].status==='fulfilled')for(const element of checks[2].value){
-      const spot=spotFromElement(element,lat,lon,activity);if(spot)raw.push(spot);
-     }
-     if(raw.length===0){
-      try{raw.push(...await nominatimSearch(lat,lon,activity,place.name));}
-      catch(e){console.warn('cached-name-search:',String(e).slice(0,70));}
-     }
-     let found=dedupeSpots(raw,lat,lon,activity);
-     const now=new Date().toISOString();
-     if(found.length===0 && activity==='낚시'){
-      const docs=await Promise.allSettled([
-       naverBlogEvidence(place.name,activity),
-       youtubeFishingEvidence(place.name,activity)
-      ]);
-      const related=docs.flatMap(doc=>doc.status==='fulfilled'?doc.value:[]);
-      const anchor=fishingPortAnchor(place,related,lat,lon);
-      if(anchor){
-       const patch={spots:[anchor],research_status:'candidate',
-        summary:'낚시 관련 블로그·영상 자료와 항구 대표 위치를 연결한 후보입니다. 실제 낚시 자리 및 출입 허용 여부는 미확인입니다.',
-        suggested_places:related.slice(0,8),
-        sources:[{name:anchor.name,url:anchor.source_url}],
-        fetched_at:now,search_version:SEARCH_VERSION
-       };
-       const {error}=await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
-       if(error)console.warn('cached-anchor-write:',error.message);
-       return json({...cache,...patch,cached:true,source_candidate:true});
-      }
-      if(related.length>0){
-       const patch={suggested_places:related.slice(0,8),
-        summary:'낚시 관련 블로그·영상 자료는 찾았으나 개별 낚시 자리의 위치가 확인되지 않았습니다. 출처를 확인해 주세요.',
-        fetched_at:now,search_version:SEARCH_VERSION,research_status:'not_confirmed'};
-       await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
-       return json({...cache,...patch,cached:true,search_incomplete:true});
-      }
-     }
-     if(found.length>0){
-      const update={
-       spots:found,summary:place.name+' 주변 3km 이내 공개 관광·지도 자료에서 '+activity+' 관련 '+found.length+'곳을 확인했습니다. 입장·운영조건은 방문 전 확인하세요.',
-       sources:found.filter(p=>Boolean(validHttp(p.source_url))).map(p=>({name:p.name,url:p.source_url})),
-       providers:found.filter(p=>p.phone||p.website),research_status:'verified',ai_generated:false,
-       fetched_at:now,search_version:SEARCH_VERSION
-      };
-      const {error}=await db.from('place_activity_insights').update(update).eq('place_id',placeId).eq('activity',activity);
-      if(error)console.warn('cache-refreshed-not-saved:',error.message);
-      return json({...cache,...update,cached:true,free_map_refreshed:true});
-     }
-     const healthy=checks.filter(x=>x.status==='fulfilled').length;
-     if(healthy===0){
-      return json({...cache,cached:true,temporarily_unavailable:true,search_incomplete:true,
-       summary:'관광공사·지역지도·공개지도 검색이 일시적으로 실패했습니다. 검색 실패는 관광지 0곳을 뜻하지 않습니다.'});
-     }
-     const patch={search_version:SEARCH_VERSION,fetched_at:now,research_status:'not_confirmed',
-      summary:'공개 관광정보 일부 출처에서 반경 3km 이내 위치를 확인하지 못했습니다. 다른 출처가 있을 수 있으므로 주기적으로 자동 재검색합니다.'};
-     await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
-     return json({...cache,...patch,cached:true,search_incomplete:true});
-    }
-   }
-   // One-time licensed-photo enrichment, never a paid AI re-search.
-   if(!cache.photo_checked_at){
-    const images=await photoList(Array.isArray(cache.spots)?cache.spots:[]);
-    const now=new Date().toISOString();
-    const {error}=await db.from('place_activity_insights')
-     .update({photos:images,photo_checked_at:now})
-     .eq('place_id',placeId).eq('activity',activity).is('photo_checked_at',null);
-    if(!error)return json({...cache,photos:images,photo_checked_at:now,cached:true});
-   }
-   return json({...cache,cached:true,ai_generated:Boolean(cache.ai_generated),
-    search_incomplete:cachedSpots.length===0});
+  // Cache-first: on a normal revisit NEVER perform tourism, map, blog, photo or
+  // AI searches. Every previously researched result is returned immediately.
+  // External discovery runs only for uncached places or explicit Refresh.
+  if(cache && !force && !refreshSources){
+   const saved=Array.isArray(cache.spots)?cache.spots:[];
+   return json({...cache,cached:true,search_incomplete:saved.length===0,
+    refresh_available:true});
+  }
+  // The app can synchronize an on-device result without kicking off a search.
+  if(body.cache_only===true){
+   return json({cache_miss:true,cached:false,search_incomplete:true});
   }
   const lat=Number(place.latitude),lon=Number(place.longitude);
   // A national tourist listing, reviewed POIs and locally contextual map search
