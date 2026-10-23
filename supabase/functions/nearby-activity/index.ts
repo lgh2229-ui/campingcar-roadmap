@@ -798,7 +798,34 @@ Deno.serve(async (req:Request)=>{
       try{raw.push(...await nominatimSearch(lat,lon,activity,place.name));}
       catch(e){console.warn('cached-name-search:',String(e).slice(0,70));}
      }
-     const found=dedupeSpots(raw,lat,lon,activity),now=new Date().toISOString();
+     let found=dedupeSpots(raw,lat,lon,activity);
+     const now=new Date().toISOString();
+     if(found.length===0 && activity==='낚시'){
+      const docs=await Promise.allSettled([
+       naverBlogEvidence(place.name,activity),
+       youtubeFishingEvidence(place.name,activity)
+      ]);
+      const related=docs.flatMap(doc=>doc.status==='fulfilled'?doc.value:[]);
+      const anchor=fishingPortAnchor(place,related,lat,lon);
+      if(anchor){
+       const patch={spots:[anchor],research_status:'candidate',
+        summary:'낚시 관련 블로그·영상 자료와 항구 대표 위치를 연결한 후보입니다. 실제 낚시 자리 및 출입 허용 여부는 미확인입니다.',
+        suggested_places:related.slice(0,8),
+        sources:[{name:anchor.name,url:anchor.source_url}],
+        fetched_at:now,search_version:SEARCH_VERSION
+       };
+       const {error}=await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
+       if(error)console.warn('cached-anchor-write:',error.message);
+       return json({...cache,...patch,cached:true,source_candidate:true});
+      }
+      if(related.length>0){
+       const patch={suggested_places:related.slice(0,8),
+        summary:'낚시 관련 블로그·영상 자료는 찾았으나 개별 낚시 자리의 위치가 확인되지 않았습니다. 출처를 확인해 주세요.',
+        fetched_at:now,search_version:SEARCH_VERSION,research_status:'not_confirmed'};
+       await db.from('place_activity_insights').update(patch).eq('place_id',placeId).eq('activity',activity);
+       return json({...cache,...patch,cached:true,search_incomplete:true});
+      }
+     }
      if(found.length>0){
       const update={
        spots:found,summary:place.name+' 주변 3km 이내 공개 관광·지도 자료에서 '+activity+' 관련 '+found.length+'곳을 확인했습니다. 입장·운영조건은 방문 전 확인하세요.',
