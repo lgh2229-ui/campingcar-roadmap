@@ -354,6 +354,7 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
  const count=activity==='관광지'?8:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?10:activity==='해루질'?8:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
+ let successes=0, failures=0;
  // Parallel bounded batches: 10 sequential 3.5-second timeouts made searches stall.
  for(let batch=0;batch<terms.length;batch+=3){
   await Promise.all(terms.slice(batch,batch+3).map(async (term)=>{
@@ -362,7 +363,8 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),activity==='시장·쇼핑'?2800:3500);
   try{
    const r=await fetch(url,{headers:{Authorization:'KakaoAK '+key},signal:ctrl.signal});
-   if(!r.ok)return;
+   if(!r.ok){failures++;return;}
+   successes++;
    const data=await r.json();
    for(const d of data.documents||[]){
     if(activity==='관광지' &&
@@ -400,11 +402,12 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
     },lat,lon,activity);
     if(spot&&!found.some(x=>x.name===spot.name))found.push(spot);
    }
-  }catch(e){console.warn('Kakao keyword lookup:',String(e).slice(0,80));}
+  }catch(e){failures++;console.warn('Kakao keyword lookup:',String(e).slice(0,80));}
   finally{clearTimeout(timer);}
   }));
   if(found.length>=15 && activity!=='시장·쇼핑')break;
  }
+ if(successes===0 && failures>0)throw new Error('REGIONAL_MAP_SEARCH_UNAVAILABLE');
  return found.slice(0,20);
 }
 async function nominatimSearch(lat:number,lon:number,activity:string,name:string){
