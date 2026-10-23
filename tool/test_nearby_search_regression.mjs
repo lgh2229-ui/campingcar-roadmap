@@ -26,6 +26,17 @@ test('coastal and fishing locations remain identifiable', () => {
   assert.deepEqual(roots('당암포구'),['당암포구','당암']);
 });
 
+test('port names strip generic docks and still search the named harbor', () => {
+  const roots=geographicRootsFromSource();
+  assert.deepEqual(roots('만대항 선착장'), ['만대항','만대항선착장','만대']);
+  assert.deepEqual(roots('삼길포항 공영주차장'), ['삼길포항','삼길포']);
+  assert.deepEqual(roots('당암포구 선착장'), ['당암포구','당암포구선착장','당암']);
+  assert.ok(code.includes("roots.flatMap(area=>[area+' 낚시'"));
+  assert.ok(code.includes('naverBlogEvidence(place.name,activity)'));
+  assert.ok(code.includes('youtubeFishingEvidence(place.name,activity)'));
+  assert.ok(code.includes('fishingPortAnchor(place,related,lat,lon)'));
+});
+
 test('gleaning searches include shellfish, not just generic tourism labels', () => {
   for(const keyword of ['해루질','맛조개','동죽','바지락','백합','갯벌체험','조개잡이']){
     assert.ok(code.includes(keyword), 'search index must include '+keyword);
