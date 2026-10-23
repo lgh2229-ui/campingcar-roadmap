@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
@@ -14,31 +17,99 @@ class ActivityInsightSheet extends StatefulWidget {
 
 class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   late Future<Map<String, dynamic>> result;
-  @override void initState() { super.initState(); result = _search(); }
+  bool _refreshing = false;
+  String get _cacheKey => 'nearby_activity_v1_${widget.place.id}_${widget.activity}';
 
-  Future<Map<String, dynamic>> _search({bool refresh = false}) async {
+  @override
+  void initState() {
+    super.initState();
+    result = _initialResult();
+  }
+
+  // A saved answer is displayed before any network request finishes.
+  Future<Map<String, dynamic>> _initialResult() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_cacheKey);
+      if (saved != null) {
+        final decoded = jsonDecode(saved);
+        if (decoded is Map) {
+          final cached = Map<String, dynamic>.from(decoded);
+          if (cached['spots'] is List && (cached['spots'] as List).isNotEmpty) {
+            unawaited(_syncSavedSnapshot());
+            unawaited(_loadReviewCounts());
+            return {...cached, 'cached': true};
+          }
+        }
+      }
+    } catch (_) {
+      // Ignore unreadable cache and fall back to the server.
+    }
+    return _fetchServer();
+  }
+
+  Future<void> _storeSnapshot(Map<String, dynamic> data) async {
+    if (data['spots'] is! List || (data['spots'] as List).isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey, jsonEncode(data));
+    } catch (_) {
+      // Storage failures must never block viewing a place.
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchServer({bool refresh = false, bool cacheOnly = false}) async {
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'nearby-activity',
-        body: {'place_id': widget.place.id, 'activity': widget.activity, if (refresh) 'refresh_sources': true},
+        body: {
+          'place_id': widget.place.id,
+          'activity': widget.activity,
+          if (refresh) 'refresh_sources': true,
+          if (cacheOnly) 'cache_only': true,
+        },
       );
       if (response.data is! Map) throw StateError('검색 결과 형식이 올바르지 않습니다.');
       final data = Map<String, dynamic>.from(response.data as Map);
       if (data['error'] != null) throw StateError(data['error'].toString());
-      await _loadReviewCounts();
+      if (!cacheOnly) unawaited(_loadReviewCounts());
+      unawaited(_storeSnapshot(data));
       return data;
     } catch (e) {
-      // Never expose raw HTTP exceptions or internal backend diagnostics to users.
       final raw = e.toString().toLowerCase();
       if (raw.contains('401') || raw.contains('jwt') || raw.contains('인증')) {
         throw StateError('로그인 시간이 만료됐습니다. 다시 로그인해 주세요.');
       }
-      throw StateError('주변 검색 서버 연결이 원활하지 않습니다. 잠시 후 다시 시도해 주세요.');
+      throw StateError('저장된 주변 정보를 불러오지 못했습니다. 연결을 확인해 주세요.');
     }
   }
-  // Standard user reloads only the permanent cache. Only admins may
-  // execute a paid AI refresh associated with a pending member report.
-  void _refresh() => setState(() => result = _search(refresh: true));
+
+  Future<void> _syncSavedSnapshot() async {
+    try {
+      final data = await _fetchServer(cacheOnly: true);
+      if (!mounted || _refreshing || data['cache_miss'] == true) return;
+      setState(() => result = Future.value(data));
+    } catch (_) {
+      // Retain downloaded data when offline.
+    }
+  }
+
+  // A fresh external search is triggered only by explicit refresh.
+  // Leave the existing cards visible during the update.
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      final data = await _fetchServer(refresh: true);
+      if (mounted) setState(() => result = Future.value(data));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
   Future<void> _reportIssue() async {
     final controller=TextEditingController();
     final reason=await showDialog<String>(
@@ -583,8 +654,12 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
                 style:TextStyle(fontSize:12,
                   color:Theme.of(context).colorScheme.onSurfaceVariant)),
             ])),
-            IconButton(tooltip:'지도·관광정보 다시 검색',onPressed:_refresh,
-              icon:const Icon(Icons.refresh_rounded)),
+            if (_refreshing)
+              const Padding(padding:EdgeInsets.all(14),
+                child:SizedBox(width:20,height:20,child:CircularProgressIndicator(strokeWidth:2)))
+            else
+              IconButton(tooltip:'지도·관광정보 다시 검색',onPressed:_refresh,
+                icon:const Icon(Icons.refresh_rounded)),
             IconButton(tooltip:'닫기',onPressed:()=>Navigator.pop(context),
               icon:const Icon(Icons.close_rounded)),
           ])),
@@ -592,7 +667,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
         Expanded(child:FutureBuilder<Map<String,dynamic>>(future:result,builder:(ctx,snapshot){
           if (snapshot.connectionState != ConnectionState.done) return const Center(
             child:Column(mainAxisSize:MainAxisSize.min,children:[
-              CircularProgressIndicator(),SizedBox(height:12),Text('3km 주변 정보를 검색 중입니다...')]));
+              CircularProgressIndicator(),SizedBox(height:12),Text('저장된 주변 정보를 불러오는 중입니다...')]));
           if (snapshot.hasError) return Center(child:Padding(padding:const EdgeInsets.all(24),
             child:Column(mainAxisSize:MainAxisSize.min,children:[
               const Text('주변 정보를 불러오지 못했습니다.\n잠시 후 다시 검색해주세요.',
