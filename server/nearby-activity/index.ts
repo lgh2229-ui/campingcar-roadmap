@@ -621,6 +621,38 @@ Deno.serve(async (req:Request)=>{
    verifiedReportId=reportId;
    // No OpenAI API key is needed for manual free-source refresh.
   }
+  // Fast database-only research: check verified national POIs even when there
+  // is no research cache. Never hold the first tap open for external providers
+  // when a nearby verified location is already stored.
+  if(!cache && body.cache_only===true){
+    return json({cache_miss:true,cached:false,search_incomplete:true});
+  }
+  if(!force && !refreshSources && (!cache || !Array.isArray(cache.spots) || cache.spots.length===0)){
+    try{
+      const verified=await curatedPoi(db,Number(place.latitude),Number(place.longitude),activity);
+      if(verified.length>0){
+        const now=new Date().toISOString();
+        const update={
+          summary:place.name+' 주변 반경 3km 안에서 위치·출처가 등록된 '+activity+
+             ' 장소 '+verified.length+'곳을 확인했습니다. 이용 허가 및 운영 여부는 현장 확인이 필요합니다.',
+          spots:verified,providers:[],photos:[],tips:[
+            '출처가 확인된 장소 위치와 실제 이용·입장·채취 허가는 다를 수 있습니다.',
+            '운영시간, 계절 및 출입 통제 여부는 현장이나 공식 출처로 확인하세요.'
+          ],
+          sources:verified.filter(p=>Boolean(validHttp(p.source_url))).map(p=>({name:p.name,url:p.source_url})),
+          fetched_at:now,photo_checked_at:now,search_version:SEARCH_VERSION,
+          research_status:'verified',ai_generated:false
+        };
+        const {error}=await db.from('place_activity_insights').upsert(
+          {place_id:placeId,activity,radius_m:RANGE,...update},
+          {onConflict:'place_id,activity'});
+        if(error)console.warn('fast-verified-lookup-write:',error.message);
+        return json({...cache,...update,cached:true,verified_poi_fast_path:true});
+      }
+    }catch(error){
+      console.warn('fast-verified-lookup:',String(error).slice(0,130));
+    }
+  }
   // Cache-first: on a normal revisit NEVER perform tourism, map, blog, photo or
   // AI searches. Every previously researched result is returned immediately.
   // External discovery runs only for uncached places or explicit Refresh.
