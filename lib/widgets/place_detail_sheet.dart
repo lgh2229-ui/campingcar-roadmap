@@ -127,7 +127,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     _loadNearbyActivityCounts();
   }
 
-  /// The badge counts verified 3km map results, not manually tagged services.
+  /// The badge counts cached searches and geographically verified POIs.
   /// Water-play POIs may still require safety and access verification.
   Future<void> _loadNearbyActivityCounts() async {
     final request = ++_activityLookupNumber;
@@ -271,7 +271,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     final display = activity && foundCount > 0
         ? '주변 $foundCount곳 확인'
         : !listed
-        ? (activity ? '활동 정보 없음' : (business || service == '전기차 충전기') ? '정보 없음' : '이용불가')
+        ? (activity ? '눌러서 주변 확인' : (business || service == '전기차 충전기') ? '정보 없음' : '이용불가')
         : price.isNotEmpty
             ? price
             : activity
