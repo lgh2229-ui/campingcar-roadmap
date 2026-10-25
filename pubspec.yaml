@@ -1,7 +1,7 @@
 name: campingcar_roadmap
 description: 캠핑카족 로드맵 Flutter MVP
 publish_to: 'none'
-version: 1.9.49+143
+version: 1.9.50+144
 # Android 15+ edge-to-edge and R8 resource optimization release
 
 environment:
