@@ -126,7 +126,7 @@ void main() {
     expect(find.byIcon(Icons.info_outline_rounded), findsWidgets);
   });
 
-  testWidgets('Pinned coordinates and three navigation buttons remain in every detail sheet',
+  testWidgets('Incomplete addresses open a copy/navigation menu when pin is tapped',
       (tester) async {
     final controller = ScrollController();
     addTearDown(controller.dispose);
@@ -159,14 +159,21 @@ void main() {
     )));
     expect(find.text('상세주소 미확인 · 지정한 정확한 핀 위치'), findsOneWidget);
     expect(find.text('36.6382566, 126.3032491'), findsOneWidget);
-    expect(find.text('주소 대신 이 좌표로 정확한 위치를 확인하세요'), findsOneWidget);
-    expect(find.text('앱 지도에서 보기'), findsOneWidget);
+    expect(find.text('앱 지도에서 보기'), findsNothing);
+    expect(find.text('티맵'), findsNothing);
+    expect(find.text('네이버지도'), findsNothing);
+    expect(find.text('카카오맵'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('place-coordinates-action')));
+    await tester.pumpAndSettle();
+    expect(find.text('좌표 복사하기'), findsOneWidget);
     expect(find.text('티맵'), findsOneWidget);
-    expect(find.text('카카오맵'), findsOneWidget);
     expect(find.text('네이버지도'), findsOneWidget);
+    expect(find.text('카카오맵'), findsOneWidget);
+    expect(find.text('정확한 지정 위치: 36.63825662, 126.30324910'), findsOneWidget);
   });
 
-  testWidgets('Full Korean road addresses are primary and do not show GPS box',
+  testWidgets('Korean street address taps reveal copy and three navigation choices',
     (tester) async {
     final controller=ScrollController();
     addTearDown(controller.dispose);
@@ -181,10 +188,18 @@ void main() {
       onOpenAddress:(){},onPhotoTap:(_){},
       photoBuilder:(_)=>const SizedBox(),reviewBuilder:(_)=>const SizedBox(),
     ))));
-    expect(find.text('한국 주소'), findsOneWidget);
+    expect(find.text('한국 주소 · 누르면 복사·길찾기'), findsOneWidget);
     expect(find.text('경기도 수원시 영통구 광교로 100'),findsOneWidget);
     expect(find.text('상세주소 미확인 · 지정한 정확한 핀 위치'),findsNothing);
+    expect(find.text('앱 지도에서 보기'), findsNothing);
+    expect(find.text('티맵'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('place-address-action')));
+    await tester.pumpAndSettle();
+    expect(find.text('주소 복사하기'),findsOneWidget);
+    expect(find.text('티맵'),findsOneWidget);
     expect(find.text('네이버지도'),findsOneWidget);
+    expect(find.text('카카오맵'),findsOneWidget);
   });
 
   test('EV must be an amenity of an overnight place, not a standalone category', () {
