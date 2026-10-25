@@ -22,16 +22,18 @@ if manifest_tag in s:
     if lines:
         s = s.replace(manifest_tag, manifest_tag + '\n' + '\n'.join(lines), 1)
 
-# Android 11+ package visibility for third-party coordinate navigation.
-# Insert before <application> so url_launcher can resolve the installed apps.
-if '<queries>' not in s:
-    supported_navigation = """    <queries>
-        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="tmap" /></intent>
+# Android 11+ package visibility for the TMAP, Kakao Map and Naver Map
+# URL schemes. Flutter's default manifest may ALREADY have a <queries> block
+# for PROCESS_TEXT, so append our entries to it instead of skipping them.
+navigation_queries = """        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="tmap" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="kakaomap" /></intent>
         <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="nmap" /></intent>
-    </queries>
 """
-    s = s.replace('<application', supported_navigation + '    <application', 1)
+if 'android:scheme="tmap"' not in s or 'android:scheme="nmap"' not in s:
+    if '</queries>' in s:
+        s = s.replace('</queries>', navigation_queries + '    </queries>', 1)
+    else:
+        s = s.replace('<application', '    <queries>\\n' + navigation_queries + '    </queries>\\n    <application', 1)
 
 s = s.replace('android:label="campingcar_roadmap"', 'android:label="캠핑카족 로드맵"')
 
