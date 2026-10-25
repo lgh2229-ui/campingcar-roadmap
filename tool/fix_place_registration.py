@@ -51,8 +51,8 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
                     if(distance>200){
                       _msg('지정 핀과 주소가 200m 넘게 떨어져 있습니다. 주소를 확인해 주세요.');return;
                     }
-                    final road=String(picked['roadAddr']??'').trim();
-                    final lot=String(picked['jibunAddr']??'').trim();
+                    final road=(picked['roadAddr']??'').toString().trim();
+                    final lot=(picked['jibunAddr']??'').toString().trim();
                     if(road.isEmpty&&lot.isEmpty)return;
                     address.text=road.isNotEmpty?road:lot;
                     setPageState((){});
