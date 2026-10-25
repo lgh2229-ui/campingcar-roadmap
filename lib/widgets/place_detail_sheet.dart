@@ -568,7 +568,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(children: [
-            Icon(Icons.my_location, size: 18, color: blueText),
+            Icon(Icons.my_location, size: 18, color: Theme.of(context).colorScheme.primary),
             const SizedBox(width: 8),
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
