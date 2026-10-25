@@ -126,6 +126,46 @@ void main() {
     expect(find.byIcon(Icons.info_outline_rounded), findsWidgets);
   });
 
+  testWidgets('Pinned coordinates and three navigation buttons remain in every detail sheet',
+      (tester) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    final place = Place(
+      id: 'precise-spot',
+      name: '청포대해수욕장 주차장',
+      latitude: 36.6382566184732,
+      longitude: 126.303249095008,
+      address: '충청남도 태안군 별주부길',
+      services: ['노지/차박'],
+      prices: {'노지/차박': '무료'},
+      approvalStatus: 'approved',
+    );
+    await tester.pumpWidget(MaterialApp(home: Scaffold(
+      body: PlaceDetailSheet(
+        place: place,
+        scrollController: controller,
+        reviews: const <PlaceReview>[],
+        initiallySaved: false,
+        isAdministrator: false,
+        onSetSaved: (_) async => true,
+        onReview: () {},
+        onEdit: () {},
+        onDelete: () {},
+        onOpenAddress: () {},
+        onPhotoTap: (_) {},
+        photoBuilder: (_) => const SizedBox(),
+        reviewBuilder: (_) => const SizedBox(),
+      ),
+    )));
+    expect(find.text('등록자가 지도에서 지정한 정확한 위치'), findsOneWidget);
+    expect(find.text('36.6382566, 126.3032491'), findsOneWidget);
+    expect(find.text('주소는 참고용 · 길찾기는 이 좌표를 사용합니다'), findsOneWidget);
+    expect(find.text('앱 지도에서 보기'), findsOneWidget);
+    expect(find.text('티맵'), findsOneWidget);
+    expect(find.text('카카오맵'), findsOneWidget);
+    expect(find.text('네이버지도'), findsOneWidget);
+  });
+
   test('EV must be an amenity of an overnight place, not a standalone category', () {
     final onlyCharger = Place(
       id:'ev-only', name:'독립 충전소', latitude:37,longitude:127,
