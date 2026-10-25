@@ -32,7 +32,7 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
           builder: (pageContext, setPageState) => Scaffold(
             appBar: AppBar(title: const Text('새 장소 등록'), leading: IconButton(icon: const Icon(Icons.close), onPressed: saving ? null : () => Navigator.pop(pageContext))),
             body: SafeArea(child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 32), children: [
-              Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(pageContext).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)), child: Text('정확한 지도 지정 좌표 (길찾기 기준)\\n${registrationPoint.latitude.toStringAsFixed(7)}, ${registrationPoint.longitude.toStringAsFixed(7)}')),
+              Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(pageContext).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)), child: Text('정확한 지도 지정 좌표 (길찾기 기준)\n${registrationPoint.latitude.toStringAsFixed(7)}, ${registrationPoint.longitude.toStringAsFixed(7)}')),
               const SizedBox(height: 12),
               TextField(controller: name, decoration: const InputDecoration(labelText: '장소명', border: OutlineInputBorder())),
               const SizedBox(height: 12),
