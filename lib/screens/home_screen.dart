@@ -499,6 +499,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<String> _reverseAddress(LatLng p) async {
+    // Prefer Korean road-number address; fallback to cadastral/lot number.
+    // Naver Maps rendering SDK is separate from Naver's Reverse Geocoding API.
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'korean-reverse-address',
+        body: {'latitude': p.latitude, 'longitude': p.longitude},
+      ).timeout(const Duration(seconds: 6));
+      if (response.data is Map) {
+        final data=Map<String,dynamic>.from(response.data as Map);
+        final road=String(data['roadAddr']??'').trim();
+        final lot=String(data['jibunAddr']??'').trim();
+        if(road.isNotEmpty)return road;
+        if(lot.isNotEmpty)return lot;
+      }
+    } catch (_) {
+      // Preserve free fallback until Maps Reverse Geocoding is configured.
+    }
     try {
       final uri = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.latitude}&lon=${p.longitude}&accept-language=ko&addressdetails=1&zoom=18');
       final r = await http.get(uri, headers: {'User-Agent': 'CampingCarRoadmap/1.9'});
