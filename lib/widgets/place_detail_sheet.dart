@@ -134,8 +134,8 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
       ).timeout(const Duration(seconds:6));
       if(res.data is! Map || !mounted)return;
       final data=Map<String,dynamic>.from(res.data as Map);
-      final road=String(data['roadAddr']??'').trim();
-      final lot=String(data['jibunAddr']??'').trim();
+      final road=(data['roadAddr']??'').toString().trim();
+      final lot=(data['jibunAddr']??'').toString().trim();
       if(road.isNotEmpty || lot.isNotEmpty){
         setState((){
           _naverRoadAddress=road;
