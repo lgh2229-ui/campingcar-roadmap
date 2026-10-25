@@ -11,7 +11,11 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
     final maxHeight = TextEditingController();
     final phone = TextEditingController();
     final note = TextEditingController();
-    final address = TextEditingController(text: await _reverseAddress(registrationPoint));
+    final lookup = await _reverseKoreanParcel(registrationPoint);
+    var verifiedParcel=(lookup['jibunAddr']??'').toString().trim();
+    var roadAddress=(lookup['roadAddr']??'').toString().trim();
+    bool parcelVerified=verifiedParcel.isNotEmpty;
+    final address = TextEditingController(text:verifiedParcel);
     final prices = <String, TextEditingController>{
       '블랙탱크 비움': TextEditingController(),
       '급수': TextEditingController(),
@@ -36,32 +40,86 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
               const SizedBox(height: 12),
               TextField(controller: name, decoration: const InputDecoration(labelText: '장소명', border: OutlineInputBorder())),
               const SizedBox(height: 12),
-              TextField(controller: address, decoration: const InputDecoration(labelText: '참고 주소 (도로명/지번)', helperText: '건물번호가 없어도 정확한 등록 위치는 지정한 핀 좌표로 저장됩니다.', helperMaxLines: 2, border: OutlineInputBorder())),
-              Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{try{final picked=await _pickKoreanAddress(address.text.trim());if(picked==null)return;final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();if(lat==null||lon==null){_msg('주소 좌표를 확인하지 못했습니다.');return;}final road=(picked['roadAddr']??'').toString().trim(),jibun=(picked['jibunAddr']??'').toString().trim();address.text=road.isNotEmpty?road:(jibun.isNotEmpty?jibun:address.text);registrationPoint=LatLng(lat,lon);setPageState((){});_msg('주소 위치를 적용했습니다.');}catch(e){_msg('$e');}},icon:const Icon(Icons.location_searching),label:const Text('주소 위치 적용'))),
+              TextField(
+                controller:address,
+                onChanged:(v)=>setPageState(()=>parcelVerified=v.trim()==verifiedParcel&&verifiedParcel.isNotEmpty),
+                decoration:const InputDecoration(
+                  labelText:'지번주소 (필수 · 읍/면/리 + 번지)',
+                  helperText:'지정한 핀에서 확인한 실제 지번으로만 등록할 수 있습니다.',
+                  helperMaxLines:2,border:OutlineInputBorder())),
+              const SizedBox(height:5),
+              Row(children:[
+                Icon(parcelVerified?Icons.verified_outlined:Icons.error_outline,
+                  size:18,color:parcelVerified?Colors.green:Colors.orange),
+                const SizedBox(width:7),
+                Expanded(child:Text(parcelVerified
+                  ? '지번 확인됨 · 등록 위치와 연결된 지번입니다'
+                  : '지번 미확인 · 도로명만으로는 등록할 수 없습니다',
+                  style:const TextStyle(fontSize:12))),
+              ]),
+              if(roadAddress.isNotEmpty)Padding(
+                padding:const EdgeInsets.only(top:5),
+                child:Text('참고 도로명: $roadAddress',
+                  style:const TextStyle(fontSize:12))),
+              Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+                onPressed:saving?null:()async{
+                  final resolved=await _reverseKoreanParcel(registrationPoint);
+                  final lot=(resolved['jibunAddr']??'').toString().trim();
+                  setPageState((){
+                    verifiedParcel=lot;
+                    roadAddress=(resolved['roadAddr']??'').toString().trim();
+                    parcelVerified=lot.isNotEmpty;
+                    address.text=lot;
+                  });
+                  if(lot.isEmpty)_msg('해당 좌표의 지번 조회가 실패했습니다. 주소 검색에서 실제 필지를 확인해 주세요.');
+                  else _msg('지정한 위치의 지번주소를 확인했습니다.');
+                },
+                icon:const Icon(Icons.location_searching),
+                label:const Text('찍은 위치에서 지번 다시 조회'))),
               Align(alignment:Alignment.centerLeft,child:TextButton.icon(
                 onPressed:saving?null:()async{
                   try{
-                    final picked=await _pickKoreanAddress(address.text.trim().isNotEmpty?address.text.trim():name.text.trim());
-                    if(picked==null)return;
-                    final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
-                    if(lat==null||lon==null){
-                      _msg('주소 위치를 검증하지 못했습니다. 다른 결과를 선택해 주세요.');return;
+                    final query=address.text.trim().isNotEmpty
+                      ?address.text.trim()
+                      :name.text.trim().isNotEmpty
+                        ?name.text.trim():'태안군 남면';
+                    final selected=await _pickKoreanAddress(query);
+                    if(selected==null)return;
+                    final lat=(selected['lat'] as num?)?.toDouble();
+                    final lon=(selected['lon'] as num?)?.toDouble();
+                    final lot=(selected['jibunAddr']??'').toString().trim();
+                    if(lat==null||lon==null||lot.isEmpty){
+                      _msg('확인 가능한 지번과 위치가 있는 검색 결과를 선택해 주세요.');return;
                     }
-                    final distance=Geolocator.distanceBetween(registrationPoint.latitude,registrationPoint.longitude,lat,lon);
-                    if(distance>200){
-                      _msg('지정 핀과 주소가 200m 넘게 떨어져 있습니다. 주소를 확인해 주세요.');return;
+                    final meters=Geolocator.distanceBetween(
+                      registrationPoint.latitude,registrationPoint.longitude,lat,lon);
+                    if(meters>200){
+                      _msg('선택한 지번은 표시한 핀에서 ${meters.round()}m 떨어져 있습니다. 정확한 필지를 다시 확인해 주세요.');
+                      return;
                     }
-                    final road=(picked['roadAddr']??'').toString().trim();
-                    final lot=(picked['jibunAddr']??'').toString().trim();
-                    if(road.isEmpty&&lot.isEmpty)return;
-                    address.text=road.isNotEmpty?road:lot;
-                    setPageState((){});
-                    _msg('한국 주소만 입력했습니다. 지도에 지정한 핀은 그대로 유지됩니다.');
-                  }catch(e){_msg('한국 주소를 확인하지 못했습니다: $e');}
+                    setPageState((){
+                      verifiedParcel=lot;
+                      parcelVerified=true;
+                      roadAddress=(selected['roadAddr']??'').toString().trim();
+                      address.text=lot;
+                    });
+                    _msg('지번 확인 완료 · 찍은 핀 좌표는 바꾸지 않았습니다.');
+                  }catch(e){_msg('지번 검색 실패: $e');}
                 },
                 icon:const Icon(Icons.fact_check_outlined),
-                label:const Text('한국 도로명·지번주소 확인 (핀 위치 유지)'))),
-              Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{var point=registrationPoint;final pickerMap=MapController();final picked=await showDialog<LatLng>(context:pageContext,builder:(mctx)=>StatefulBuilder(builder:(mctx,setM)=>Dialog(child:SizedBox(width:520,height:620,child:Column(children:[Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(mctx),icon:const Icon(Icons.close))])),const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('원하는 위치를 길게 누른 뒤 이 위치 적용을 누르세요.')),const SizedBox(height:8),Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,v)=>setM(()=>point=v)),children:[TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))])])),Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:()=>Navigator.pop(mctx),child:const Text('취소'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>Navigator.pop(mctx,point),child:const Text('이 위치 적용')))]))])))));if(picked!=null){registrationPoint=picked;final newAddress=await _reverseAddress(picked);if(newAddress.trim().isNotEmpty)address.text=newAddress;setPageState((){});}},icon:const Icon(Icons.map_outlined),label:const Text('주소 검색이 안 되면 지도에서 직접 위치 지정'))),
+                label:const Text('한국 지번주소 검색·확인 (핀 유지)'))),
+              Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{var point=registrationPoint;final pickerMap=MapController();final picked=await showDialog<LatLng>(context:pageContext,builder:(mctx)=>StatefulBuilder(builder:(mctx,setM)=>Dialog(child:SizedBox(width:520,height:620,child:Column(children:[Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(mctx),icon:const Icon(Icons.close))])),const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('원하는 위치를 길게 누른 뒤 이 위치 적용을 누르세요.')),const SizedBox(height:8),Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,v)=>setM(()=>point=v)),children:[TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))])])),Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:()=>Navigator.pop(mctx),child:const Text('취소'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>Navigator.pop(mctx,point),child:const Text('이 위치 적용')))]))])))));if(picked!=null){
+                  final result=await _reverseKoreanParcel(picked);
+                  final lot=(result['jibunAddr']??'').toString().trim();
+                  setPageState((){
+                    registrationPoint=picked;
+                    verifiedParcel=lot;
+                    roadAddress=(result['roadAddr']??'').toString().trim();
+                    address.text=lot;
+                    parcelVerified=lot.isNotEmpty;
+                  });
+                  if(lot.isEmpty)_msg('지정 위치의 지번을 확인할 수 없습니다. 주소 검색으로 필지를 선택해 주세요.');
+                }},icon:const Icon(Icons.map_outlined),label:const Text('주소 검색이 안 되면 지도에서 직접 위치 지정'))),
               const SizedBox(height: 18), const Text('서비스 항목 및 금액', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 6),
               ...prices.entries.map((e) => Card(margin: const EdgeInsets.symmetric(vertical: 4), child: Padding(padding: const EdgeInsets.fromLTRB(4, 4, 10, 4), child: Row(children: [
                 Checkbox(value: selected.contains(e.key), onChanged: saving ? null : (v) => setPageState(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })),
@@ -111,6 +169,10 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
                 if (name.text.trim().isEmpty || selected.isEmpty) { msg('장소명과 서비스 항목을 입력해주세요.'); return; }
                 for (final service in selected.where(prices.containsKey)) { if (prices[service]!.text.trim().isEmpty) { msg('$service 금액을 입력해주세요. 무료면 "무료"라고 입력해주세요.'); return; } }
                 if (photos.isEmpty) { msg('장소사진을 1장 이상 등록해주세요.'); return; }
+                if (!parcelVerified || verifiedParcel.isEmpty || address.text.trim()!=verifiedParcel) {
+                  msg('정확한 지번주소를 확인해야 등록할 수 있습니다. 찍은 핀의 지번을 다시 조회하거나 검색 결과에서 확인해 주세요.');
+                  return;
+                }
                 setPageState(() => saving = true);
                 try {
                   final place = Place(id: const Uuid().v4(), name: name.text.trim(), latitude: registrationPoint.latitude, longitude: registrationPoint.longitude, address: address.text.trim(), services: selected.toList(), prices: {for (final service in selected.where(prices.containsKey)) service: prices[service]!.text.trim()}, hours: hours.text.trim(), reservation: reservation, maxHeightMm: maxHeight.text.trim().isEmpty ? null : _metersToMm(maxHeight.text), phone: phone.text.trim(), note: note.text.trim(), ownerId: _currentAuthorId, approvalStatus: 'pending');
