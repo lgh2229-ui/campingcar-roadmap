@@ -123,7 +123,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   bool get _hasNumberedAddress {
     final text=widget.place.address;
     if(text.contains('미확인'))return false;
-    return RegExp(r'(?:로|길)\\s*\\d+(?:-\\d+)?|(?:동|리|읍|면)\\s*(?:산\\s*)?\\d+(?:-\\d+)?').hasMatch(text);
+    return RegExp(r'(?:로|길)\s*\d+(?:-\d+)?|(?:동|리|읍|면)\s*(?:산\s*)?\d+(?:-\d+)?').hasMatch(text);
   }
   Future<void> _resolveIncompleteAddress() async {
     if(_hasNumberedAddress)return;
@@ -576,8 +576,17 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
               onTap: widget.onOpenAddress,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(p.address, style: TextStyle(
-                    fontSize: 13, height: 1.45, color: muted)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start,children:[
+                  Text(detailedAddress ? '한국 주소' : '주소 일부만 확인됨',
+                    style: TextStyle(fontSize:12,color:muted)),
+                  const SizedBox(height:2),
+                  Text(displayAddress,style:const TextStyle(
+                      fontSize:14,height:1.45,fontWeight:FontWeight.w600)),
+                  if(_naverRoadAddress.isNotEmpty && _naverLotAddress.isNotEmpty)
+                    Padding(padding:const EdgeInsets.only(top:3),
+                      child:Text('지번: $_naverLotAddress',
+                        style:TextStyle(fontSize:12,color:muted))),
+                ]),
               ),
             )),
             IconButton(
