@@ -491,6 +491,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheetContext) {
         Widget navTile(String app, IconData icon) => ListTile(
           leading: Icon(icon, color: Theme.of(sheetContext).colorScheme.primary),
@@ -503,9 +504,14 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         );
         return SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.78,
+            ),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 3, 12, 12),
                 child: Column(
@@ -537,7 +543,9 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
               navTile('티맵', Icons.directions_car_outlined),
               navTile('네이버지도', Icons.map_outlined),
               navTile('카카오맵', Icons.near_me_outlined),
-            ]),
+                ]),
+              ),
+            ),
           ),
         );
       },
