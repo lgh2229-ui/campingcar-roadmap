@@ -567,10 +567,10 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final p = widget.place;
-    final displayAddress = _naverRoadAddress.isNotEmpty
-        ? _naverRoadAddress
-        : _naverLotAddress.isNotEmpty
-            ? _naverLotAddress
+    final displayAddress = _naverLotAddress.isNotEmpty
+        ? _naverLotAddress
+        : _naverRoadAddress.isNotEmpty
+            ? _naverRoadAddress
             : p.address.trim();
     final detailedAddress = _naverRoadAddress.isNotEmpty ||
         _naverLotAddress.isNotEmpty || _hasNumberedAddress;
@@ -665,7 +665,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                       if (_naverRoadAddress.isNotEmpty && _naverLotAddress.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 3),
-                          child: Text('지번: $_naverLotAddress',
+                          child: Text('도로명: $_naverRoadAddress',
                             style: TextStyle(fontSize: 12, color: muted)),
                         ),
                     ],
