@@ -478,6 +478,72 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     ));
   }
 
+  /// One compact address action menu instead of four permanent detail buttons.
+  /// Navigation continues to use the saved pin coordinates, never a fuzzy
+  /// address/geocoding search that might choose a different parking lot.
+  void _showAddressActions(String displayAddress, bool hasFullAddress) {
+    final place = widget.place;
+    final lat = place.latitude.toStringAsFixed(8);
+    final lon = place.longitude.toStringAsFixed(8);
+    final copyAddress = hasFullAddress && displayAddress.trim().isNotEmpty;
+    final copyValue = copyAddress ? displayAddress.trim() : '$lat, $lon';
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        Widget navTile(String app, IconData icon) => ListTile(
+          leading: Icon(icon, color: Theme.of(sheetContext).colorScheme.primary),
+          title: Text(app),
+          subtitle: const Text('저장된 핀 위치로 길찾기'),
+          onTap: () {
+            Navigator.of(sheetContext).pop();
+            openPinnedNavigation(app);
+          },
+        );
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 3, 12, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('주소 복사·길찾기',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 5),
+                    Text(place.name, style: const TextStyle(fontSize: 14)),
+                    Text(copyAddress ? displayAddress : '정확한 지정 위치: $lat, $lon',
+                      style: TextStyle(fontSize: 12,
+                        color: Theme.of(sheetContext).colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: Icon(Icons.copy_outlined,
+                  color: Theme.of(sheetContext).colorScheme.primary),
+                title: Text(copyAddress ? '주소 복사하기' : '좌표 복사하기'),
+                onTap: () async {
+                  Navigator.of(sheetContext).pop();
+                  await Clipboard.setData(ClipboardData(text: copyValue));
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text(copyAddress ? '한국 주소를 복사했습니다.' : '지정된 좌표를 복사했습니다.'),
+                  ));
+                },
+              ),
+              navTile('티맵', Icons.directions_car_outlined),
+              navTile('네이버지도', Icons.map_outlined),
+              navTile('카카오맵', Icons.near_me_outlined),
+            ]),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> toggleSaved() async {
     if (saving) return;
     setState(() => saving = true);
@@ -569,103 +635,79 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
           ),
         const SizedBox(height: 12),
         if (displayAddress.isNotEmpty) ...[
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Icon(Icons.location_on_outlined, size: 20, color: muted),
-            const SizedBox(width: 7),
-            Expanded(child: InkWell(
-              onTap: widget.onOpenAddress,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: const Key('place-address-action'),
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => _showAddressActions(displayAddress, detailedAddress),
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,children:[
-                  Text(detailedAddress ? '한국 주소' : '주소 일부만 확인됨',
-                    style: TextStyle(fontSize:12,color:muted)),
-                  const SizedBox(height:2),
-                  Text(displayAddress,style:const TextStyle(
-                      fontSize:14,height:1.45,fontWeight:FontWeight.w600)),
-                  if(_naverRoadAddress.isNotEmpty && _naverLotAddress.isNotEmpty)
-                    Padding(padding:const EdgeInsets.only(top:3),
-                      child:Text('지번: $_naverLotAddress',
-                        style:TextStyle(fontSize:12,color:muted))),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.location_on_outlined, size: 20, color: muted),
+                  const SizedBox(width: 7),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(detailedAddress ? '한국 주소 · 누르면 복사·길찾기' : '주소 일부만 확인됨 · 누르면 길찾기',
+                        style: TextStyle(fontSize: 12, color: muted)),
+                      const SizedBox(height: 2),
+                      Text(displayAddress, style: const TextStyle(
+                        fontSize: 14, height: 1.45, fontWeight: FontWeight.w600)),
+                      if (_naverRoadAddress.isNotEmpty && _naverLotAddress.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text('지번: $_naverLotAddress',
+                            style: TextStyle(fontSize: 12, color: muted)),
+                        ),
+                    ],
+                  )),
+                  const SizedBox(width: 6),
+                  Icon(Icons.chevron_right, color: muted),
                 ]),
               ),
-            )),
-            IconButton(
-              icon: const Icon(Icons.copy_outlined, size: 18),
-              tooltip: '한국 주소 복사',
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: displayAddress));
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('표시된 주소를 복사했습니다.')),
-                );
-              },
             ),
-          ]),
-        ],
-        // Ordinary destinations lead with their searchable Korean address.
-        // For unnumbered roads, shorelines and informal sites show GPS too.
-        if(!detailedAddress) Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            border: Border.all(color: stroke),
-            borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(children: [
-            Icon(Icons.my_location, size: 18, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(width: 8),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('상세주소 미확인 · 지정한 정확한 핀 위치',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-                const SizedBox(height: 2),
-                Text('${p.latitude.toStringAsFixed(7)}, ${p.longitude.toStringAsFixed(7)}',
-                    style: TextStyle(color: muted, fontSize: 12)),
-                Text('주소 대신 이 좌표로 정확한 위치를 확인하세요',
-                    style: TextStyle(color: muted, fontSize: 11)),
-              ],
-            )),
-            IconButton(
-              tooltip: '정확한 좌표 복사',
-              icon: const Icon(Icons.copy_all_outlined, size: 19),
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(
-                  text: '${p.latitude.toStringAsFixed(8)}, ${p.longitude.toStringAsFixed(8)}',
-                ));
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('지정 위치 좌표를 복사했습니다.')),
-                );
-              },
+        ],
+        // Only sites without a complete Korean address need a prominent pin.
+        // Tapping the pin opens the same copy/navigation selector.
+        if (!detailedAddress)
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: const Key('place-coordinates-action'),
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _showAddressActions(displayAddress, false),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerLow,
+                  border: Border.all(color: stroke),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(children: [
+                  Icon(Icons.my_location, size: 18,
+                    color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('상세주소 미확인 · 지정한 정확한 핀 위치',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                      const SizedBox(height: 2),
+                      Text('${p.latitude.toStringAsFixed(7)}, ${p.longitude.toStringAsFixed(7)}',
+                        style: TextStyle(color: muted, fontSize: 12)),
+                      Text('좌표를 누르면 복사·길찾기를 선택할 수 있습니다',
+                        style: TextStyle(color: muted, fontSize: 11)),
+                    ],
+                  )),
+                  Icon(Icons.chevron_right, color: muted),
+                ]),
+              ),
             ),
-          ]),
-        ),
+          ),
         const SizedBox(height: 9),
-        Row(children: [
-          Expanded(child: OutlinedButton(
-            onPressed: widget.onOpenAddress,
-            child: const Text('앱 지도에서 보기', style: TextStyle(fontSize: 12)),
-          )),
-        ]),
-        const SizedBox(height: 7),
-        Row(children: [
-          Expanded(child: OutlinedButton(
-            onPressed: () => openPinnedNavigation('티맵'),
-            child: const Text('티맵', style: TextStyle(fontSize: 12)),
-          )),
-          const SizedBox(width: 6),
-          Expanded(child: OutlinedButton(
-            onPressed: () => openPinnedNavigation('카카오맵'),
-            child: const Text('카카오맵', style: TextStyle(fontSize: 12)),
-          )),
-          const SizedBox(width: 6),
-          Expanded(child: OutlinedButton(
-            onPressed: () => openPinnedNavigation('네이버지도'),
-            child: const Text('네이버지도', style: TextStyle(fontSize: 12)),
-          )),
-        ]),
         if (p.photoUrls.isNotEmpty) ...[
           const SizedBox(height: 14),
           SizedBox(
