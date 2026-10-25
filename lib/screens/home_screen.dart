@@ -498,6 +498,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return '';
   }
 
+  // A numbered Korean 지번 is different from a road label. The registration
+  // form must use this verified parcel response, not the OSM fallback string.
+  Future<Map<String, dynamic>> _reverseKoreanParcel(LatLng point) async {
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'korean-reverse-address',
+        body: {'latitude': point.latitude, 'longitude': point.longitude},
+      ).timeout(const Duration(seconds: 11));
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+    } catch (_) {
+      // A network issue must not be interpreted as a confirmed lot number.
+    }
+    return <String, dynamic>{
+      'available': false,
+      'jibunAddr': '',
+      'roadAddr': '',
+      'status': 'parcel_unverified',
+    };
+  }
+
   Future<String> _reverseAddress(LatLng p) async {
     // Prefer Korean road-number address; fallback to cadastral/lot number.
     // Naver Maps rendering SDK is separate from Naver's Reverse Geocoding API.
@@ -510,8 +532,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final data=Map<String,dynamic>.from(response.data as Map);
         final road=(data['roadAddr']??'').toString().trim();
         final lot=(data['jibunAddr']??'').toString().trim();
-        if(road.isNotEmpty)return road;
         if(lot.isNotEmpty)return lot;
+        if(road.isNotEmpty)return road;
       }
     } catch (_) {
       // Preserve free fallback until Maps Reverse Geocoding is configured.
