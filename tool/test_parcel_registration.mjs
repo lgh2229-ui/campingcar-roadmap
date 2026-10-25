@@ -32,7 +32,7 @@ test('manual cadastral address verification never moves the picked GPS pin',()=>
  assert.match(registration,/지도에서 직접 위치 지정/);
  assert.match(registration,/registrationPoint=picked/);
  assert.match(registration,/await _reverseKoreanParcel\(picked\)/);
- assert.match(registration,/지정한 핀 좌표는 바꾸지 않았습니다/);
+ assert.match(registration,/찍은 핀 좌표는 바꾸지 않았습니다/);
 });
 
 test('current source and CI-injected source both use same parcel checks',()=>{
