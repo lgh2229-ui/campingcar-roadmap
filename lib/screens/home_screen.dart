@@ -509,8 +509,9 @@ class _HomeScreenState extends State<HomeScreen> {
         final parts = <String>[];
         for (final v in [
           _pickPart(a, ['state', 'province']),
-          _pickPart(a, ['city', 'municipality', 'county', 'town']),
-          _pickPart(a, ['borough', 'district']),
+          _pickPart(a, ['city', 'municipality', 'county']),
+          _pickPart(a, ['city_district', 'borough', 'district']),
+          _pickPart(a, ['town', 'suburb', 'village', 'hamlet', 'quarter', 'neighbourhood']),
           _pickPart(a, ['road', 'residential', 'pedestrian']),
           _pickPart(a, ['house_number']),
         ]) {
@@ -1061,7 +1062,21 @@ class _HomeScreenState extends State<HomeScreen> {
           photoBuilder: _placePhoto,
           onPhotoTap: (i) => _showPhotoViewer(p.photoUrls, i),
           reviewBuilder: (r) => _reviewTile(p, r),
-          onOpenAddress: () => _openExternalAddressSearch(p.address),
+          // Clicking address focuses the exact originally pinned place, not its road.
+          onOpenAddress: () {
+            Navigator.of(ctx).pop();
+            if (!mounted) return;
+            final point = LatLng(p.latitude, p.longitude);
+            setState(() {
+              tab = 0;
+              center = point;
+              nearbyMapSpot = point;
+              nearbyMapSpotName = p.name;
+            });
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _moveMap(point, 17);
+            });
+          },
           onReview: () {
             Navigator.pop(ctx);
             _openReview(p);
