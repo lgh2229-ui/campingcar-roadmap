@@ -17,6 +17,8 @@ on:
       - lib/screens/vehicle_market_screen.dart
       - lib/widgets/place_marker_icons.dart
       - tool/apply_requested_redesign.py
+      - tool/prepare_android.py
+      - tool/fix_place_registration.py
       - test/place_detail_services_test.dart
 
 jobs:
