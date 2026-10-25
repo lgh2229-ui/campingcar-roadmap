@@ -118,6 +118,34 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   bool saving = false;
   bool showAllActivities = false;
   bool _openingActivity = false;
+  String _naverRoadAddress = '';
+  String _naverLotAddress = '';
+  bool get _hasNumberedAddress {
+    final text=widget.place.address;
+    if(text.contains('미확인'))return false;
+    return RegExp(r'(?:로|길)\\s*\\d+(?:-\\d+)?|(?:동|리|읍|면)\\s*(?:산\\s*)?\\d+(?:-\\d+)?').hasMatch(text);
+  }
+  Future<void> _resolveIncompleteAddress() async {
+    if(_hasNumberedAddress)return;
+    try {
+      final res=await Supabase.instance.client.functions.invoke(
+        'korean-reverse-address',
+        body:{'latitude':widget.place.latitude,'longitude':widget.place.longitude},
+      ).timeout(const Duration(seconds:6));
+      if(res.data is! Map || !mounted)return;
+      final data=Map<String,dynamic>.from(res.data as Map);
+      final road=String(data['roadAddr']??'').trim();
+      final lot=String(data['jibunAddr']??'').trim();
+      if(road.isNotEmpty || lot.isNotEmpty){
+        setState((){
+          _naverRoadAddress=road;
+          _naverLotAddress=lot;
+        });
+      }
+    }catch(_){
+      // Original supplied address and actual GPS pin are never overwritten.
+    }
+  }
   final Map<String, int> _nearbyActivityCounts = {};
   int _activityLookupNumber = 0;
 
@@ -125,6 +153,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   void initState() {
     super.initState();
     _loadNearbyActivityCounts();
+    _resolveIncompleteAddress();
   }
 
   /// The badge counts cached searches and geographically verified POIs.
@@ -464,6 +493,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final p = widget.place;
+    final displayAddress = _naverRoadAddress.isNotEmpty
+        ? _naverRoadAddress
+        : _naverLotAddress.isNotEmpty
+            ? _naverLotAddress
+            : p.address.trim();
+    final detailedAddress = _naverRoadAddress.isNotEmpty ||
+        _naverLotAddress.isNotEmpty || _hasNumberedAddress;
     final name = p.name.replaceFirst(
       RegExp(r'^\[(승인 대기|승인 반려)\]\s*'), '',
     );
@@ -532,7 +568,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             )).toList(),
           ),
         const SizedBox(height: 12),
-        if (p.address.trim().isNotEmpty) ...[
+        if (displayAddress.isNotEmpty) ...[
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(Icons.location_on_outlined, size: 20, color: muted),
             const SizedBox(width: 7),
@@ -546,20 +582,20 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             )),
             IconButton(
               icon: const Icon(Icons.copy_outlined, size: 18),
-              tooltip: '참고 주소 복사',
+              tooltip: '한국 주소 복사',
               onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: p.address));
+                await Clipboard.setData(ClipboardData(text: displayAddress));
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('참고 주소를 복사했습니다.')),
+                  const SnackBar(content: Text('표시된 주소를 복사했습니다.')),
                 );
               },
             ),
           ]),
         ],
-        // Addresses from map services can end at a street or neighborhood.
-        // The independently stored GPS pin is the canonical exact target.
-        Container(
+        // Ordinary destinations lead with their searchable Korean address.
+        // For unnumbered roads, shorelines and informal sites show GPS too.
+        if(!detailedAddress) Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
@@ -573,12 +609,12 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             Expanded(child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('등록자가 지도에서 지정한 정확한 위치',
+                const Text('상세주소 미확인 · 지정한 정확한 핀 위치',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
                 const SizedBox(height: 2),
                 Text('${p.latitude.toStringAsFixed(7)}, ${p.longitude.toStringAsFixed(7)}',
                     style: TextStyle(color: muted, fontSize: 12)),
-                Text('주소는 참고용 · 길찾기는 이 좌표를 사용합니다',
+                Text('주소 대신 이 좌표로 정확한 위치를 확인하세요',
                     style: TextStyle(color: muted, fontSize: 11)),
               ],
             )),
