@@ -19,6 +19,8 @@ on:
       - tool/apply_requested_redesign.py
       - tool/prepare_android.py
       - tool/fix_place_registration.py
+      - tool/test_parcel_registration.mjs
+      - supabase/functions/korean-reverse-address/index.ts
       - test/place_detail_services_test.dart
 
 jobs:
@@ -26,6 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Korean parcel registration rules
+        run: node --test tool/test_parcel_registration.mjs
       - name: Use Java 17 for Gradle 8.x
         uses: actions/setup-java@v4
         with:
