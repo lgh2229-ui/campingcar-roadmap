@@ -410,6 +410,45 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     }
   }
 
+  /// Launch navigation to the user's saved pin, never to a geocoded road name.
+  Future<void> openPinnedNavigation(String provider) async {
+    final p = widget.place;
+    final lat = p.latitude.toStringAsFixed(8);
+    final lon = p.longitude.toStringAsFixed(8);
+    final label = Uri.encodeComponent(p.name);
+    final List<Uri> links;
+    switch (provider) {
+      case '티맵':
+        links = [
+          Uri.parse('tmap://route?rGoName=$label&rGoX=$lon&rGoY=$lat'),
+          Uri.parse('tmap://route?goalname=$label&goalx=$lon&goaly=$lat'),
+        ];
+      case '카카오맵':
+        // Official Kakao Maps URL always sets destination by supplied coords.
+        links = [Uri.parse('https://map.kakao.com/link/to/$label,$lat,$lon')];
+      case '네이버지도':
+        links = [
+          Uri.parse('nmap://navigation?dlat=$lat&dlng=$lon&dname=$label&appname=kr.co.campingcarroadmap.app'),
+          Uri.parse('nmap://route/car?dlat=$lat&dlng=$lon&dname=$label&appname=kr.co.campingcarroadmap.app'),
+        ];
+      default:
+        return;
+    }
+    for (final uri in links) {
+      try {
+        if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+      } catch (_) {
+        // Missing third-party app or unsupported URL scheme.
+      }
+    }
+    // Preserve the user's actual target even if the destination app is absent.
+    await Clipboard.setData(ClipboardData(text: '$lat, $lon'));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('$provider를 열 수 없어 지정 좌표를 복사했습니다. 앱 설치 상태를 확인해 주세요.'),
+    ));
+  }
+
   Future<void> toggleSaved() async {
     if (saving) return;
     setState(() => saving = true);
@@ -492,32 +531,96 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                   style: const TextStyle(fontSize: 12)),
             )).toList(),
           ),
+        const SizedBox(height: 12),
         if (p.address.trim().isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Row(children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Icon(Icons.location_on_outlined, size: 20, color: muted),
             const SizedBox(width: 7),
             Expanded(child: InkWell(
               onTap: widget.onOpenAddress,
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Text(p.address,
-                    style: TextStyle(fontSize: 13, height: 1.45, color: muted)),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(p.address, style: TextStyle(
+                    fontSize: 13, height: 1.45, color: muted)),
               ),
             )),
             IconButton(
               icon: const Icon(Icons.copy_outlined, size: 18),
-              tooltip: '주소 복사',
+              tooltip: '참고 주소 복사',
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: p.address));
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('주소를 복사했습니다.')),
+                  const SnackBar(content: Text('참고 주소를 복사했습니다.')),
                 );
               },
             ),
           ]),
         ],
+        // Addresses from map services can end at a street or neighborhood.
+        // The independently stored GPS pin is the canonical exact target.
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            border: Border.all(color: stroke),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(children: [
+            Icon(Icons.my_location, size: 18, color: blueText),
+            const SizedBox(width: 8),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('등록자가 지도에서 지정한 정확한 위치',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                const SizedBox(height: 2),
+                Text('${p.latitude.toStringAsFixed(7)}, ${p.longitude.toStringAsFixed(7)}',
+                    style: TextStyle(color: muted, fontSize: 12)),
+                Text('주소는 참고용 · 길찾기는 이 좌표를 사용합니다',
+                    style: TextStyle(color: muted, fontSize: 11)),
+              ],
+            )),
+            IconButton(
+              tooltip: '정확한 좌표 복사',
+              icon: const Icon(Icons.copy_all_outlined, size: 19),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(
+                  text: '${p.latitude.toStringAsFixed(8)}, ${p.longitude.toStringAsFixed(8)}',
+                ));
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('지정 위치 좌표를 복사했습니다.')),
+                );
+              },
+            ),
+          ]),
+        ),
+        const SizedBox(height: 9),
+        Row(children: [
+          Expanded(child: OutlinedButton(
+            onPressed: widget.onOpenAddress,
+            child: const Text('앱 지도에서 보기', style: TextStyle(fontSize: 12)),
+          )),
+        ]),
+        const SizedBox(height: 7),
+        Row(children: [
+          Expanded(child: OutlinedButton(
+            onPressed: () => openPinnedNavigation('티맵'),
+            child: const Text('티맵', style: TextStyle(fontSize: 12)),
+          )),
+          const SizedBox(width: 6),
+          Expanded(child: OutlinedButton(
+            onPressed: () => openPinnedNavigation('카카오맵'),
+            child: const Text('카카오맵', style: TextStyle(fontSize: 12)),
+          )),
+          const SizedBox(width: 6),
+          Expanded(child: OutlinedButton(
+            onPressed: () => openPinnedNavigation('네이버지도'),
+            child: const Text('네이버지도', style: TextStyle(fontSize: 12)),
+          )),
+        ]),
         if (p.photoUrls.isNotEmpty) ...[
           const SizedBox(height: 14),
           SizedBox(
