@@ -157,13 +157,34 @@ void main() {
         reviewBuilder: (_) => const SizedBox(),
       ),
     )));
-    expect(find.text('등록자가 지도에서 지정한 정확한 위치'), findsOneWidget);
+    expect(find.text('상세주소 미확인 · 지정한 정확한 핀 위치'), findsOneWidget);
     expect(find.text('36.6382566, 126.3032491'), findsOneWidget);
-    expect(find.text('주소는 참고용 · 길찾기는 이 좌표를 사용합니다'), findsOneWidget);
+    expect(find.text('주소 대신 이 좌표로 정확한 위치를 확인하세요'), findsOneWidget);
     expect(find.text('앱 지도에서 보기'), findsOneWidget);
     expect(find.text('티맵'), findsOneWidget);
     expect(find.text('카카오맵'), findsOneWidget);
     expect(find.text('네이버지도'), findsOneWidget);
+  });
+
+  testWidgets('Full Korean road addresses are primary and do not show GPS box',
+    (tester) async {
+    final controller=ScrollController();
+    addTearDown(controller.dispose);
+    final place=Place(id:'numbered-road',name:'일반 캠핑장',
+      latitude:37.1,longitude:127.2,
+      address:'경기도 수원시 영통구 광교로 100',
+      services:['노지/차박'],prices:{'노지/차박':'유료'},approvalStatus:'approved');
+    await tester.pumpWidget(MaterialApp(home:Scaffold(body:PlaceDetailSheet(
+      place:place,scrollController:controller,
+      reviews:const <PlaceReview>[],initiallySaved:false,isAdministrator:false,
+      onSetSaved:(_)async=>true,onReview:(){},onEdit:(){},onDelete:(){},
+      onOpenAddress:(){},onPhotoTap:(_){},
+      photoBuilder:(_)=>const SizedBox(),reviewBuilder:(_)=>const SizedBox(),
+    ))));
+    expect(find.text('한국 주소'), findsOneWidget);
+    expect(find.text('경기도 수원시 영통구 광교로 100'),findsOneWidget);
+    expect(find.text('상세주소 미확인 · 지정한 정확한 핀 위치'),findsNothing);
+    expect(find.text('네이버지도'),findsOneWidget);
   });
 
   test('EV must be an amenity of an overnight place, not a standalone category', () {
