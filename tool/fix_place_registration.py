@@ -38,6 +38,29 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
               const SizedBox(height: 12),
               TextField(controller: address, decoration: const InputDecoration(labelText: '참고 주소 (도로명/지번)', helperText: '건물번호가 없어도 정확한 등록 위치는 지정한 핀 좌표로 저장됩니다.', helperMaxLines: 2, border: OutlineInputBorder())),
               Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{try{final picked=await _pickKoreanAddress(address.text.trim());if(picked==null)return;final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();if(lat==null||lon==null){_msg('주소 좌표를 확인하지 못했습니다.');return;}final road=(picked['roadAddr']??'').toString().trim(),jibun=(picked['jibunAddr']??'').toString().trim();address.text=road.isNotEmpty?road:(jibun.isNotEmpty?jibun:address.text);registrationPoint=LatLng(lat,lon);setPageState((){});_msg('주소 위치를 적용했습니다.');}catch(e){_msg('$e');}},icon:const Icon(Icons.location_searching),label:const Text('주소 위치 적용'))),
+              Align(alignment:Alignment.centerLeft,child:TextButton.icon(
+                onPressed:saving?null:()async{
+                  try{
+                    final picked=await _pickKoreanAddress(address.text.trim().isNotEmpty?address.text.trim():name.text.trim());
+                    if(picked==null)return;
+                    final lat=(picked['lat'] as num?)?.toDouble(),lon=(picked['lon'] as num?)?.toDouble();
+                    if(lat==null||lon==null){
+                      _msg('주소 위치를 검증하지 못했습니다. 다른 결과를 선택해 주세요.');return;
+                    }
+                    final distance=Geolocator.distanceBetween(registrationPoint.latitude,registrationPoint.longitude,lat,lon);
+                    if(distance>200){
+                      _msg('지정 핀과 주소가 200m 넘게 떨어져 있습니다. 주소를 확인해 주세요.');return;
+                    }
+                    final road=String(picked['roadAddr']??'').trim();
+                    final lot=String(picked['jibunAddr']??'').trim();
+                    if(road.isEmpty&&lot.isEmpty)return;
+                    address.text=road.isNotEmpty?road:lot;
+                    setPageState((){});
+                    _msg('한국 주소만 입력했습니다. 지도에 지정한 핀은 그대로 유지됩니다.');
+                  }catch(e){_msg('한국 주소를 확인하지 못했습니다: $e');}
+                },
+                icon:const Icon(Icons.fact_check_outlined),
+                label:const Text('한국 도로명·지번주소 확인 (핀 위치 유지)'))),
               Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{var point=registrationPoint;final pickerMap=MapController();final picked=await showDialog<LatLng>(context:pageContext,builder:(mctx)=>StatefulBuilder(builder:(mctx,setM)=>Dialog(child:SizedBox(width:520,height:620,child:Column(children:[Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(mctx),icon:const Icon(Icons.close))])),const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('원하는 위치를 길게 누른 뒤 이 위치 적용을 누르세요.')),const SizedBox(height:8),Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,v)=>setM(()=>point=v)),children:[TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))])])),Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:()=>Navigator.pop(mctx),child:const Text('취소'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>Navigator.pop(mctx,point),child:const Text('이 위치 적용')))]))])))));if(picked!=null){registrationPoint=picked;final newAddress=await _reverseAddress(picked);if(newAddress.trim().isNotEmpty)address.text=newAddress;setPageState((){});}},icon:const Icon(Icons.map_outlined),label:const Text('주소 검색이 안 되면 지도에서 직접 위치 지정'))),
               const SizedBox(height: 18), const Text('서비스 항목 및 금액', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 6),
               ...prices.entries.map((e) => Card(margin: const EdgeInsets.symmetric(vertical: 4), child: Padding(padding: const EdgeInsets.fromLTRB(4, 4, 10, 4), child: Row(children: [
