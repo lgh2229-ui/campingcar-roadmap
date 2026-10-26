@@ -18,7 +18,12 @@ class ActivityInsightSheet extends StatefulWidget {
 class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   late Future<Map<String, dynamic>> result;
   bool _refreshing = false;
-  String get _cacheKey => 'nearby_activity_v1_${widget.place.id}_${widget.activity}';
+  // Category revisions invalidate old on-device false results once, while
+  // other categories keep their already downloaded local caches.
+  String get _cacheKey {
+    final ver=(widget.activity=='수상레포츠'||widget.activity=='관광지') ? 'v2' : 'v1';
+    return 'nearby_activity_${ver}_${widget.place.id}_${widget.activity}';
+  }
 
   @override
   void initState() {
