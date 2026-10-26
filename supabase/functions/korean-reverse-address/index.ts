@@ -111,6 +111,16 @@ Deno.serve(async(req:Request)=>{
       console.warn("parcel reverse provider:",entry.name,reason.slice(0,75));
     }
   }
+  // This is an API configuration failure, not "the land parcel does not exist".
+  // Never treat unavailable providers as a normal empty parcel lookup.
+  if(failed.length===2 && failed.every(x=>x.endsWith("NOT_CONFIGURED"))){
+    return json({
+      available:false,source:"none",status:"provider_not_configured",
+      jibunAddr:"",roadAddr:"",hasFullAddress:false,
+      message:"서버 지번조회 API 인증키가 연결되지 않았습니다. 네이버 또는 카카오 주소조회 키 설정이 필요합니다.",
+      providerErrors:failed,
+    },503);
+  }
   return json({
     available:Boolean(jibunAddr),source:source||"none",
     jibunAddr,roadAddr,region,hasFullAddress:Boolean(jibunAddr),
