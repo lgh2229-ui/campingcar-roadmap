@@ -69,7 +69,16 @@ async function fetchKakao(lat:number,lon:number):Promise<{road:string;lot:string
     const r=await fetch(url.toString(),{
       signal:ctl.signal,headers:{Authorization:"KakaoAK "+key,Accept:"application/json"},
     });
-    if(!r.ok)throw new Error("KAKAO_HTTP_"+r.status);
+    if(!r.ok){
+      // Expose Kakao error code (not credentials) to determine why API access is denied.
+      let providerCode="", providerMessage="";
+      try {
+        const err=await r.json();
+        providerCode=String(err.code??"").slice(0,15);
+        providerMessage=String(err.msg??err.message??"").replace(/app_key\\([^)]*\\)/gi,"app_key(REDACTED)").slice(0,130);
+      }catch(_){}
+      throw new Error("KAKAO_HTTP_"+r.status+"_CODE_"+providerCode+"_MSG_"+providerMessage);
+    }
     const result=await r.json();
     const item=(Array.isArray(result.documents)?result.documents:[])[0]||{};
     const a=item.address||{},road=item.road_address||{};
