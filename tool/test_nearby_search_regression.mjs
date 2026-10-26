@@ -52,7 +52,7 @@ test('unverified blog evidence cannot be turned into a fabricated map pin', () =
 });
 
 test('saved search results bypass external providers regardless of age or version', () => {
-  assert.match(code,/SEARCH_VERSION=13/);
+  assert.match(code,/SEARCH_VERSION=14/);
   assert.ok(code.includes('if(cache && !force && !refreshSources)'));
   assert.ok(code.includes('return json({...cache,cached:true,search_incomplete:saved.length===0'));
   assert.ok(code.includes('if(body.cache_only===true)'));
@@ -75,4 +75,35 @@ test('scenic lake and bridge discovery is not restricted to POI business categor
   assert.ok(code.includes("region+' 출렁다리'"));
   assert.ok(code.includes('place.address||'));
   assert.ok(code.includes('호수·저수지의 지도 중심점입니다.'));
+});
+
+function themedMatcherFromSource(){
+  const definition=code.match(/function matchesActivityTheme\(activity:string,nameValue:unknown,kindValue:unknown=''\):boolean\{[\s\S]*?\n\}/);
+  assert.ok(definition, 'themed search validator must be in deployed source');
+  const javascript=definition[0]
+    .replace('activity:string','activity')
+    .replace('nameValue:unknown','nameValue')
+    .replace("kindValue:unknown=''","kindValue=''")
+    .replace('):boolean{','){');
+  return new Function('return ('+javascript+')')();
+}
+
+test('water sports includes actual beaches and sports, never ordinary lodging',()=>{
+  const matches=themedMatcherFromSource();
+  for(const name of ['골드오션펜션','마리솔펜션','메르벨르풀빌라','몽산포 황토펜션','오션갤러리']){
+    assert.equal(matches('수상레포츠',name,'수상레포츠'),false,name);
+  }
+  assert.equal(matches('관광지','골드오션펜션','관광지'),false);
+  assert.equal(matches('관광지','몽산포해수욕장','관광지'),true);
+  assert.equal(matches('수상레포츠','몽산포해수욕장','관광지'),true);
+  assert.equal(matches('수상레포츠','죽도해변 서핑','서핑'),true);
+  assert.equal(matches('수상레포츠','수주팔봉 달천 강변 물놀이','수상레포츠'),true);
+  assert.equal(matches('수상레포츠','한가한 일반 마트','수상레포츠'),false);
+});
+
+test('tourism authority beaches can also show under swimming but not hotels',()=>{
+  assert.ok(code.includes("const beachSwimming=activity==='수상레포츠'"));
+  assert.ok(code.includes("activity==='관광지'"));
+  assert.ok(code.includes("matchesActivityTheme(activity,d.place_name,d.category_name)"));
+  assert.ok(code.includes("matchesActivityTheme(activity,name,item.kind||'')"));
 });
