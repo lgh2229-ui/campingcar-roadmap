@@ -1,0 +1,69 @@
+name: Verify and Connect Korean Parcel Geocoding
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-korean-parcel-geocoding.yml'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check available API connections without revealing secrets
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_LOCAL_REST_API_KEY: ${{ secrets.KAKAO_LOCAL_REST_API_KEY }}
+          NAVER_MAPS_API_KEY_ID: ${{ secrets.NAVER_MAPS_API_KEY_ID }}
+          NAVER_MAPS_API_KEY: ${{ secrets.NAVER_MAPS_API_KEY }}
+          NAVER_MAPS_CLIENT_SECRET: ${{ secrets.NAVER_MAPS_CLIENT_SECRET }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          JUSO_API_KEY: ${{ secrets.JUSO_API_KEY }}
+          JUSO_COORD_API_KEY: ${{ secrets.JUSO_COORD_API_KEY }}
+        shell: bash
+        run: |
+          for name in KAKAO_REST_API_KEY KAKAO_LOCAL_REST_API_KEY NAVER_MAPS_API_KEY_ID NAVER_MAPS_API_KEY NAVER_MAPS_CLIENT_SECRET SUPABASE_ACCESS_TOKEN JUSO_API_KEY JUSO_COORD_API_KEY; do
+            if [ -n "${!name}" ]; then
+              echo "${name}: configured"
+            else
+              echo "${name}: absent"
+            fi
+          done
+      - name: Validate Kakao API credential without leaking its value
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_LOCAL_REST_API_KEY: ${{ secrets.KAKAO_LOCAL_REST_API_KEY }}
+        shell: bash
+        run: |
+          KEY="${KAKAO_REST_API_KEY:-$KAKAO_LOCAL_REST_API_KEY}"
+          if [ -z "$KEY" ]; then
+            echo 'KAKAO_COORD2ADDRESS: no REST key'
+            exit 0
+          fi
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+            -H "Authorization: KakaoAK $KEY" \
+            'https://dapi.kakao.com/v2/local/geo/coord2address.json?x=126.2895475&y=36.6725042') || STATUS=error
+          echo "KAKAO_COORD2ADDRESS_HTTP: $STATUS"
+      - name: Automatically configure live Supabase address provider when authorized
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_LOCAL_REST_API_KEY: ${{ secrets.KAKAO_LOCAL_REST_API_KEY }}
+          NAVER_MAPS_API_KEY_ID: ${{ secrets.NAVER_MAPS_API_KEY_ID }}
+          NAVER_MAPS_API_KEY: ${{ secrets.NAVER_MAPS_API_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo 'Supabase secret update unavailable: management token absent'
+            exit 0
+          fi
+          export SUPABASE_ACCESS_TOKEN
+          curl -fsSL https://supabase.com/install.sh -o /tmp/supabase-install.sh || true
+          npx --yes supabase@latest --version >/dev/null
+          if [ -n "${KAKAO_REST_API_KEY:-$KAKAO_LOCAL_REST_API_KEY}" ]; then
+            KAKAO_REST_API_KEY="${KAKAO_REST_API_KEY:-$KAKAO_LOCAL_REST_API_KEY}" npx --yes supabase@latest secrets set --project-ref xlpwxkcxpxorrmkgzhft KAKAO_REST_API_KEY="$KAKAO_REST_API_KEY"
+            echo 'Kakao reverse address key configured'
+          fi
+          if [ -n "$NAVER_MAPS_API_KEY_ID" ] && [ -n "$NAVER_MAPS_API_KEY" ]; then
+            npx --yes supabase@latest secrets set --project-ref xlpwxkcxpxorrmkgzhft NAVER_MAPS_API_KEY_ID="$NAVER_MAPS_API_KEY_ID" NAVER_MAPS_API_KEY="$NAVER_MAPS_API_KEY"
+            echo 'Naver reverse address key configured'
+          fi
