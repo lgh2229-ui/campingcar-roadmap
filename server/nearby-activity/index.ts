@@ -56,7 +56,8 @@ function label(t:AnyObj, activity:string) {
  if(t["natural"]==="peak")return "산·봉우리";
  if(t["amenity"]==="casino")return "카지노";
  if(t["leisure"]==="marina")return "마리나";
- if(activity==="수상레포츠" && (t["waterway"]||t["natural"]==="beach"||t["tourism"]==="attraction"))
+ if(activity==="수상레포츠" && t["natural"]==="beach")return "해수욕장·해변 (개장·입수 허용 확인)";
+ if(activity==="수상레포츠" && (t["waterway"]||t["tourism"]==="attraction"))
   return "강·계곡 물놀이 후보 (안전·출입 미확인)";
  return [t.tourism,t.leisure,t.sport,t.shop,t.amenity,t.historic].find(Boolean) || "주변 활동 장소";
 }
@@ -85,6 +86,19 @@ async function overpass(lat:number, lon:number, keys:string[]) {
  }
  throw new Error('공개 지도 서버 일시 중단 ('+lastError.slice(0,80)+')');
 }
+// A search result is not proof of recreation; accommodation is never a public sport venue.
+function matchesActivityTheme(activity:string,nameValue:unknown,kindValue:unknown=''):boolean{
+ const name=String(nameValue||'').trim(),kind=String(kindValue||'').trim();
+ if(!name)return false;
+ if(/펜션|풀빌라|호텔|모텔|민박|리조트|게스트하우스|호스텔|여관|숙박|카라반|글램핑|콘도|스테이(?:$|\s)/i.test(name) ||
+    /(^|[>\s])숙박([>\s]|$)|펜션|풀빌라|호텔|모텔|리조트|게스트하우스/i.test(kind))return false;
+ if(activity==='수상레포츠'){
+  return /해수욕장|해변|비치|beach|서핑|서프|카약|카누|SUP|패들보드|스탠드업패들|스노클|스노쿨|수영|해수욕|물놀이|워터파크|수상레저|수상스포츠|해양레저|다이빙|스쿠버|요트|제트스키|수상스키|웨이크보드|래프팅|마리나|보트체험|바나나보트/i.test(name) ||
+    /^(surfing|sailing|kayaking|canoe|swimming|snorkeling|scuba_diving|marina|water_park|bathing_place)$/i.test(kind);
+ }
+ return true;
+}
+
 function dedupeSpots(items:AnyObj[],lat:number,lon:number,activity:string):AnyObj[]{
  const unique:AnyObj[]=[];
  for(const raw of items){
@@ -105,7 +119,7 @@ function normalizePlace(item:AnyObj,lat:number,lon:number,activity:string) {
  const distance_m=Math.round(distanceM(lat,lon,a,b));
  if(distance_m>RANGE)return null;
  const name=String(item.name||'').trim().slice(0,130);
- if(!name)return null;
+ if(!name || !matchesActivityTheme(activity,name,item.kind||''))return null;
  return {
   name,lat:a,lon:b,distance_m,
   kind:String(item.kind||activity).slice(0,90),
@@ -156,7 +170,7 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
 }
 // Search the names people actually use, not just abstract category labels.
 const searchTerms:Record<string,string[]>={
- '관광지':['관광명소','호수','저수지','출렁다리','수변길','관광공원','전망대','관광지'],
+ '관광지':['해수욕장','관광명소','호수','저수지','출렁다리','수변길','관광공원','전망대','관광지'],
  '산책':['산책로','수변공원','둘레길','해안길','벽화골목'],
  '등산':['등산로','등산','둘레길'],
  '낚시':['낚시포인트','선착장','방파제','낚시터','항구','포구','워킹낚시'],
@@ -171,7 +185,7 @@ const searchTerms:Record<string,string[]>={
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 
-const SEARCH_VERSION=13;
+const SEARCH_VERSION=14;
 const EMPTY_RETRY_MS=6*60*60*1000;
 const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
@@ -219,11 +233,15 @@ async function tourApiSearch(lat:number,lon:number,activity:string):Promise<AnyO
    const items=Array.isArray(raw)?raw:[raw];
    for(const item of items){
     const classified=tourActivity(item);
-    if(classified!==activity && !(activity==='관광지' && String(item.contenttypeid)==='14'))continue;
+    // Official beach attractions can be retrieved under the swimming category too.
+     const beachSwimming=activity==='수상레포츠' && String(item.contenttypeid)==='12'
+       && /해수욕장|해변/.test(String(item.title||''));
+     if(classified!==activity && !beachSwimming &&
+        !(activity==='관광지' && String(item.contenttypeid)==='14'))continue;
     const name=String(item.title||'').replace(/<[^>]*>/g,' ').trim();
     const id=String(item.contentid||'').trim();
     const poi=normalizePlace({
-      name,lat:item.mapy,lon:item.mapx,kind:activity,
+      name,lat:item.mapy,lon:item.mapx,kind:beachSwimming?'해수욕장·해수욕 (개장·입수 제한 확인)':activity,
       address:String(item.addr1||'').slice(0,160),phone:String(item.tel||'').replace(/<[^>]*>/g,' ').trim(),
       description:'한국관광공사 관광정보 '+(id?'(ID '+id+')':'')+'. 실제 이용·운영조건 별도 확인.',
       source_url:KTO_SOURCE
@@ -354,18 +372,20 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
  const locality=regionParts?.[2]||'';
  const coastal=/항|포구|선착장|방파제|어촌|해변|해수욕장|해안/.test(root);
  const targeted=root && activity==='관광지'
-  ? [root,root+' 주변 관광지',
-     ...(region?[region+' 관광명소',region+' 호수',region+' 수변길',region+' 출렁다리',region+' 공원']:[]),
+  ? [root,root.replace(/국립공원$/,'')+' 해수욕장',root+' 주변 관광지',
+     ...(region?[region+' 해수욕장',region+' 관광명소',region+' 호수',region+' 수변길',region+' 출렁다리',region+' 공원']:[]),
      ...(region&&locality?[region+' '+locality+' 관광지']:[])]
   : root && activity==='시장·쇼핑'
   ? (coastal?[root+' 수산물직매장',root+' 선상어시장',root+' 선상횟집']:[root+' 전통시장',root+' 마트'])
   : root && activity==='해루질'
   ? roots.flatMap(area=>[area+' 맛조개',area+' 조개잡이',area+' 갯벌체험',area+' 해루질'])
   : root && activity==='낚시'
-  ? roots.flatMap(area=>[area+' 낚시',area+' 원투낚시',area+' 방파제 낚시',area+' 선착장']) : [];
+  ? roots.flatMap(area=>[area+' 낚시',area+' 원투낚시',area+' 방파제 낚시',area+' 선착장'])
+  : root && activity==='수상레포츠'
+  ? [root.replace(/국립공원$/,'')+' 해수욕장',root+' 서핑',root+' 카약',...(region?[region+' 해수욕장']:[])] : [];
  const marketMix=['수산물직매장','전통시장','마트','수산시장','시장',
    '수산물센터','어시장','농산물직판장'];
- const count=activity==='관광지'?10:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?11:activity==='낚시'?10:activity==='해루질'?8:4;
+ const count=activity==='관광지'?12:activity==='시장·쇼핑'?10:activity==='지상레포츠'?10:activity==='수상레포츠'?12:activity==='낚시'?10:activity==='해루질'?8:4;
  const terms=[...new Set([...targeted,...(activity==='시장·쇼핑'?marketMix:(searchTerms[activity]||[activity]))])].slice(0,count);
  const found:AnyObj[]=[];
  let successes=0, failures=0;
@@ -390,24 +410,29 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
     if(activity==='시장·쇼핑' &&
        !/수산|어시장|시장|직매장|어판장|선상|회뜨는|마트|쇼핑|상설|장터|활어|회센터|회센타/i.test(
         String(d.place_name||'')+' '+String(d.category_name||'')))continue;
+    if(!matchesActivityTheme(activity,d.place_name,d.category_name))continue;
     const kind=activity==='낚시'&&/방파제|선착장|항구/.test(term)
       ? '낚시 관련 해안시설 후보 (출입·낚시 허용 여부 현장 확인)'
       : activity;
-    const waterCandidate=activity==='수상레포츠' && /계곡|강변|하천|유원지|물놀이|해수욕장/i.test(String(d.place_name||''));
+    const beachCandidate=activity==='수상레포츠' && /해수욕장|해변|비치/i.test(String(d.place_name||''));
+     const waterCandidate=activity==='수상레포츠' && /계곡|강변|하천|유원지|물놀이/i.test(String(d.place_name||''));
     const candidateKind=activity==='시장·쇼핑'
       ? '시장·직매장 관련 시설 (판매·영업 조건 확인)'
       : activity==='해루질'
       ? '갯벌·해루질 장소 후보 (채취·출입 허가 미확인)'
       : activity==='낚시'
       ? '낚시 관련 항만시설 후보 (출입·낚시 허가 미확인)'
-      : waterCandidate?'강·계곡 물놀이 후보 (안전·출입 미확인)':kind;
+      : beachCandidate?'해수욕장·해수욕 (개장·입수 가능 여부 확인)'
+       : waterCandidate?'강·계곡 물놀이 후보 (안전·출입 미확인)':kind;
     const spot=normalizePlace({name:d.place_name,lat:d.y,lon:d.x,kind:candidateKind,
       address:d.road_address_name||d.address_name,phone:d.phone,
       website:d.place_url,source_url:d.place_url,
       description:activity==='낚시'?
        '지도에 등록된 항만 관련 시설입니다. 낚시 가능 여부 및 출입통제 여부는 현장 확인이 필요합니다.':
-       waterCandidate?
-       '강·계곡 물놀이 관련 지도 장소 후보입니다. 실제 수영·입수 허용, 수심·급류·수질·출입 통제는 현장 안내를 확인하세요.':
+       beachCandidate?
+        '해수욕장·해변의 지도 위치입니다. 해수욕 개장기간과 입수 가능 구역, 물때·기상 조건을 확인하세요.':
+        waterCandidate?
+        '강·계곡 물놀이 관련 지도 장소 후보입니다. 실제 수영·입수 허용, 수심·급류·수질·출입 통제는 현장 안내를 확인하세요.':
        activity==='해루질'
         ? '지도에 등록된 갯벌·해루질 후보입니다. 실제 출입·채취 허가와 어촌계 관리, 갯골·물때를 확인하세요.'
         : activity==='시장·쇼핑'
@@ -451,7 +476,7 @@ function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
  const t=e.tags||{};
  const name=String(t['name:ko']||t.name||'').trim();
  const la=Number(e.lat??e.center?.lat),lo=Number(e.lon??e.center?.lon);
- if(!name || !Number.isFinite(la) || !Number.isFinite(lo))return null;
+ if(!name || !Number.isFinite(la) || !Number.isFinite(lo) || !matchesActivityTheme(activity,name,label(t,activity)))return null;
  const meters=Math.round(distanceM(lat,lon,la,lo));
  if(meters>RANGE)return null;
  const url='https://www.openstreetmap.org/'+e.type+'/'+e.id;
