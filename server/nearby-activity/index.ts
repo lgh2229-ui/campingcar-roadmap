@@ -9,7 +9,7 @@ const selectors: Record<string, string[]> = {
   "관광지": ['["tourism"~"^(attraction|museum|viewpoint|zoo|aquarium|gallery)$"]',
     '["historic"]','["natural"="water"]["water"~"^(lake|reservoir)$"]["name"]',
     '["man_made"="bridge"]["name"~"출렁다리|구름다리"]',
-    '["leisure"="park"]["name"]'],
+    '["leisure"="park"]["name"]','["natural"="beach"]["name"]'],
   "산책": ['["leisure"~"^(park|garden|nature_reserve)$"]','["highway"~"^(path|footway|pedestrian|steps)$"]["name"]','["route"="foot"]','["tourism"="viewpoint"]'],
   "등산": ['["route"="hiking"]', '["natural"="peak"]', '["information"="guidepost"]'],
   "낚시": ['["sport"="fishing"]','["fishing"]','["leisure"="fishing"]',
@@ -55,6 +55,7 @@ function label(t:AnyObj, activity:string) {
  if(t["man_made"]==="bridge" && /출렁다리|구름다리/.test(String(t.name||"")))return "출렁다리";
  if(t["natural"]==="peak")return "산·봉우리";
  if(t["amenity"]==="casino")return "카지노";
+ if(t["natural"]==="beach")return activity==="수상레포츠"?"해수욕장·해변 (개장·입수 허용 확인)":"해수욕장·해변 관광지";
  if(t["leisure"]==="marina")return "마리나";
  if(activity==="수상레포츠" && t["natural"]==="beach")return "해수욕장·해변 (개장·입수 허용 확인)";
  if(activity==="수상레포츠" && (t["waterway"]||t["tourism"]==="attraction"))
