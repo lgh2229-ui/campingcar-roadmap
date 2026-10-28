@@ -20,6 +20,13 @@ const dist=(a:number,b:number,c:number,d:number)=>{
 function activityOf(i:Obj):string|null{
  const type=String(i.contenttypeid||"");
  const name=trim(i.title).toLowerCase();
+ // Accommodation is not a tourist sight, even when a provider labels it tourism.
+ if(/펜션|풀빌라|호텔|모텔|민박|게스트하우스|호스텔|여관|숙박|카라반|글램핑|콘도|스테이(?:$|\s)/i.test(name))return null;
+ if(/리조트/i.test(name)){
+  if(/알파인코스터|스키장|눈썰매장|짚라인|산악자전거|골프장/i.test(name))return "지상레포츠";
+  if(/온천|스파|워터파크/i.test(name))return "온천·스파";
+  return null;
+ }
  // TourAPI content type 28 includes camping, golf and snow sports too.
  if(type==="28" || type==="12"){
   if(/캠핑|야영|글램핑|카라반|오토캠프|캠프장|캠프농장|힐링캠프/.test(name))return null; // Campsites are not tourism activities.
