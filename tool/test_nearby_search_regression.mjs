@@ -107,3 +107,30 @@ test('tourism authority beaches can also show under swimming but not hotels',()=
   assert.ok(code.includes("matchesActivityTheme(activity,d.place_name,d.category_name)"));
   assert.ok(code.includes("matchesActivityTheme(activity,name,item.kind||'')"));
 });
+
+test('resort accommodations are not tourism and resort facilities stay in their real themes',()=> {
+  const matches=themedMatcherFromSource();
+  for(const name of ['메이힐스리조트','새연리조트 가평설악2호점','변산리조트','궁항리조트']){
+    assert.equal(matches('관광지',name,'관광지'),false,name);
+    assert.equal(matches('수상레포츠',name,'수상레포츠'),false,name);
+  }
+  assert.equal(matches('관광지','담양리조트 온천','관광지'),false);
+  assert.equal(matches('관광지','하이원리조트 알파인코스터','관광지'),false);
+  assert.equal(matches('온천·스파','담양리조트 온천','온천·스파'),true);
+  assert.equal(matches('지상레포츠','하이원리조트 알파인코스터','지상레포츠'),true);
+  assert.equal(matches('지상레포츠','하이원리조트 스키장','지상레포츠'),true);
+});
+
+test('the tourism importer skips resort lodging rather than relying on the source category',()=>{
+  const importer=readFileSync('server/kto-tourism-import/index.ts','utf8');
+  const found=importer.match(/function activityOf\(i:Obj\):string\|null\{[\s\S]*?\n\}/);
+  assert.ok(found,'tourism importer must contain an activity classifier');
+  const classifier=new Function('trim','return ('+found[0].replace('i:Obj','i').replace('):string|null{','){')+')')(
+    value=>String(value??'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,280)
+  );
+  assert.equal(classifier({contenttypeid:12,title:'메이힐스리조트'}),null);
+  assert.equal(classifier({contenttypeid:12,title:'궁항리조트'}),null);
+  assert.equal(classifier({contenttypeid:12,title:'담양리조트 온천'}),'온천·스파');
+  assert.equal(classifier({contenttypeid:12,title:'하이원리조트 알파인코스터'}),'지상레포츠');
+  assert.equal(classifier({contenttypeid:12,title:'몽산포해수욕장'}),'관광지');
+});
