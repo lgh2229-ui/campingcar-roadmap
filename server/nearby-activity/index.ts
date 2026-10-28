@@ -141,6 +141,16 @@ function normalizePlace(item:AnyObj,lat:number,lon:number,activity:string) {
   photo_hint:String(item.photo_hint||'').startsWith('File:')?String(item.photo_hint).slice(0,200):'',
  };
 }
+// Only expose a Korean address when the official tourism source supplied one.
+// A POI's map coordinates or prose description are not a cadastral address.
+function verifiedPoiAddress(descriptionValue:unknown):string{
+ const description=String(descriptionValue||'');
+ const marker=' · 관광공사 TourAPI';
+ if(!description.includes(marker))return '';
+ const address=description.split(marker)[0].trim();
+ return /^(강원|경기|충청|충북|충남|경상|경북|경남|전라|전북|전남|부산|대구|대전|울산|인천|광주|세종|서울|제주)/.test(address)
+   ? address.slice(0,170) : '';
+}
 async function curatedPoi(db:any,lat:number,lon:number,activity:string){
  const latDelta=RANGE/110570,lonDelta=RANGE/(111320*Math.max(0.2,Math.cos(lat*Math.PI/180)));
  const {data,error}=await db.from('verified_activity_pois').select('*')
@@ -160,6 +170,7 @@ async function curatedPoi(db:any,lat:number,lon:number,activity:string){
  }
  const mapped=matches.map((p:AnyObj)=>normalizePlace({
   name:p.name,lat:p.latitude,lon:p.longitude,kind:activity,
+  address:verifiedPoiAddress(p.description),
   description:p.description,phone:p.phone,website:p.info_source_url,
   source_url:p.info_source_url||p.map_source_url,
  },lat,lon,activity)).filter(Boolean) as AnyObj[];
