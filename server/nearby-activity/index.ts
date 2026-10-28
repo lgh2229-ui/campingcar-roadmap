@@ -91,8 +91,15 @@ async function overpass(lat:number, lon:number, keys:string[]) {
 function matchesActivityTheme(activity:string,nameValue:unknown,kindValue:unknown=''):boolean{
  const name=String(nameValue||'').trim(),kind=String(kindValue||'').trim();
  if(!name)return false;
- if(/펜션|풀빌라|호텔|모텔|민박|리조트|게스트하우스|호스텔|여관|숙박|카라반|글램핑|콘도|스테이(?:$|\s)/i.test(name) ||
-    /(^|[>\s])숙박([>\s]|$)|펜션|풀빌라|호텔|모텔|리조트|게스트하우스/i.test(kind))return false;
+ // Resort accommodation is never a tourist attraction. Independently named
+ // facilities inside a resort may qualify only for their actual activity.
+ if(/펜션|풀빌라|호텔|모텔|민박|게스트하우스|호스텔|여관|숙박|카라반|글램핑|콘도|스테이(?:$|\s)/i.test(name) ||
+    /(^|[>\s])숙박([>\s]|$)|펜션|풀빌라|호텔|모텔|게스트하우스/i.test(kind))return false;
+ if(/리조트/i.test(name) || /리조트/i.test(kind)){
+  if(activity==='지상레포츠' && /알파인코스터|스키장|눈썰매장|짚라인|산악자전거|골프장/i.test(name))return true;
+  if(activity==='온천·스파' && /온천|스파|워터파크/i.test(name))return true;
+  return false;
+ }
  if(activity==='수상레포츠'){
   return /해수욕장|해변|비치|beach|서핑|서프|카약|카누|SUP|패들보드|스탠드업패들|스노클|스노쿨|수영|해수욕|물놀이|워터파크|수상레저|수상스포츠|해양레저|다이빙|스쿠버|요트|제트스키|수상스키|웨이크보드|래프팅|마리나|보트체험|바나나보트/i.test(name) ||
     /^(surfing|sailing|kayaking|canoe|swimming|snorkeling|scuba_diving|marina|water_park|bathing_place)$/i.test(kind);
@@ -192,6 +199,13 @@ const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
  const type=String(item.contenttypeid||'');
  const name=String(item.title||'').toLowerCase();
+ // Accommodation is not a tourist sight, even when a provider labels it tourism.
+ if(/펜션|풀빌라|호텔|모텔|민박|게스트하우스|호스텔|여관|숙박|카라반|글램핑|콘도|스테이(?:$|\s)/i.test(name))return null;
+ if(/리조트/i.test(name)){
+  if(/알파인코스터|스키장|눈썰매장|짚라인|산악자전거|골프장/i.test(name))return '지상레포츠';
+  if(/온천|스파|워터파크/i.test(name))return '온천·스파';
+  return null;
+ }
  if(/캠핑|야영|글램핑|카라반|오토캠프/.test(name))return null;
  if(['12','14','15','25'].includes(type)){
   if(type==='14')return '문화체험';
