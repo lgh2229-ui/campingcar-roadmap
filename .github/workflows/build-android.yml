@@ -133,7 +133,7 @@ jobs:
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-play-aab-1.9.43-137
+          name: campingcar-roadmap-play-aab-1.9.54-148
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 14
 
