@@ -300,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Resolve numbered parcels from exact cadastral results, never an OSM centroid.
   bool _looksLikeParcelAddress(String value) =>
-      RegExp(r'[가-힣]+(?:동|리)\s+(?:산\s*)?\d+(?:-\d+)?$')
+      RegExp(r'[가-힣]+(?:동|리)\s*(?:산\s*)?\d+(?:-\d+)?$')
           .hasMatch(value.trim());
 
   List<Place> _matchingSearchPlaces(String query) {
