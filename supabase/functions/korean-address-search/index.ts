@@ -30,7 +30,7 @@ function normalized(value:string):string {
   return chunks.join("").toLowerCase();
 }
 function parcelRequest(value:string):boolean {
-  return /[가-힣]+(?:동|리)\s+(?:산\s*)?\d+(?:-\d+)?$/.test(value.trim());
+  return /[가-힣]+(?:동|리)\s*(?:산\s*)?\d+(?:-\d+)?$/.test(value.trim());
 }
 function matchesParcel(input:string, returned:string):boolean {
   if(!returned || !parcelRequest(input))return false;
