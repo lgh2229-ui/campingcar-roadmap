@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const registration=readFileSync('tool/fix_place_registration.py','utf8');
 const flutter=readFileSync('lib/screens/home_screen.dart','utf8');
 const reverse=readFileSync('supabase/functions/korean-reverse-address/index.ts','utf8');
+const search=readFileSync('supabase/functions/korean-address-search/index.ts','utf8');
 
 test('parcel lookup checks both authoritative Korean providers',()=>{
  assert.match(reverse,/fetchNaver\(/);
@@ -26,13 +27,31 @@ test('registration does not assign OSM roads as mandatory cadastral address',()=
  assert.doesNotMatch(registration,/label:const Text\('주소 위치 적용'\)/);
 });
 
-test('manual cadastral address verification never moves the picked GPS pin',()=>{
- assert.match(registration,/Geolocator\.distanceBetween/);
- assert.match(registration,/if\(meters>200\)/);
+test('verified cadastral address positions pin without stale-distance rejection',()=>{
+ assert.match(registration,/selected\['verified'\]!=true/);
+ assert.match(registration,/registrationPoint=LatLng\(lat,lon\)/);
+ assert.doesNotMatch(registration,/if\(meters>200\)/);
  assert.match(registration,/지도에서 직접 위치 지정/);
  assert.match(registration,/registrationPoint=picked/);
  assert.match(registration,/await _reverseKoreanParcel\(picked\)/);
- assert.match(registration,/찍은 핀 좌표는 바꾸지 않았습니다/);
+});
+
+test('search accepts numbered land parcels only with matching locality and lot',()=>{
+ assert.match(search,/KAKAO_REST_API_KEY/);
+ assert.match(search,/NAVER_MAPS_API_KEY_ID/);
+ assert.match(search,/search\/address\.json/);
+ assert.match(search,/map-geocode\/v2\/geocode/);
+ assert.match(search,/matchesParcel\(query,lot\)/);
+ assert.match(search,/r\.includes\(n\)/);
+ assert.match(search,/parcelRequest\(query\)/);
+ assert.match(search,/verified:parcelRequest\(query\)/);
+});
+
+test('app searches numbered parcels without trusting approximate OSM positions',()=>{
+ assert.match(flutter,/_looksLikeParcelAddress/);
+ assert.match(flutter,/addresses\.isEmpty && isParcelAddress/);
+ assert.match(flutter,/picked\['verified'\]!=true/);
+ assert.match(flutter,/registrationPoint=LatLng\(lat,lon\)/);
 });
 
 test('current source and CI-injected source both use same parcel checks',()=>{
