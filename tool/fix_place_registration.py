@@ -36,7 +36,7 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
           builder: (pageContext, setPageState) => Scaffold(
             appBar: AppBar(title: const Text('새 장소 등록'), leading: IconButton(icon: const Icon(Icons.close), onPressed: saving ? null : () => Navigator.pop(pageContext))),
             body: SafeArea(child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 32), children: [
-              Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(pageContext).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)), child: Text('정확한 지도 지정 좌표 (길찾기 기준)\n${registrationPoint.latitude.toStringAsFixed(7)}, ${registrationPoint.longitude.toStringAsFixed(7)}')),
+              Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(pageContext).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)), child: Text('현재 지도 핀 (길찾기 기준)\n${registrationPoint.latitude.toStringAsFixed(7)}, ${registrationPoint.longitude.toStringAsFixed(7)}\n필지 대표좌표는 차량 진입로와 다를 수 있습니다.')),
               const SizedBox(height: 12),
               TextField(controller: name, decoration: const InputDecoration(labelText: '장소명', border: OutlineInputBorder())),
               const SizedBox(height: 12),
@@ -45,7 +45,7 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
                 onChanged:(v)=>setPageState(()=>parcelVerified=v.trim()==verifiedParcel&&verifiedParcel.isNotEmpty),
                 decoration:const InputDecoration(
                   labelText:'지번주소 (필수 · 읍/면/리 + 번지)',
-                  helperText:'지정한 핀에서 확인한 실제 지번으로만 등록할 수 있습니다.',
+                  helperText:'건물이 없는 노지 지번도 검색 가능합니다. 주소 선택 시 핀을 이동합니다.',
                   helperMaxLines:2,border:OutlineInputBorder())),
               const SizedBox(height:5),
               Row(children:[
@@ -80,34 +80,28 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
                 onPressed:saving?null:()async{
                   try{
                     final query=address.text.trim().isNotEmpty
-                      ?address.text.trim()
-                      :name.text.trim().isNotEmpty
-                        ?name.text.trim():'태안군 남면';
+                      ?address.text.trim() : name.text.trim();
+                    if(query.isEmpty){_msg('찾을 지번주소를 먼저 입력해 주세요.');return;}
                     final selected=await _pickKoreanAddress(query);
                     if(selected==null)return;
                     final lat=(selected['lat'] as num?)?.toDouble();
                     final lon=(selected['lon'] as num?)?.toDouble();
                     final lot=(selected['jibunAddr']??'').toString().trim();
-                    if(lat==null||lon==null||lot.isEmpty){
-                      _msg('확인 가능한 지번과 위치가 있는 검색 결과를 선택해 주세요.');return;
-                    }
-                    final meters=Geolocator.distanceBetween(
-                      registrationPoint.latitude,registrationPoint.longitude,lat,lon);
-                    if(meters>200){
-                      _msg('선택한 지번은 표시한 핀에서 ${meters.round()}m 떨어져 있습니다. 정확한 필지를 다시 확인해 주세요.');
-                      return;
+                    if(selected['verified']!=true||lat==null||lon==null||lot.isEmpty){
+                      _msg('필지와 좌표가 일치하는 지번주소를 선택해 주세요.');return;
                     }
                     setPageState((){
+                      registrationPoint=LatLng(lat,lon);
                       verifiedParcel=lot;
                       parcelVerified=true;
                       roadAddress=(selected['roadAddr']??'').toString().trim();
                       address.text=lot;
                     });
-                    _msg('지번 확인 완료 · 찍은 핀 좌표는 바꾸지 않았습니다.');
+                    _msg('지번주소 위치로 이동했습니다. 실제 차박 자리·차량 진입로를 확인해 주세요.');
                   }catch(e){_msg('지번 검색 실패: $e');}
                 },
                 icon:const Icon(Icons.fact_check_outlined),
-                label:const Text('한국 지번주소 검색·확인 (핀 유지)'))),
+                label:const Text('지번주소 검색 → 해당 필지로 핀 이동'))),
               Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:saving?null:()async{var point=registrationPoint;final pickerMap=MapController();final picked=await showDialog<LatLng>(context:pageContext,builder:(mctx)=>StatefulBuilder(builder:(mctx,setM)=>Dialog(child:SizedBox(width:520,height:620,child:Column(children:[Padding(padding:const EdgeInsets.fromLTRB(16,12,8,8),child:Row(children:[const Expanded(child:Text('지도에서 위치 지정',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold))),IconButton(onPressed:()=>Navigator.pop(mctx),icon:const Icon(Icons.close))])),const Padding(padding:EdgeInsets.symmetric(horizontal:16),child:Text('원하는 위치를 길게 누른 뒤 이 위치 적용을 누르세요.')),const SizedBox(height:8),Expanded(child:FlutterMap(mapController:pickerMap,options:MapOptions(initialCenter:point,initialZoom:16,onLongPress:(_,v)=>setM(()=>point=v)),children:[TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',userAgentPackageName:'kr.co.campingcarroadmap.app'),MarkerLayer(markers:[Marker(point:point,width:54,height:54,child:const Icon(Icons.location_pin,color:Colors.red,size:54))])])),Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:OutlinedButton(onPressed:()=>Navigator.pop(mctx),child:const Text('취소'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>Navigator.pop(mctx,point),child:const Text('이 위치 적용')))]))])))));if(picked!=null){
                   final result=await _reverseKoreanParcel(picked);
                   final lot=(result['jibunAddr']??'').toString().trim();
