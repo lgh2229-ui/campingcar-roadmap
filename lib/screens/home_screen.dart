@@ -276,8 +276,8 @@ class _HomeScreenState extends State<HomeScreen> {
   // Treat common province abbreviations and spacing as equivalent in
   // app-registered place searches (e.g. 경북 상주시 == 경상북도 상주시).
   String _normalizePlaceSearchText(String value) {
-    var s = value.trim().replaceFirst(RegExp(r'^대한민국\\s*'), '');
-    s = s.replaceAll(RegExp(r'\\s+'), ' ');
+    var s = value.trim().replaceFirst(RegExp(r'^대한민국\s*'), '');
+    s = s.replaceAll(RegExp(r'\s+'), ' ');
     const provinceAliases = <String, String>{
       '서울': '서울특별시', '부산': '부산광역시', '대구': '대구광역시',
       '인천': '인천광역시', '광주': '광주광역시', '대전': '대전광역시',
