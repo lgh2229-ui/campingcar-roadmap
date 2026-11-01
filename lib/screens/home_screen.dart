@@ -263,7 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if(!mounted)return;
     final open=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(
       title:const Text('정확한 필지 위치 확인'),
-      content:Text('앱의 주소 데이터에서 "$query"의 정확한 좌표를 확인하지 못했습니다.\n\n산번지는 도로명주소 검색에서 누락될 수 있습니다. 임의 위치로 이동하지 않고 카카오맵에서 해당 지번을 검색할 수 있습니다.'),
+      content:Text('현재 주소 검색 서비스에서 "$query"의 정확한 좌표를 찾지 못했습니다. 주소가 실제로 존재하지 않는다는 뜻은 아닙니다.\n\n건물이 없는 지번은 도로명주소 기반 검색에서 누락될 수 있습니다. 확인되지 않은 좌표로 이동하지 않고 카카오맵에서 해당 지번을 검색할 수 있습니다.'),
       actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('취소')),
         FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('카카오맵에서 검색'))],
     ));
@@ -273,15 +273,38 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // Suggestions match both registered place names and their addresses.
   // Prefer a name prefix so a user typing "죽도" finds 죽도야영장 first.
+  // Treat common province abbreviations and spacing as equivalent in
+  // app-registered place searches (e.g. 경북 상주시 == 경상북도 상주시).
+  String _normalizePlaceSearchText(String value) {
+    var s = value.trim().replaceFirst(RegExp(r'^대한민국\\s*'), '');
+    s = s.replaceAll(RegExp(r'\\s+'), ' ');
+    const provinceAliases = <String, String>{
+      '서울': '서울특별시', '부산': '부산광역시', '대구': '대구광역시',
+      '인천': '인천광역시', '광주': '광주광역시', '대전': '대전광역시',
+      '울산': '울산광역시', '세종': '세종특별자치시',
+      '경기': '경기도', '강원': '강원특별자치도',
+      '충북': '충청북도', '충남': '충청남도',
+      '전북': '전북특별자치도', '전남': '전라남도',
+      '경북': '경상북도', '경남': '경상남도',
+      '제주': '제주특별자치도',
+    };
+    final parts = s.split(' ');
+    if (parts.isNotEmpty && provinceAliases.containsKey(parts.first)) {
+      parts[0] = provinceAliases[parts.first]!;
+    }
+    return parts.join('').toLowerCase();
+  }
+
   List<Place> _matchingSearchPlaces(String query) {
-    final q = query.trim().toLowerCase();
+    final q = _normalizePlaceSearchText(query);
     if (q.isEmpty) return [];
     final matches = places.where((p) =>
         (p.isApproved || _isMine(p)) &&
-        (p.name.toLowerCase().contains(q) || p.address.toLowerCase().contains(q))).toList();
+        (_normalizePlaceSearchText(p.name).contains(q) ||
+         _normalizePlaceSearchText(p.address).contains(q))).toList();
     int score(Place p) {
-      final name = p.name.toLowerCase();
-      final address = p.address.toLowerCase();
+      final name = _normalizePlaceSearchText(p.name);
+      final address = _normalizePlaceSearchText(p.address);
       if (name.startsWith(q)) return 0;
       if (name.contains(q)) return 1;
       if (address.startsWith(q)) return 2;
@@ -434,7 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (placesFound.isEmpty && addresses.isEmpty && !_loadingAddressSuggestions)
                 const Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text('일치하는 장소가 없습니다. 주소 검색은 3글자 이상 입력하거나 검색 버튼을 눌러주세요.'),
+                  child: Text('등록 장소나 주소 검색 결과가 없습니다. 지번주소는 현재 검색 서비스에서 조회되지 않을 수 있습니다.'),
                 ),
             ],
           ),
