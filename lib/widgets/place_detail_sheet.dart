@@ -540,6 +540,26 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
                   ));
                 },
               ),
+              if (copyAddress)
+                ListTile(
+                  leading: Icon(Icons.travel_explore_outlined,
+                    color: Theme.of(sheetContext).colorScheme.primary),
+                  title: const Text('지번주소로 지도에서 검색'),
+                  subtitle: const Text('저장된 좌표가 틀린 경우 주소 자체로 찾습니다'),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    final url = Uri.https('map.kakao.com', '/', {'q': copyValue});
+                    try {
+                      if (await launchUrl(url, mode: LaunchMode.externalApplication)) return;
+                    } catch (_) {
+                      // Preserve the address for manual navigation on failure.
+                    }
+                    await Clipboard.setData(ClipboardData(text: copyValue));
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('지도를 열 수 없어 주소를 복사했습니다.')));
+                  },
+                ),
               navTile('티맵', Icons.directions_car_outlined),
               navTile('네이버지도', Icons.map_outlined),
               navTile('카카오맵', Icons.near_me_outlined),
@@ -567,11 +587,15 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final p = widget.place;
-    final displayAddress = _naverLotAddress.isNotEmpty
-        ? _naverLotAddress
-        : _naverRoadAddress.isNotEmpty
-            ? _naverRoadAddress
-            : p.address.trim();
+    // A saved numbered Korean address takes priority over reverse-geocoding
+    // of a potentially misplaced pin. The pin may be on a river or road.
+    final displayAddress = _hasNumberedAddress
+        ? p.address.trim()
+        : _naverLotAddress.isNotEmpty
+            ? _naverLotAddress
+            : _naverRoadAddress.isNotEmpty
+                ? _naverRoadAddress
+                : p.address.trim();
     final detailedAddress = _naverRoadAddress.isNotEmpty ||
         _naverLotAddress.isNotEmpty || _hasNumberedAddress;
     final name = p.name.replaceFirst(
