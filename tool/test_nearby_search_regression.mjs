@@ -52,7 +52,7 @@ test('unverified blog evidence cannot be turned into a fabricated map pin', () =
 });
 
 test('saved search results bypass external providers regardless of age or version', () => {
-  assert.match(code,/SEARCH_VERSION=14/);
+  assert.match(code,/SEARCH_VERSION=15/);
   assert.ok(code.includes('if(cache && !force && !refreshSources)'));
   assert.ok(code.includes('return json({...cache,cached:true,search_incomplete:saved.length===0'));
   assert.ok(code.includes('if(body.cache_only===true)'));
@@ -133,4 +133,21 @@ test('the tourism importer skips resort lodging rather than relying on the sourc
   assert.equal(classifier({contenttypeid:12,title:'담양리조트 온천'}),'온천·스파');
   assert.equal(classifier({contenttypeid:12,title:'하이원리조트 알파인코스터'}),'지상레포츠');
   assert.equal(classifier({contenttypeid:12,title:'몽산포해수욕장'}),'관광지');
+});
+
+test('fishing rejects coffee shops and unrelated keyword coincidences',()=>{
+ const matches=themedMatcherFromSource();
+ for(const name of ['항구다방','항구반점','항구카페','항구횟집','피싱카페','송죽낚시휴게점','오삼수퍼낚시']){
+   assert.equal(matches('낚시',name,'낚시 관련 항만시설 후보 (출입·낚시 허가 미확인)'),false,name);
+ }
+ for(const name of ['강구항','강구방파제','삼사방파제','당암포구','만대항 선착장','금곡낚시터','삼길포항 낚시 안내']){
+   assert.equal(matches('낚시',name,'낚시 관련 항만시설 후보 (출입·낚시 허가 미확인)'),true,name);
+ }
+ assert.equal(matches('낚시','항구다방','카페'),false);
+ assert.equal(matches('낚시','갈매기 낚시터','sport:fishing'),true);
+});
+test('old fishing caches are filtered without repeat API search',()=>{
+ assert.ok(code.includes("activity==='낚시'"));
+ assert.ok(code.includes("filtered legacy fishing cache"));
+ assert.ok(code.includes("matchesActivityTheme(activity,spot.name,spot.kind||'')"));
 });
