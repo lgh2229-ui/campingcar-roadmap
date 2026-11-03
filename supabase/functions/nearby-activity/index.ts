@@ -724,7 +724,30 @@ Deno.serve(async (req:Request)=>{
   // AI searches. Every previously researched result is returned immediately.
   // External discovery runs only for uncached places or explicit Refresh.
   if(cache && !force && !refreshSources){
+   // Even a saved result must pass the current category rules. Do not let an
+   // old keyword-search cache return a cafe as a fishing spot forever.
    const saved=Array.isArray(cache.spots)?cache.spots:[];
+   const filtered=activity==='낚시'
+     ? saved.filter((spot:AnyObj)=>matchesActivityTheme(activity,spot.name,spot.kind||''))
+     : saved;
+   if(filtered.length!==saved.length){
+     const primary=filtered.slice(0,3).map((spot:AnyObj)=>spot.name).join('·');
+     const summary=filtered.length>0
+       ? place.name+' 주변 3km 이내 '+filtered.length+'곳의 낚시 관련 항만·포인트가 확인됐습니다. 가까운 곳: '+primary+'. 실제 낚시 허용 여부는 현장 확인이 필요합니다.'
+       : '주변 낚시 장소의 업종을 다시 검증 중입니다. 카페·식당 등 관계없는 시설은 제외했습니다.';
+     const patch={
+       spots:filtered,summary,search_version:SEARCH_VERSION,
+       providers:filtered.filter((p:AnyObj)=>p.phone||p.website).slice(0,12),
+       photos:[],
+       sources:filtered.filter((p:AnyObj)=>validHttp(p.source_url))
+          .map((p:AnyObj)=>({name:p.name,url:p.source_url})),
+     };
+     const {error}=await db.from('place_activity_insights').update(patch)
+       .eq('place_id',placeId).eq('activity',activity);
+     if(error)console.warn('filtered legacy fishing cache:',error.message);
+     return json({...cache,...patch,cached:true,search_incomplete:filtered.length===0,
+       refresh_available:true});
+   }
    return json({...cache,cached:true,search_incomplete:saved.length===0,
     refresh_available:true});
   }
