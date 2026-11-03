@@ -145,6 +145,7 @@ test('fishing rejects coffee shops and unrelated keyword coincidences',()=>{
  }
  assert.equal(matches('낚시','항구다방','카페'),false);
  assert.equal(matches('낚시','갈매기 낚시터','sport:fishing'),true);
+ assert.equal(matches('낚시','삼사 고고씽호','낚시 관련 항만시설 후보'),true);
 });
 test('old fishing caches are filtered without repeat API search',()=>{
  assert.ok(code.includes("activity==='낚시'"));
