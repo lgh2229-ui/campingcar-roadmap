@@ -100,6 +100,19 @@ function matchesActivityTheme(activity:string,nameValue:unknown,kindValue:unknow
   if(activity==='온천·스파' && /온천|스파|워터파크/i.test(name))return true;
   return false;
  }
+ // Fishing is a real fishing spot / harbor / boat service, not every result of
+ // the keyword "항구" or "낚시". Reject ordinary businesses before checking.
+ if(activity==='낚시'){
+   if(/다방|카페|커피|베이커리|반점|중식|음식점|식당|횟집|주점|치킨|편의점|슈퍼|수퍼|마트|낚시용품|낚시휴게점|숙박|펜션|풀빌라|호텔|모텔|미용실|세탁소|노래방/i.test(name) ||
+      /음식점|카페|커피전문점|숙박|소매|슈퍼|낚시용품|편의점/i.test(kind))return false;
+   if(/방파제|선착장|갯바위|낚시터|낚시포인트|낚시공원|낚시잔교|낚시체험|선상낚시|낚시배|낚시선|낚시안내|낚시정보|낚시 포인트|낚시 안내|낚시 정보|생활낚시|유어선|출조|어항|낚시항/i.test(name))return true;
+   // "강구항" and "당암포구" are real geographic names. "항구다방"
+   // cannot satisfy a terminal harbor/wharf word match.
+   if(/(?:항|포구|부두|물양장|선창|항구)$/.test(name))return true;
+   // Specific OSM fishing features and verified fishing charter categories.
+   if(/sport:fishing|leisure:fishing|fishing=|낚시터|낚시포인트|유어선|선상낚시|낚시선|낚시배|출조선/i.test(kind))return true;
+   return false;
+ }
  if(activity==='수상레포츠'){
   return /해수욕장|해변|비치|beach|서핑|서프|카약|카누|SUP|패들보드|스탠드업패들|스노클|스노쿨|수영|해수욕|물놀이|워터파크|수상레저|수상스포츠|해양레저|다이빙|스쿠버|요트|제트스키|수상스키|웨이크보드|래프팅|마리나|보트체험|바나나보트/i.test(name) ||
     /^(surfing|sailing|kayaking|canoe|swimming|snorkeling|scuba_diving|marina|water_park|bathing_place)$/i.test(kind);
@@ -204,7 +217,7 @@ const searchTerms:Record<string,string[]>={
 const discoveryKeywords:Record<string,string>=Object.fromEntries(
  Object.entries(searchTerms).map(([key,terms])=>[key,terms[0]]));
 
-const SEARCH_VERSION=14;
+const SEARCH_VERSION=15;
 const EMPTY_RETRY_MS=6*60*60*1000;
 const KTO_SOURCE='https://www.data.go.kr/data/15101578/openapi.do';
 function tourActivity(item:AnyObj):string|null{
@@ -502,7 +515,10 @@ function spotFromElement(e:AnyObj, lat:number,lon:number,activity:string) {
  const t=e.tags||{};
  const name=String(t['name:ko']||t.name||'').trim();
  const la=Number(e.lat??e.center?.lat),lo=Number(e.lon??e.center?.lon);
- if(!name || !Number.isFinite(la) || !Number.isFinite(lo) || !matchesActivityTheme(activity,name,label(t,activity)))return null;
+ if(!name || !Number.isFinite(la) || !Number.isFinite(lo) ||
+    !matchesActivityTheme(activity,name,activity==='낚시'
+      ? [label(t,activity),t.sport==='fishing'?'sport:fishing':'',t.fishing?'fishing=yes':'',t.leisure==='fishing'?'leisure:fishing':''].join(' ')
+      : label(t,activity)))return null;
  const meters=Math.round(distanceM(lat,lon,la,lo));
  if(meters>RANGE)return null;
  const url='https://www.openstreetmap.org/'+e.type+'/'+e.id;
