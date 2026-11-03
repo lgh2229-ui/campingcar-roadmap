@@ -21,7 +21,7 @@ class _ActivityInsightSheetState extends State<ActivityInsightSheet> {
   // Category revisions invalidate old on-device false results once, while
   // other categories keep their already downloaded local caches.
   String get _cacheKey {
-    final ver=(widget.activity=='수상레포츠'||widget.activity=='관광지') ? 'v2' : 'v1';
+    final ver=(widget.activity=='수상레포츠'||widget.activity=='관광지'||widget.activity=='낚시') ? 'v2' : 'v1';
     return 'nearby_activity_${ver}_${widget.place.id}_${widget.activity}';
   }
 
