@@ -106,6 +106,8 @@ function matchesActivityTheme(activity:string,nameValue:unknown,kindValue:unknow
    if(/다방|카페|커피|베이커리|반점|중식|음식점|식당|횟집|주점|치킨|편의점|슈퍼|수퍼|마트|낚시용품|낚시휴게점|숙박|펜션|풀빌라|호텔|모텔|미용실|세탁소|노래방/i.test(name) ||
       /음식점|카페|커피전문점|숙박|소매|슈퍼|낚시용품|편의점/i.test(kind))return false;
    if(/방파제|선착장|갯바위|낚시터|낚시포인트|낚시공원|낚시잔교|낚시체험|선상낚시|낚시배|낚시선|낚시안내|낚시정보|낚시 포인트|낚시 안내|낚시 정보|생활낚시|유어선|출조|어항|낚시항/i.test(name))return true;
+   // A named boat is a fishing-charter *candidate*, not a verified bank spot.
+   if(/.{2,}호$/.test(name))return true;
    // "강구항" and "당암포구" are real geographic names. "항구다방"
    // cannot satisfy a terminal harbor/wharf word match.
    if(/(?:항|포구|부두|물양장|선창|항구)$/.test(name))return true;
@@ -460,7 +462,9 @@ async function kakaoSearch(lat:number,lon:number,activity:string,key:string|unde
       : activity==='해루질'
       ? '갯벌·해루질 장소 후보 (채취·출입 허가 미확인)'
       : activity==='낚시'
-      ? '낚시 관련 항만시설 후보 (출입·낚시 허가 미확인)'
+      ? (/.{2,}호$/.test(String(d.place_name||''))
+          ? '선상낚시 관련 선박 후보 (출항·운영·허가 확인)'
+          : '낚시 관련 항만시설 후보 (출입·낚시 허가 미확인)')
       : beachCandidate?'해수욕장·해수욕 (개장·입수 가능 여부 확인)'
        : waterCandidate?'강·계곡 물놀이 후보 (안전·출입 미확인)':kind;
     const spot=normalizePlace({name:d.place_name,lat:d.y,lon:d.x,kind:candidateKind,
