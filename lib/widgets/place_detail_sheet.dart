@@ -6,6 +6,7 @@ import '../models/place.dart';
 import '../models/recreation_activities.dart';
 import '../models/place_review.dart';
 import 'place_marker_icons.dart';
+import 'linked_place_note.dart';
 
 
 /// Blue marks a recorded facility or service; it does not certify that every
@@ -807,7 +808,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         if (note.isNotEmpty) ...[
           const SizedBox(height: 24),
           heading(Icons.info_outline, '이용 안내 및 주의사항'),
-          panel(Text(note, style: const TextStyle(fontSize: 14, height: 1.65))),
+          panel(LinkedPlaceNote(text: note)),
         ],
         const SizedBox(height: 24),
         heading(Icons.explore_outlined, '주변 관광·레저'),
