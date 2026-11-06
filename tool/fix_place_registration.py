@@ -117,7 +117,7 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
               const SizedBox(height: 18), const Text('서비스 항목 및 금액', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), const SizedBox(height: 6),
               ...prices.entries.map((e) => Card(margin: const EdgeInsets.symmetric(vertical: 4), child: Padding(padding: const EdgeInsets.fromLTRB(4, 4, 10, 4), child: Row(children: [
                 Checkbox(value: selected.contains(e.key), onChanged: saving ? null : (v) => setPageState(() { if (v == true) { selected.add(e.key); } else { selected.remove(e.key); e.value.clear(); } })),
-                Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key) && !saving, decoration: const InputDecoration(hintText: '금액 / 무료', isDense: true))),
+                Expanded(flex: 2, child: Text(e.key)), Expanded(flex: 3, child: TextField(controller: e.value, enabled: selected.contains(e.key) && !saving, inputFormatters: [const PriceThousandsFormatter()], decoration: const InputDecoration(hintText: '금액 / 무료', isDense: true))),
               ])))),
               GridView.count(shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisCount:2,childAspectRatio:3.0,crossAxisSpacing:8,mainAxisSpacing:8,children:noPriceServices.map((service)=>Card(margin:EdgeInsets.zero,child:CheckboxListTile(dense:true,value:selected.contains(service),onChanged:saving?null:(v)=>setPageState((){if(v==true){selected.add(service);}else{selected.remove(service);}}),title:Text(service=='A/S'?'A/S':service=='부품·용품'?'부품/용품':service),controlAffinity:ListTileControlAffinity.leading,contentPadding:const EdgeInsets.symmetric(horizontal:8)))).toList()),
               RecreationPicker(
@@ -131,7 +131,7 @@ method = r'''  Future<void> _openAddPlace(LatLng spot) async {
               const SizedBox(height: 12), DropdownButtonFormField<String>(initialValue: reservation, items: ['예약불필요', '예약필수', '전화문의'].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: saving ? null : (v) => reservation = v ?? reservation, decoration: const InputDecoration(labelText: '예약 여부', border: OutlineInputBorder())),
               const SizedBox(height: 12), TextField(controller: maxHeight, enabled: !saving, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: '진입 최대 높이', hintText: '예: 3.2', suffixText: 'm', border: OutlineInputBorder())),
               const SizedBox(height: 12), TextField(controller: phone, enabled: !saving, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: '문의연락처', border: OutlineInputBorder())),
-              const SizedBox(height: 12), TextField(controller: note, enabled: !saving, maxLines: 3, decoration: const InputDecoration(labelText: '이용방법 / 주의사항', border: OutlineInputBorder())),
+              const SizedBox(height: 12), TextField(controller: note, enabled: !saving, minLines: 3, maxLines: null, keyboardType: TextInputType.multiline, decoration: const InputDecoration(labelText: '이용방법 / 주의사항', border: OutlineInputBorder())),
               const SizedBox(height: 16),
               OutlinedButton.icon(
                 onPressed: saving ? null : () async {
