@@ -31,7 +31,7 @@ class PriceThousandsFormatter extends TextInputFormatter {
     final formatted = formatStoredText(newValue.text);
     if (formatted == newValue.text) return newValue;
 
-    final offset = newValue.selection.extentOffset.clamp(0, newValue.text.length);
+    final offset = newValue.selection.extentOffset.clamp(0, newValue.text.length).toInt();
     final digitsBeforeCaret = RegExp(r'\d')
         .allMatches(newValue.text.substring(0, offset))
         .length;
