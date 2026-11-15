@@ -28,7 +28,8 @@ if wrapper.exists():
 props = Path('android/gradle.properties')
 if props.exists():
     s = props.read_text(encoding='utf-8')
-    s = re.sub(r'^android\.newDsl=.*$', 'android.newDsl=true', s, flags=re.M)
-    s = re.sub(r'^android\.builtInKotlin=.*$', 'android.builtInKotlin=true', s, flags=re.M)
+    s = re.sub(r'^android\.newDsl=.*\\n?', '', s, flags=re.M)
+    s = re.sub(r'^android\.builtInKotlin=.*\\n?', '', s, flags=re.M)
+    s += '\\nandroid.newDsl=false\\nandroid.builtInKotlin=false\\n'
     props.write_text(s, encoding='utf-8')
 print('Pinned Android build stack: AGP 9.1.1 / Gradle 9.3.1')
