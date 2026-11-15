@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>웨이팅 POS</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6fa;color:#172333;font-family:-apple-system,BlinkMacSystemFont,"Noto Sans KR",sans-serif;font-size:16px}
+header{background:#102a46;color:white;padding:18px 18px 14px}header h1{margin:0 0 6px;font-size:24px}header p{opacity:.8;font-size:13px;margin:0}
+main{max-width:1050px;margin:auto;padding:16px}.tabs{display:flex;gap:10px;margin-bottom:16px}.tab{flex:1;border:1px solid #cad5e4;background:white;padding:15px 5px;border-radius:12px;font-size:17px;font-weight:bold;color:#24405c}.tab.on{background:#174873;border-color:#174873;color:white}
+.panel{background:white;border:1px solid #e4e9ef;border-radius:14px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px rgba(15,37,60,.04)}
+h2{font-size:20px;margin:0 0 12px}h3{font-size:16px;margin:0 0 10px}input{width:100%;padding:13px 14px;font-size:17px;border:1px solid #bdcadd;border-radius:9px;background:white;color:#192b3d}
+label{display:block;font-size:14px;font-weight:bold;margin:9px 0 5px}.hint{font-size:13px;color:#64748b;line-height:1.5}.btn{border:0;border-radius:10px;background:#1766ac;color:white;font-weight:bold;font-size:16px;padding:14px 17px;min-height:48px;cursor:pointer}
+.btn:disabled{opacity:.44}.btn.gray{background:#586b80}.btn.green{background:#19845d}.btn.danger{background:#bd4949}.btn.outline{background:#eef4fa;color:#144a74}.full{width:100%}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions .btn{flex:1}
+.muted{color:#657589}.pill{display:inline-block;padding:7px 10px;border-radius:30px;background:#edf1f5;font-size:13px;font-weight:bold}.pill.good{background:#e4f5ec;color:#147d55}.pill.warn{background:#fff0d7;color:#976008}
+.stats{display:flex;gap:9px;flex-wrap:wrap}.stat{flex:1;min-width:112px;padding:16px;background:#eef5fc;border-radius:12px;text-align:center}.stat strong{display:block;font-size:33px;color:#1a5385}.stat span{font-size:13px;color:#64748b}
+.entry{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 0;border-top:1px solid #e8eef5}.entry:first-child{border-top:0}.entry .num{font-size:24px;font-weight:800;color:#164b78}.entry small{font-size:13px;color:#586b80}.entry .buttons{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.entry .buttons button{font-size:14px;padding:9px 10px;min-height:40px}
+#message{display:none;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14px;line-height:1.5;background:#fff4e0;color:#84550d}.section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
+footer{text-align:center;color:#8290a0;font-size:12px;padding:10px 0 24px}.hide{display:none!important}
+@media(max-width:520px){.entry{display:block}.entry .buttons{justify-content:flex-start;margin-top:10px}main{padding:11px}.tab{font-size:15px}.stats .stat strong{font-size:28px}}
+</style></head>
+<body><header><h1>웨이팅 POS</h1><p>매장 직원 전용 · 고객 접수는 QR 모바일 웹으로 진행</p></header>
+<main>
+<div class="tabs"><button type="button" class="tab on" id="tab-dowon" onclick="chooseStore('dowon')">도원부산양곱창</button><button type="button" class="tab" id="tab-starbam" onclick="chooseStore('starbam')">별밤포차</button></div>
+<div id="message" role="alert"></div>
+<section class="panel">
+ <div class="section-title"><h2 id="store-name">도원부산양곱창</h2><span id="store-state" class="pill">조회 중</span></div>
+ <div class="hint">이 앱에서는 매장 접수를 임의로 열지 않습니다. 접수 상태는 서버 관리자가 제어합니다.</div>
+</section>
+<section class="panel" id="staff-login">
+ <h2>직원 인증</h2><p class="hint">매장에 설정된 직원용 비밀번호를 입력하세요. 서버로 암호화된 HTTPS 연결을 사용합니다.</p>
+ <label for="staff-key">직원 비밀번호</label><input type="password" id="staff-key" autocomplete="off" placeholder="직원 비밀번호">
+ <div style="height:12px"></div><button type="button" class="btn full" id="sign-in" onclick="staffLogin()">대기 목록 열기</button>
+</section>
+<div id="pos" class="hide">
+<section class="panel">
+ <div class="section-title"><h2>현재 대기현황</h2><button type="button" class="btn outline" onclick="refresh()">새로고침</button></div>
+ <div class="stats"><div class="stat"><strong id="waiting-count">0</strong><span>대기 중 팀</span></div><div class="stat"><strong id="called-count">0</strong><span>호출 중 팀</span></div><div class="stat"><strong id="all-count">0</strong><span>현재 전체 팀</span></div></div>
+ <div class="hint" id="last-refresh" style="margin:12px 0">서버 연결 중</div>
+ <button type="button" class="btn green full" id="call-next" onclick="doAction('call_next','')">다음 대기팀 호출</button>
+</section>
+<section class="panel"><h2>호출한 팀</h2><div id="called-list"><p class="muted">호출 내역 없음</p></div></section>
+<section class="panel"><h2>대기 중인 팀</h2><div id="waiting-list"><p class="muted">대기 내역 없음</p></div></section>
+<section class="panel"><button class="btn gray full" onclick="signOut()">직원 로그아웃</button></section>
+</div>
+<section class="panel" id="owner-panel">
+ <div class="section-title"><h2>점주 관리</h2><span class="pill">별도 인증</span></div>
+ <p class="hint">점주 계정으로 직원 비밀번호를 재설정할 수 있습니다. 비밀번호는 기기에 저장하지 않습니다.</p>
+ <details><summary style="font-weight:700;padding:8px 0;cursor:pointer">점주 관리 메뉴 열기</summary>
+ <label for="owner-id">점주 아이디</label><input id="owner-id" autocomplete="off" placeholder="점주 아이디">
+ <label for="owner-password">점주 비밀번호</label><input id="owner-password" type="password" autocomplete="off">
+ <div style="height:12px"></div><button type="button" class="btn outline full" onclick="ownerLogin()">점주 로그인 확인</button>
+ <div id="owner-settings" class="hide">
+ <label for="new-staff-key">새 직원 비밀번호 (매장별)</label><input id="new-staff-key" type="password" autocomplete="off" placeholder="새 직원 비밀번호">
+ <div style="height:12px"></div><button type="button" class="btn full" onclick="changeStaffKey()">직원 비밀번호 변경</button>
+ <p class="hint">변경하면 기존 직원 비밀번호는 즉시 사용할 수 없습니다.</p></div></details>
+</section>
+<footer>웨이팅 프로그램 · Android 매장 운영용 v1.0</footer></main>
+<script>
+(function(){var saved;try{saved=localStorage.getItem('waiting_store');}catch(e){}window.store=saved==='starbam'?'starbam':'dowon';window.staffSecret='';window.ownerVerified=false;window.busy=false;chooseStore(window.store);setInterval(function(){if(window.staffSecret&&!window.busy)refresh(true);},12000);setInterval(function(){loadStatus();},45000);})();
+var base='https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/';
+var storeNames={dowon:'도원부산양곱창',starbam:'별밤포차'};
+var items=[];
+function el(id){return document.getElementById(id);}
+function showMessage(t,ok){var m=el('message');m.textContent=t;m.style.display='block';m.style.background=ok?'#e7f7ef':'#fff1dd';m.style.color=ok?'#11704c':'#86500f';}
+function clearMessage(){el('message').style.display='none';}
+function request(path,payload,headers,callback,method){var xhr=new XMLHttpRequest();xhr.open(method||'POST',base+path,true);xhr.timeout=15000;xhr.onreadystatechange=function(){if(xhr.readyState!==4)return;var data={};try{data=JSON.parse(xhr.responseText||'{}');}catch(e){}if(xhr.status>=200&&xhr.status<300){callback(null,data);}else{callback(data.error||('HTTP_'+xhr.status),data);}};xhr.onerror=function(){callback('NETWORK_ERROR',{});};xhr.ontimeout=function(){callback('TIMEOUT',{});};if((method||'POST')!=='GET')xhr.setRequestHeader('Content-Type','application/json');if(headers){for(var k in headers){if(headers.hasOwnProperty(k))xhr.setRequestHeader(k,headers[k]);}}xhr.send((method||'POST')==='GET'?null:JSON.stringify(payload||{}));}
+function friendly(code){var e={UNAUTHORIZED:'직원 비밀번호가 맞지 않습니다.',INVALID_LOGIN:'점주 로그인 정보가 맞지 않습니다.',NETWORK_ERROR:'서버 연결에 실패했습니다. 인터넷 상태를 확인하세요.',TIMEOUT:'서버 응답 시간이 초과됐습니다.',RECALL_TOO_EARLY:'마지막 호출 후 5분이 지나야 다시 호출할 수 있습니다.',NO_SHOW_NOT_ALLOWED:'3회 호출하고 마지막 호출 후 5분이 지나야 미방문 처리할 수 있습니다.',EMPTY:'현재 대기 중인 팀이 없습니다.',AUTH_UNAVAILABLE:'인증 서버에 연결할 수 없습니다.',QUEUE_FAILED:'대기 목록 조회에 실패했습니다.',ACTION_FAILED:'처리에 실패했습니다. 잠시 후 재시도하세요.',PASSWORD_POLICY:'비밀번호 형식이 올바르지 않습니다.'};return e[code]||('처리 오류: '+code);}
+function chooseStore(s){window.store=s;window.staffSecret='';window.ownerVerified=false;items=[];if(!el('tab-dowon'))return;el('store-name').textContent=storeNames[s];el('tab-dowon').className='tab'+(s==='dowon'?' on':'');el('tab-starbam').className='tab'+(s==='starbam'?' on':'');el('staff-login').classList.remove('hide');el('pos').classList.add('hide');el('owner-settings').classList.add('hide');el('staff-key').value='';el('owner-id').value='';el('owner-password').value='';el('new-staff-key').value='';clearMessage();try{localStorage.setItem('waiting_store',s);}catch(e){}loadStatus();}
+function loadStatus(){request('restaurant-waiting-status?store='+encodeURIComponent(window.store),{},null,function(err,d){var st=el('store-state');if(err){st.className='pill warn';st.textContent='상태 확인 불가';return;}st.className='pill '+(d.registration_open?'good':'warn');st.textContent=d.registration_open?'접수 열림':'접수 닫힘';},'GET');}
+function staffLogin(){var key=el('staff-key').value;if(!key){showMessage('직원 비밀번호를 입력해 주세요.');return;}el('sign-in').disabled=true;request('restaurant-waiting-staff',{store:window.store,action:'queue'},{'x-staff-key':key},function(err,d){el('sign-in').disabled=false;if(err){showMessage(friendly(err));return;}window.staffSecret=key;el('staff-key').value='';el('staff-login').classList.add('hide');el('pos').classList.remove('hide');clearMessage();render(d.entries||[]);setStamp();});}
+function refresh(silent){if(!window.staffSecret||window.busy)return;request('restaurant-waiting-staff',{store:window.store,action:'queue'},{'x-staff-key':window.staffSecret},function(err,d){if(err){if(err==='UNAUTHORIZED'){signOut();showMessage('직원 비밀번호가 변경되었습니다. 다시 인증하세요.');}else if(!silent)showMessage(friendly(err));return;}render(d.entries||[]);setStamp();});}
+function setStamp(){var date=new Date();el('last-refresh').textContent='마지막 갱신 '+date.toLocaleTimeString('ko-KR')+' · 12초마다 자동 갱신';}
+function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function render(list){items=list;var waiting=[],called=[];for(var i=0;i<items.length;i++){if(items[i].status==='waiting')waiting.push(items[i]);if(items[i].status==='called')called.push(items[i]);}el('waiting-count').textContent=waiting.length;el('called-count').textContent=called.length;el('all-count').textContent=items.length;el('call-next').disabled=waiting.length===0;el('waiting-list').innerHTML=waiting.length?waiting.map(function(x){return entryMarkup(x,false);}).join(''):'<p class="muted">현재 대기 중인 팀이 없습니다.</p>';el('called-list').innerHTML=called.length?called.map(function(x){return entryMarkup(x,true);}).join(''):'<p class="muted">호출 중인 팀이 없습니다.</p>';}
+function entryMarkup(x,called){var id=esc(x.entry_id),n=esc(x.queue_number),party=esc(x.party_size),last4=esc(x.phone_last4||'');var s='<div class="entry"><div><div class="num">'+n+'번 <small>'+party+'명 · 휴대폰 끝 '+last4+'</small></div><small>'+(called?'호출 '+esc(x.call_count)+'회':'대기 중')+'</small></div>';if(called){var mins=x.last_called_at?(Date.now()-Date.parse(x.last_called_at))/60000:0;var due=mins>=5;s+='<div class="buttons"><button class="btn green" onclick="doAction(\'seated\',\''+id+'\')">입장완료</button><button class="btn outline" onclick="doAction(\'recall\',\''+id+'\')" '+(x.call_count>=3||!due?'disabled':'')+'>재호출</button><button class="btn danger" onclick="doAction(\'no_show\',\''+id+'\')" '+(x.call_count<3||!due?'disabled':'')+'>미방문</button></div>';}return s+'</div>';}
+function doAction(action,id){if(!window.staffSecret||window.busy)return;if(action==='no_show'&&!confirm('미방문으로 처리하시겠습니까?'))return;window.busy=true;el('call-next').disabled=true;var body={store:window.store,action:action};if(id)body.entry_id=id;request('restaurant-waiting-staff',body,{'x-staff-key':window.staffSecret},function(err,d){window.busy=false;if(err){showMessage(friendly(err));refresh(true);return;}if(d.ok===false){showMessage(friendly(d.reason||'ACTION_FAILED'));refresh(true);return;}var msg={call_next:'다음 대기팀 호출 완료',recall:'재호출 완료',seated:'입장완료 처리',no_show:'미방문 처리'};showMessage(msg[action]||'처리 완료',true);refresh(true);});}
+function signOut(){window.staffSecret='';items=[];el('staff-login').classList.remove('hide');el('pos').classList.add('hide');el('staff-key').value='';clearMessage();}
+function ownerLogin(){var u=el('owner-id').value.trim(),p=el('owner-password').value;if(!u||!p){showMessage('점주 아이디와 비밀번호를 입력해 주세요.');return;}request('restaurant-waiting-owner-login',{store:window.store,username:u,password:p,action:'login'},null,function(err,d){if(err||!d.ok){showMessage(friendly(err||'INVALID_LOGIN'));return;}window.ownerVerified=true;el('owner-settings').classList.remove('hide');showMessage('점주 인증이 완료되었습니다.',true);});}
+function changeStaffKey(){if(!window.ownerVerified){showMessage('점주 인증을 먼저 완료해 주세요.');return;}var next=el('new-staff-key').value;if(next.length<6||next.length>128){showMessage('직원 비밀번호는 6~128자로 설정하세요.');return;}if(!confirm('이 매장의 기존 직원 비밀번호가 즉시 변경됩니다. 계속하시겠습니까?'))return;request('restaurant-waiting-owner-login',{store:window.store,username:el('owner-id').value.trim(),password:el('owner-password').value,action:'set_staff_password',new_password:next},null,function(err,d){if(err||!d.ok){showMessage(friendly(err||'CHANGE_FAILED'));return;}window.ownerVerified=false;el('owner-settings').classList.add('hide');el('owner-password').value='';el('new-staff-key').value='';signOut();showMessage('직원 비밀번호가 변경되었습니다. 새 비밀번호로 다시 인증하세요.',true);});}
+</script></body></html>
