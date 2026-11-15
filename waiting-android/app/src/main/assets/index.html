@@ -40,7 +40,68 @@ small,.note{font-size:14px;color:#627589;line-height:1.6}
 .foot{text-align:center;color:#889cad;font-size:13px;padding:18px}
 @media(max-width:760px){header{padding:14px 18px}.brand{font-size:23px}.clock{font-size:14px}main{padding:11px}.top h1{font-size:26px}.grid{grid-template-columns:1fr;gap:12px}.section{padding:19px}.key{min-height:58px}.numberbox{font-size:31px}.success{margin:10px auto;padding:20px}.big{font-size:76px}.setup{margin:20px auto;padding:22px}}
 @media(max-width:410px){.actions{flex-direction:column}.round{width:65px;height:65px}.counter{gap:10px}}
+
+/* Adaptive kiosk viewport: no scroll bars, one screen in any orientation. */
+html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+#kioskStage{position:absolute;top:0;left:0;transform-origin:0 0;width:1024px;overflow:visible}
+#kioskStage header{min-height:56px;padding:10px 23px}
+#kioskStage .brand{font-size:24px}
+#kioskStage .sub{font-size:13px;margin-top:3px}
+#kioskStage main{padding:13px 20px 5px;max-width:100%}
+#kioskStage .top{margin-bottom:10px}
+#kioskStage .top h1{font-size:24px;margin:0 0 2px}
+#kioskStage .tag{padding:7px 11px}
+#kioskStage .grid{grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);gap:14px}
+#kioskStage .section{padding:15px 20px}
+#kioskStage h2{font-size:20px;margin:0 0 10px}
+#kioskStage .numberbox{padding:9px;font-size:32px;margin-bottom:10px;border-radius:10px}
+#kioskStage .keypad{gap:6px}
+#kioskStage .key{min-height:53px;border-radius:9px;font-size:25px}
+#kioskStage .key.utility{font-size:16px}
+#kioskStage .counter{margin:14px auto 8px;gap:12px}
+#kioskStage .round{width:65px;height:60px;font-size:38px}
+#kioskStage .party{font-size:52px}
+#kioskStage .party span{font-size:19px}
+#kioskStage .consent{margin:12px 0 10px;padding:11px}
+#kioskStage .consent label{font-size:16px}
+#kioskStage .consent input{width:22px;height:22px}
+#kioskStage .primary{padding:12px;font-size:20px;min-height:57px}
+#kioskStage .info{margin-top:9px;padding:10px 13px;font-size:14px}
+#kioskStage .foot{padding:10px 0 0}
+#kioskStage .setup{margin:18px auto;padding:25px}
+#kioskStage .setup .store{padding:18px}
+#kioskStage .success{margin:10px auto;padding:24px}
+#kioskStage .success h1{font-size:27px}
+#kioskStage .big{font-size:86px}
+#kioskStage .big small{font-size:36px}
+#kioskStage .metrics{margin:15px auto}
+#kioskStage .metric{padding:12px 5px}
+#kioskStage .metric strong{font-size:30px}
+#kioskStage .actions button{padding:12px}
+#kioskStage.portrait{width:560px}
+#kioskStage.portrait header{padding:10px 14px}
+#kioskStage.portrait .brand{font-size:22px}
+#kioskStage.portrait .grid{grid-template-columns:1fr;gap:9px}
+#kioskStage.portrait main{padding:11px}
+#kioskStage.portrait .top{margin-bottom:8px}
+#kioskStage.portrait .section{padding:12px 17px}
+#kioskStage.portrait h2{font-size:19px;margin-bottom:7px}
+#kioskStage.portrait .numberbox{font-size:29px;margin-bottom:7px;padding:7px}
+#kioskStage.portrait .key{min-height:45px;font-size:24px}
+#kioskStage.portrait .key.utility{font-size:17px}
+#kioskStage.portrait .counter{margin:7px auto 4px}
+#kioskStage.portrait .round{height:54px}
+#kioskStage.portrait .party{font-size:44px}
+#kioskStage.portrait .consent{margin:7px 0 8px;padding:9px 12px}
+#kioskStage.portrait .primary{min-height:48px;padding:8px}
+#kioskStage.portrait .info{margin-top:5px;padding:6px 10px}
+#kioskStage.portrait .success{max-width:520px;margin:10px auto}
+#kioskStage.portrait .big{font-size:77px}
+#kioskStage.portrait .foot{padding:5px 0}
+#kioskStage .error{font-size:14px;margin:6px 0;padding:8px 10px}
+
 </style></head><body>
+<div id="kioskStage">
 <header><div><div id="headerName" class="brand">웨이팅 고객접수</div><div class="sub">전화번호 · 방문 인원 · 동의 후 바로 접수</div></div>
 <div class="headright"><div class="clock" id="clock"></div><span id="availability" class="pill">연결 확인 중</span></div></header>
 <main>
@@ -70,7 +131,7 @@ small,.note{font-size:14px;color:#627589;line-height:1.6}
 <section id="success" class="card success hide">
 <h1 id="successTitle">웨이팅 접수 완료</h1><div class="big"><span id="queueNum">0</span><small>번</small></div>
 <p id="successName"></p><div class="metrics"><div class="metric"><strong id="successParty">2명</strong><span>방문 인원</span></div><div class="metric"><strong id="successAhead">—</strong><span>앞 대기팀 수</span></div></div>
-<p class="note">접수번호를 확인해 주세요.<br>알림 발송 여부는 매장 운영 설정에 따릅니다.</p>
+<p class="note" id="notifyStatus">카카오 알림톡 발송 상태를 확인하고 있습니다.</p>
 <div class="actions"><button onclick="reset()">확인 · 첫 화면</button><button class="danger" onclick="cancelTicket()">방금 접수 취소</button></div>
 <div id="successError" class="error hide"></div><div id="countdown" class="note" style="margin-top:23px"></div>
 </section>
@@ -108,13 +169,22 @@ function changeParty(n){if(busy)return;people=Math.max(1,Math.min(20,people+n));
 function formError(m){e('formError').textContent=m;show('formError')}
 function clearForm(){phone='';people=2;busy=false;e('party').innerHTML='2<span>명</span>';e('consent').checked=false;hide('formError');drawPhone()}
 function register(){if(busy||!open||!valid()||!e('consent').checked){formError('전화번호와 방문 인원, 필수 동의를 확인해 주세요.');return}busy=true;checkForm();e('register').textContent='등록 처리 중...';var savedStore=store;
-api('restaurant-waiting-register','POST',{store:store,phone:phone,party_size:people,privacy_consent:true},function(err,res){
+api('restaurant-waiting-register-v2','POST',{store:store,phone:phone,party_size:people,privacy_consent:true},function(err,res){
 busy=false;e('register').textContent='웨이팅 등록하기';checkForm();if(savedStore!==store)return;
 if(err){formError(message(err));if(err==='REGISTRATION_CLOSED')status();return}
 if(!res.token||!res.queue_number){formError('접수번호를 확인할 수 없습니다. 매장에 문의해 주세요.');return}
 token=res.token;e('successTitle').textContent='웨이팅 접수 완료';e('queueNum').textContent=res.queue_number;e('successName').textContent=names[store]+' · 대기번호 '+res.queue_number+'번';
-e('successParty').textContent=people+'명';e('successAhead').textContent='조회 중';hide('successError');phone='';e('consent').checked=false;page('success');readTicket();startTimer()
+e('successParty').textContent=people+'명';e('successAhead').textContent='조회 중';hide('successError');phone='';e('consent').checked=false;page('success');showNotify(res.notification_status);readTicket();startTimer();fitKiosk()
 })}
+function showNotify(state){
+ var value={
+ accepted:'카카오 알림톡 발송 요청이 접수됐습니다. 실제 도착 여부는 발송사 처리 결과에 따릅니다.',
+ not_configured:'알림톡 발송 서비스가 아직 연결되지 않았습니다. 웨이팅 접수는 완료됐습니다.',
+ rejected:'알림톡 발송 요청에 실패했습니다. 접수번호를 기억해 주세요.',
+ unknown:'알림톡 발송 처리 결과를 확인할 수 없습니다. 접수번호를 기억해 주세요.'
+ };
+ e('notifyStatus').textContent=value[state]||'카카오 알림톡 연결을 확인 중입니다. 접수번호를 기억해 주세요.';
+}
 function readTicket(){var hold=token;api('restaurant-waiting-ticket','POST',{action:'read',token:hold},function(err,res){
 if(hold!==token)return;e('successAhead').textContent=err?'—':String(res.ahead_count||0)+'팀'
 })}
@@ -130,4 +200,28 @@ function kioskBack(){if(!e('success').classList.contains('hide'))reset()}
 function init(){now();setInterval(now,15000);setInterval(function(){if(store&&e('success').classList.contains('hide'))status()},30000);
 var s='';try{s=localStorage.getItem('waiting_kiosk_store')||''}catch(err){}if(names[s])apply(s);else{page('setup');e('availability').textContent='초기 설정'}}
 init();
-</script></body></html>
+
+/* Fits the entire current page onto the physical Android WebView viewport. */
+function fitKiosk(){
+ var stage=e('kioskStage');if(!stage)return;
+ var vw=document.documentElement.clientWidth||window.innerWidth;
+ var vh=document.documentElement.clientHeight||window.innerHeight;
+ if(!vw||!vh)return;
+ var portrait=vh>vw;
+ stage.className=portrait?'portrait':'landscape';
+ var naturalW=portrait?560:1024;
+ stage.style.width=naturalW+'px';
+ stage.style.transform='none';
+ var naturalH=Math.max(stage.scrollHeight,stage.offsetHeight,1);
+ var scale=Math.min(vw/naturalW,vh/naturalH);
+ stage.style.left=Math.max(0,(vw-naturalW*scale)/2)+'px';
+ stage.style.top=Math.max(0,(vh-naturalH*scale)/2)+'px';
+ stage.style.transform='scale('+scale+')';
+}
+window.addEventListener('resize',fitKiosk);
+window.addEventListener('orientationchange',function(){setTimeout(fitKiosk,150)});
+document.addEventListener('click',function(){setTimeout(fitKiosk,50)},true);
+setInterval(fitKiosk,850);
+
+fitKiosk();
+</script></div></body></html>
