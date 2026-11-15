@@ -1,13 +1,24 @@
-# 웨이팅 POS · 안드로이드 매장 운영용 v1.0
-- 대상: 도원부산양곱창(dowon), 별밤포차(starbam)
-- Android 최소 버전: 6.0 (API 23), 구형 Galaxy Tab E 지원
-- 직원용 매장키로 인증하고 대기팀 조회, 다음팀 호출, 5분 후 재호출, 입장/미방문 처리
-- 점주 로그인 및 직원용 비밀번호 변경
-- 서버: 기존 Supabase Edge Functions (restaurant-waiting-staff, -status, -owner-login)
-- 인증키, 점주 비밀번호는 빌드에 포함하지 않으며 앱 저장소에 저장하지 않음
-- 별도의 고객용 앱 없음. 고객 접수 QR·모바일웹·메시지 발송은 별도 웹/서버 작업
-- 현 백엔드 두 매장 registration_open=false. 실제 고객 접수는 관리자가 서버에서 열어야 함.
-- 임시 테스트 배포: Android Debug APK. Play Store 정식 배포용 서명 APK는 아님.
-## 자동 빌드
-GitHub Actions > Build Waiting POS APK. 브랜치 waiting-android.
-결과: artifact waiting-pos-v1-android6-apk > app-debug.apk
+# 웨이팅 고객 접수 태블릿 v1.0
+고객이 매장 입구 태블릿에 직접 휴대전화번호와 방문 인원을 입력하는 **고객 접수 전용** 앱입니다.
+
+- Android 6.0(API 23) 이상, Galaxy Tab E 등 구형 안드로이드 태블릿 지원
+- 최초 실행 1회 도원부산양곱창 또는 별밤포차 매장 지정
+- 고객에게 매장 선택 메뉴를 보여주지 않음. 매장 변경은 Android 앱 데이터 초기화
+- 휴대전화번호 입력용 키패드, 방문 인원(1~20명), 개인정보 동의
+- 휴대폰 OTP 본인 인증 및 회원가입 없음
+- 서버 중복 접수·요청 과다 제한 적용
+- 접수 번호, 인원, 앞 대기팀 수 표시, 방금 접수 취소 가능
+- 개인정보 보호를 위해 접수 완료 40초 후 자동 초기화
+- HTTPS Supabase Edge Functions 연동, 고객 전화번호/접수 토큰 기기 저장 안 함
+- 화면 켜짐 유지. 일반 Android 앱으로 MDM 수준 완전 잠금은 제공하지 않음.
+- 별도 고객 개인용 앱 없음. 고객 본인 대기현황 모바일 웹/QR은 추가 배포 기능.
+- 카카오 알림톡 발송은 별도 연동 필요.
+
+## 빌드 및 설치
+GitHub Actions의 Build Waiting Customer APK 결과 artifact waiting-customer-registration-v1-apk에서 waiting-customer-v1.apk를 다운로드.
+Debug 서명 APK이므로 Play Store 정식 출시용은 아님.
+
+## 현재 서버 제약
+도원부산양곱창과 별밤포차 모두 registration_open=false.
+개인정보처리방침, 보유기간, 알림톡 연동과 접수 서버 설정 검증 전에는 운영용으로 접수를 열지 마세요.
+앱 설치 후 접수 UI는 확인할 수 있으나 닫힌 상태에서 실제 대기 등록은 불가합니다.

@@ -1,4 +1,4 @@
-name: Build Waiting POS APK
+name: Build Waiting Customer APK
 on:
   push:
     branches: [waiting-android]
@@ -20,19 +20,15 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Check Android SDK availability
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls "$ANDROID_HOME/platforms" || true
-          ls "$ANDROID_HOME/build-tools" || true
-      - name: Build installable APK (Android 6.0+)
+      - name: Build installable Android 6+ customer APK
         run: gradle --no-daemon -p waiting-android :app:assembleDebug
-      - name: Check APK
+      - name: Verify installable APK
         run: |
           test -s waiting-android/app/build/outputs/apk/debug/app-debug.apk
-          sha256sum waiting-android/app/build/outputs/apk/debug/app-debug.apk
+          cp waiting-android/app/build/outputs/apk/debug/app-debug.apk waiting-customer-v1.apk
+          sha256sum waiting-customer-v1.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: waiting-pos-v1-android6-apk
-          path: waiting-android/app/build/outputs/apk/debug/app-debug.apk
+          name: waiting-customer-registration-v1-apk
+          path: waiting-customer-v1.apk
           retention-days: 30
