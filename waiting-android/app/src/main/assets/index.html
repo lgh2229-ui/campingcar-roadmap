@@ -54,7 +54,7 @@ footer{text-align:center;color:#8290a0;font-size:12px;padding:10px 0 24px}.hide{
 </section>
 <footer>웨이팅 프로그램 · Android 매장 운영용 v1.0</footer></main>
 <script>
-(function(){var saved;try{saved=localStorage.getItem('waiting_store');}catch(e){}window.store=saved==='starbam'?'starbam':'dowon';window.staffSecret='';window.ownerVerified=false;window.busy=false;chooseStore(window.store);setInterval(function(){if(window.staffSecret&&!window.busy)refresh(true);},12000);setInterval(function(){loadStatus();},45000);})();
+
 var base='https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/';
 var storeNames={dowon:'도원부산양곱창',starbam:'별밤포차'};
 var items=[];
@@ -75,4 +75,5 @@ function doAction(action,id){if(!window.staffSecret||window.busy)return;if(actio
 function signOut(){window.staffSecret='';items=[];el('staff-login').classList.remove('hide');el('pos').classList.add('hide');el('staff-key').value='';clearMessage();}
 function ownerLogin(){var u=el('owner-id').value.trim(),p=el('owner-password').value;if(!u||!p){showMessage('점주 아이디와 비밀번호를 입력해 주세요.');return;}request('restaurant-waiting-owner-login',{store:window.store,username:u,password:p,action:'login'},null,function(err,d){if(err||!d.ok){showMessage(friendly(err||'INVALID_LOGIN'));return;}window.ownerVerified=true;el('owner-settings').classList.remove('hide');showMessage('점주 인증이 완료되었습니다.',true);});}
 function changeStaffKey(){if(!window.ownerVerified){showMessage('점주 인증을 먼저 완료해 주세요.');return;}var next=el('new-staff-key').value;if(next.length<6||next.length>128){showMessage('직원 비밀번호는 6~128자로 설정하세요.');return;}if(!confirm('이 매장의 기존 직원 비밀번호가 즉시 변경됩니다. 계속하시겠습니까?'))return;request('restaurant-waiting-owner-login',{store:window.store,username:el('owner-id').value.trim(),password:el('owner-password').value,action:'set_staff_password',new_password:next},null,function(err,d){if(err||!d.ok){showMessage(friendly(err||'CHANGE_FAILED'));return;}window.ownerVerified=false;el('owner-settings').classList.add('hide');el('owner-password').value='';el('new-staff-key').value='';signOut();showMessage('직원 비밀번호가 변경되었습니다. 새 비밀번호로 다시 인증하세요.',true);});}
+(function(){var saved;try{saved=localStorage.getItem('waiting_store');}catch(e){}window.store=saved==='starbam'?'starbam':'dowon';window.staffSecret='';window.ownerVerified=false;window.busy=false;chooseStore(window.store);setInterval(function(){if(window.staffSecret&&!window.busy)refresh(true);},12000);setInterval(function(){loadStatus();},45000);})();
 </script></body></html>
