@@ -70,7 +70,6 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.7'
           cache: true
       - name: Force Flutter to use Java 17
         run: flutter config --jdk-dir="$JAVA_HOME"
