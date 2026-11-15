@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'admin_notification_log_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'admin_home_screen.dart';
 import 'home_screen.dart';
@@ -11,9 +12,26 @@ import '../repositories/local_repository.dart';
 import '../models/app_user.dart';
 class AdminManagementScreen extends StatefulWidget{const AdminManagementScreen({super.key});@override State<AdminManagementScreen> createState()=>_S();}
 class _S extends State<AdminManagementScreen> with SingleTickerProviderStateMixin{
- final db=Supabase.instance.client;final memberSearch=TextEditingController();late final TabController tabs;List<Map<String,dynamic>> market=[],members=[],feedback=[],reports=[],reviewTasks=[];List<Place> places=[];bool loading=true;String memberQuery='';bool approvalCompleted=false,feedbackCompleted=false,reportCompleted=false;
- @override void initState(){super.initState();tabs=TabController(length:4,vsync:this);_load();}@override void dispose(){memberSearch.dispose();tabs.dispose();super.dispose();}
- Future<void> _load()async{setState(()=>loading=true);try{final a=await Future.wait([db.from('vehicle_market_listings').select().order('created_at',ascending:false),db.from('profiles').select().order('created_at',ascending:false),db.from('app_feedback').select().order('created_at',ascending:false),db.from('vehicle_market_reports').select().order('created_at',ascending:false),db.from('review_admin_tasks').select('*, reviews(id,author_id,body,status,photo_urls), places(id,name,address,latitude,longitude)').order('created_at',ascending:false),db.from('places').select().order('created_at',ascending:false)]);if(mounted)setState((){market=List<Map<String,dynamic>>.from(a[0]);members=List<Map<String,dynamic>>.from(a[1]);feedback=List<Map<String,dynamic>>.from(a[2]);reports=List<Map<String,dynamic>>.from(a[3]);reviewTasks=List<Map<String,dynamic>>.from(a[4]);places=List<Map<String,dynamic>>.from(a[5]).map(Place.fromJson).toList();});}finally{if(mounted)setState(()=>loading=false);}}
+ final db=Supabase.instance.client;final memberSearch=TextEditingController();late final TabController tabs;List<Map<String,dynamic>> market=[],members=[],feedback=[],reports=[],reviewTasks=[];List<Place> places=[];bool loading=true;int newMemberCount=0;String memberQuery='';bool approvalCompleted=false,feedbackCompleted=false,reportCompleted=false;
+ @override void initState(){super.initState();tabs=TabController(length:5,vsync:this);tabs.addListener(() { if (!tabs.indexIsChanging && tabs.index==1) _ackNewMembers(); });_load();}@override void dispose(){memberSearch.dispose();tabs.dispose();super.dispose();}
+ Future<void> _load()async{setState(()=>loading=true);try{final a=await Future.wait([db.from('vehicle_market_listings').select().order('created_at',ascending:false),db.from('profiles').select().order('created_at',ascending:false),db.from('app_feedback').select().order('created_at',ascending:false),db.from('vehicle_market_reports').select().order('created_at',ascending:false),db.from('review_admin_tasks').select('*, reviews(id,author_id,body,status,photo_urls), places(id,name,address,latitude,longitude)').order('created_at',ascending:false),db.from('places').select().order('created_at',ascending:false),db.from('notifications').select('id').eq('user_id',db.auth.currentUser!.id).eq('kind','new_member').eq('is_read',false)]);if(mounted)setState((){market=List<Map<String,dynamic>>.from(a[0]);members=List<Map<String,dynamic>>.from(a[1]);feedback=List<Map<String,dynamic>>.from(a[2]);reports=List<Map<String,dynamic>>.from(a[3]);reviewTasks=List<Map<String,dynamic>>.from(a[4]);places=List<Map<String,dynamic>>.from(a[5]).map(Place.fromJson).toList();newMemberCount=(a[6] as List).length;});}finally{if(mounted)setState(()=>loading=false);}}
+ Future<void> _ackNewMembers() async {
+   if (newMemberCount==0) return;
+   try {
+     await db.from('notifications').update({'is_read':true})
+       .eq('user_id',db.auth.currentUser!.id).eq('kind','new_member').eq('is_read',false);
+     if (mounted) setState(()=>newMemberCount=0);
+   } catch(e) { if (mounted) msg('신규 회원 확인 처리 실패: $e'); }
+ }
+ Widget _memberBadge() => Row(mainAxisSize:MainAxisSize.min,children:[
+   const Text('회원'),if(newMemberCount>0)...[
+     const SizedBox(width:5),
+     Container(padding:const EdgeInsets.symmetric(horizontal:6,vertical:2),
+       decoration:BoxDecoration(color:Colors.red,borderRadius:BorderRadius.circular(12)),
+       child:Text(newMemberCount>99?'99+':'$newMemberCount',
+         style:const TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.bold)))
+   ]
+ ]);
  String _userId(Map<String,dynamic>x)=>'${x['username']??x['user_id']??''}'.trim();
  String _nickname(Map<String,dynamic>x)=>'${x['nickname']??x['display_name']??''}'.trim();
  String _memberTitle(Map<String,dynamic>x){final a=_userId(x),b=_nickname(x);return a.isNotEmpty&&b.isNotEmpty?'$a · $b':a.isNotEmpty?a:b.isNotEmpty?b:'회원정보 없음';}
@@ -267,5 +285,5 @@ Padding(padding:const EdgeInsets.fromLTRB(12,12,12,4),child:SegmentedButton<bool
   ]);
  }
  Widget _memberTab(){final r=_filteredMembers;return Column(children:[Padding(padding:const EdgeInsets.fromLTRB(12,12,12,0),child:Align(alignment:Alignment.centerLeft,child:Text('총 회원수: ${members.length}명',style:const TextStyle(fontWeight:FontWeight.bold)))),Padding(padding:const EdgeInsets.all(12),child:TextField(controller:memberSearch,onChanged:(v)=>setState(()=>memberQuery=v),decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'아이디 · 닉네임 통합검색',border:OutlineInputBorder()))),Expanded(child:ListView.builder(itemCount:r.length,itemBuilder:(_,i){final x=r[i];return ListTile(title:Text(_memberTitle(x)),subtitle:Text('상태: ${x['account_status']??'active'}'),onTap:()=>_showMember(x),trailing:PopupMenuButton<String>(onSelected:(v)=>_member(x,v),itemBuilder:(_)=>const[PopupMenuItem(value:'active',child:Text('정상 복구')),PopupMenuItem(value:'suspended',child:Text('자격정지')),PopupMenuItem(value:'withdrawn',child:Text('탈퇴 처리'))]));}))]);}
- @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('관리자 통합관리'),bottom:TabBar(controller:tabs,isScrollable:true,tabs:const[Tab(text:'장소승인'),Tab(text:'회원'),Tab(text:'의견'),Tab(text:'신고')])),body:loading?const Center(child:CircularProgressIndicator()):TabBarView(controller:tabs,children:[_approvalTab(),_memberTab(),_feedbackTab(),_reportTab()]));
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('관리자 통합관리'),bottom:TabBar(controller:tabs,isScrollable:true,tabs:const[Tab(text:'장소승인'),Tab(child:_memberBadge()),Tab(text:'의견'),Tab(text:'신고'),Tab(text:'알림 로그')])),body:loading?const Center(child:CircularProgressIndicator()):TabBarView(controller:tabs,children:[_approvalTab(),_memberTab(),_feedbackTab(),_reportTab(),const AdminNotificationLogScreen()]));
 }
