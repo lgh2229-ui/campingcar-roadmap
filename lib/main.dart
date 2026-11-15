@@ -11,6 +11,7 @@ import 'repositories/auth_repository.dart';
 import 'repositories/local_repository.dart';
 import 'repositories/supabase_repository.dart';
 import 'screens/admin_home_screen.dart';
+import 'screens/admin_notification_log_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/recovery_screen.dart';
@@ -123,7 +124,7 @@ class _CampingCarRoadmapAppState extends State<CampingCarRoadmapApp> {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   Map<String,dynamic>? _pendingNotification;
   void _handleNotification(Map<String,dynamic> event){_pendingNotification=event;_openNotification();}
-  void _openNotification(){if(!mounted||!ready||user==null||_pendingNotification==null)return;final event=_pendingNotification!;final id='${event['reference_id']??''}';if(id.isEmpty)return;_pendingNotification=null;final kind='${event['kind']??''}'.toLowerCase();final navigator=_navigatorKey.currentState;if(navigator==null){_pendingNotification=event;return;}if(kind.contains('place')||kind.contains('location')){navigator.push(MaterialPageRoute(builder:(_)=>user!.isAdministrator?AdminHomeScreen(user:user!,auth:auth,data:data,onUserChanged:(u)=>setState(()=>user=u),onLogout:_logout,focusPlaceId:id):HomeScreen(user:user!,auth:auth,data:data,onUserChanged:(u)=>setState(()=>user=u),onLogout:_logout,focusPlaceId:id)));}else if(user!.isAdministrator){navigator.push(MaterialPageRoute(builder:(_)=>AdminHomeScreen(user:user!,auth:auth,data:data,onUserChanged:(u)=>setState(()=>user=u),onLogout:_logout)));}}
+  void _openNotification(){if(!mounted||!ready||user==null||_pendingNotification==null)return;final event=_pendingNotification!;final id='${event['reference_id']??''}';if(id.isEmpty)return;_pendingNotification=null;final kind='${event['kind']??''}'.toLowerCase();final navigator=_navigatorKey.currentState;if(navigator==null){_pendingNotification=event;return;}if(kind.contains('place')||kind.contains('location')){navigator.push(MaterialPageRoute(builder:(_)=>user!.isAdministrator?AdminHomeScreen(user:user!,auth:auth,data:data,onUserChanged:(u)=>setState(()=>user=u),onLogout:_logout,focusPlaceId:id):HomeScreen(user:user!,auth:auth,data:data,onUserChanged:(u)=>setState(()=>user=u),onLogout:_logout,focusPlaceId:id)));}else if(user!.isAdministrator){navigator.push(MaterialPageRoute(builder:(_)=>const AdminNotificationLogScreen()));}}
 
 
   @override
