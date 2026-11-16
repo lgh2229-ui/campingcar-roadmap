@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -72,26 +71,8 @@ Future<void> main() async {
 
   runApp(CampingCarRoadmapApp(client: client, startupError: startupError));
 
-  // Defer native Naver Map initialization until after the first Flutter frame.
-  // Never block login if the native map fails to initialise.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    Future<void>(() async {
-    if (AppConfig.naverMapClientId.isNotEmpty) {
-    try {
-      await FlutterNaverMap().init(
-        clientId: AppConfig.naverMapClientId,
-        onAuthFailed: (error) {
-          AppConfig.naverMapFailed = true;
-          debugPrint('Naver Maps authentication error: ${error.runtimeType}');
-        },
-      );
-    } catch (error) {
-      AppConfig.naverMapFailed = true;
-      debugPrint('Naver Maps init failed, retaining original map: $error');
-    }
-    }
-    });
-  });
+  // Native map initialization is deferred until a map screen actually needs it.
+  // This avoids touching Naver's native SDK during Android app launch.
 
   // Start optional push services only after Flutter has rendered the app.
   // A native Firebase/FCM failure must never block the first app frame.
