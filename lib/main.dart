@@ -70,9 +70,13 @@ Future<void> main() async {
     }
   }
 
-  // Load the native Naver Map SDK only when this build has a valid client ID.
+  runApp(CampingCarRoadmapApp(client: client, startupError: startupError));
+
+  // Defer native Naver Map initialization until after the first Flutter frame.
   // Never block login if the native map fails to initialise.
-  if (AppConfig.naverMapClientId.isNotEmpty) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future<void>(() async {
+    if (AppConfig.naverMapClientId.isNotEmpty) {
     try {
       await FlutterNaverMap().init(
         clientId: AppConfig.naverMapClientId,
@@ -85,9 +89,9 @@ Future<void> main() async {
       AppConfig.naverMapFailed = true;
       debugPrint('Naver Maps init failed, retaining original map: $error');
     }
-  }
-
-  runApp(CampingCarRoadmapApp(client: client, startupError: startupError));
+    }
+    });
+  });
 
   // Start optional push services only after Flutter has rendered the app.
   // A native Firebase/FCM failure must never block the first app frame.
