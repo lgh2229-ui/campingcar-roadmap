@@ -72,24 +72,29 @@ Future<void> main() async {
 
   runApp(CampingCarRoadmapApp(client: client, startupError: startupError));
 
-  // Initialize the Naver native SDK after the first frame, never before runApp.
+  // Start the native SDK after the first frame so its platform channel
+  // cannot block app startup. HomeScreen renders a fallback map until the
+  // asynchronous init succeeds; never create NaverMap before this point.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     Future<void>(() async {
       if (AppConfig.naverMapClientId.trim().isEmpty) {
-        AppConfig.naverMapFailed = true;
+        AppConfig.markNaverMapUnavailable();
         debugPrint('Naver Map client ID missing from build configuration');
         return;
       }
       try {
         await FlutterNaverMap().init(
-          clientId: AppConfig.naverMapClientId,
+          clientId: AppConfig.naverMapClientId.trim(),
           onAuthFailed: (error) {
-            AppConfig.naverMapFailed = true;
+            // Authentication can fail after init returns and the map appears.
+            // Notify listeners immediately to remove the broken native view.
+            AppConfig.markNaverMapUnavailable();
             debugPrint('Naver Map authorization failed: $error');
           },
         );
+        AppConfig.markNaverMapInitialized();
       } catch (error, stackTrace) {
-        AppConfig.naverMapFailed = true;
+        AppConfig.markNaverMapUnavailable();
         debugPrint('Naver Map initialization error: $error');
         debugPrintStack(stackTrace: stackTrace);
       }
