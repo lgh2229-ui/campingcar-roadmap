@@ -127,6 +127,11 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then exit 1; fi
+      - name: Verify Naver Maps client ID secret
+        env:
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+        run: |
+          if [ -z "$NAVER_MAP_CLIENT_ID" ]; then echo "FATAL: NAVER_MAP_CLIENT_ID GitHub secret is missing"; exit 1; fi
       - name: Build debug APK
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
