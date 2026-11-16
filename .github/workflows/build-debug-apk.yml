@@ -115,6 +115,10 @@ jobs:
           EXPECTED_SHA256="E2BD19B77B905D522D57FC9DB1D9FBD7A1BEA9E04990A9DDEDF89D2C3A8B0361"
           ACTUAL_SHA256=$(keytool -list -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey 2>/dev/null | awk -F'SHA256:' '/SHA256:/{gsub(/[: ]/,"",$2); print toupper($2); exit}')
           if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then exit 1; fi
+      - name: Validate Naver Maps client ID before compiling
+        env:
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+        run: python tool/check_naver_map_client_id.py
       - name: Get packages
         run: flutter pub get
       - name: Run tests
@@ -192,7 +196,7 @@ jobs:
       - name: Upload release APK for device validation
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-1.9.57-151-release-apk
+          name: campingcar-roadmap-1.9.58-152-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 3
       - name: Verify final APK signer
@@ -205,6 +209,6 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-1.9.57-151-debug-apk
+          name: campingcar-roadmap-1.9.58-152-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 3
