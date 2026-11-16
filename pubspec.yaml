@@ -1,8 +1,8 @@
 name: campingcar_roadmap
 description: 캠핑카족 로드맵 Flutter MVP
 publish_to: 'none'
-version: 1.9.57+151
-# Fix WorkManager/Room constructor stripping in Android release builds
+version: 1.9.58+152
+# Naver Map SDK async initialization gate + WorkManager release fix
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
