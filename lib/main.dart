@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -71,8 +72,29 @@ Future<void> main() async {
 
   runApp(CampingCarRoadmapApp(client: client, startupError: startupError));
 
-  // Native map initialization is deferred until a map screen actually needs it.
-  // This avoids touching Naver's native SDK during Android app launch.
+  // Initialize the Naver native SDK after the first frame, never before runApp.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    Future<void>(() async {
+      if (AppConfig.naverMapClientId.trim().isEmpty) {
+        AppConfig.naverMapFailed = true;
+        debugPrint('Naver Map client ID missing from build configuration');
+        return;
+      }
+      try {
+        await FlutterNaverMap().init(
+          clientId: AppConfig.naverMapClientId,
+          onAuthFailed: (error) {
+            AppConfig.naverMapFailed = true;
+            debugPrint('Naver Map authorization failed: $error');
+          },
+        );
+      } catch (error, stackTrace) {
+        AppConfig.naverMapFailed = true;
+        debugPrint('Naver Map initialization error: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+    });
+  });
 
   // Start optional push services only after Flutter has rendered the app.
   // A native Firebase/FCM failure must never block the first app frame.
