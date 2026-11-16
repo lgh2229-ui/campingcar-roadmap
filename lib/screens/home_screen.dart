@@ -124,15 +124,21 @@ class _HomeScreenState extends State<HomeScreen> {
     if (oldWidget.refreshSignal != widget.refreshSignal) _load();
   }
 
+  void _onNaverMapReadyChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    AppConfig.naverMapReady.addListener(_onNaverMapReadyChanged);
     _load();
     _locate(initial: true);
   }
 
   @override
   void dispose() {
+    AppConfig.naverMapReady.removeListener(_onNaverMapReadyChanged);
     _searchSuggestionTimer?.cancel();
     _searchRequestId++;
     _searchFocus.dispose();

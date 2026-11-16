@@ -98,6 +98,10 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
           python tool/configure_release_signing.py
+      - name: Validate Naver Maps client ID before compiling
+        env:
+          NAVER_MAP_CLIENT_ID: ${{ secrets.NAVER_MAP_CLIENT_ID }}
+        run: python tool/check_naver_map_client_id.py
       - name: Get packages
         run: flutter pub get
       - name: Run tests
@@ -137,7 +141,7 @@ jobs:
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-play-aab-1.9.57-151
+          name: campingcar-roadmap-play-aab-1.9.58-152
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 14
 
