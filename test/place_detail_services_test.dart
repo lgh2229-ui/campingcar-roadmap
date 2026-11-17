@@ -21,7 +21,7 @@ void main() {
     final u = Place(id: 'unknown', name: 'parking', latitude: 0, longitude: 0,
       address: 'parking', services: ['노지/차박'],
       prices: {'노지/차박': '주차 무료 / 차박 허용 여부 미확인'});
-    expect(placeServiceShowsAvailable(u, '노지/차박'), false);
+    expect(placeServiceShowsAvailable(u, '노지/차박'), true);
   });
   test('EV charging availability follows the saved services checkbox', () {
     final noEv = Place(id:'x1',name:'parking',latitude:37,longitude:127,
@@ -82,7 +82,54 @@ void main() {
       services: ['노지/차박'],
       prices: {'노지/차박': '주차 무료 / 차박 허용 여부 미확인'},
     );
-    expect(placeServiceShowsAvailable(uncheckedParking, '노지/차박'), isFalse);
+    expect(placeServiceShowsAvailable(uncheckedParking, '노지/차박'), isTrue);
+  });
+
+  testWidgets('Jumunjin selected camping service is blue with an unknown-permission warning',
+      (tester) async {
+    final place = Place(
+      id: 'jumunjin-parking',
+      name: '주문진해변 주차장',
+      latitude: 37.88, longitude: 128.82,
+      address: '강원특별자치도 강릉시 주문진읍 향호리 8-17',
+      services: ['노지/차박', '공중화장실'],
+      prices: {
+        '노지/차박': '주차는 별도 현장 안내 확인 · 차박/취사 허용 미확인',
+        '공중화장실': '무료 이용 안내(공공데이터 2023 기준 상시개방; 현장 재확인)',
+      },
+      approvalStatus: 'approved',
+    );
+    expect(placeServiceShowsAvailable(place, '노지/차박'), isTrue);
+    expect(placeCampingAccessNeedsConfirmation(place), isTrue);
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(
+      body: PlaceDetailSheet(
+        place: place, scrollController: controller,
+        reviews: const <PlaceReview>[], initiallySaved: false,
+        isAdministrator: false, onSetSaved: (_) async => true,
+        onReview: () {}, onEdit: () {}, onDelete: () {},
+        onOpenAddress: () {}, onPhotoTap: (_) {},
+        photoBuilder: (_) => const SizedBox(),
+        reviewBuilder: (_) => const SizedBox(),
+      ),
+    )));
+    final note = find.text('주차는 별도 현장 안내 확인 · 차박/취사 허용 미확인');
+    expect(note, findsOneWidget);
+    final campingCardContainers = tester.widgetList<Container>(
+      find.ancestor(of: note, matching: find.byType(Container)),
+    );
+    expect(campingCardContainers.any((c) => c.decoration is BoxDecoration &&
+        (c.decoration! as BoxDecoration).color == const Color(0xFFEAF4FF)), isTrue);
+    expect(find.byIcon(Icons.info_outline_rounded), findsWidgets);
+  });
+
+  test('Explicitly prohibited overnight parking is never highlighted', () {
+    final p = Place(id: 'no-overnight', name: '차박금지 주차장',
+      latitude: 37, longitude: 128, address: 'sample',
+      services: ['노지/차박'],
+      prices: {'노지/차박': '차박 금지 / 주차만 가능'});
+    expect(placeServiceShowsAvailable(p, '노지/차박'), isFalse);
   });
 
   testWidgets('Ulleung campground card is blue with caution info rather than approval check',
