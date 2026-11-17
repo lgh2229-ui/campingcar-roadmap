@@ -161,7 +161,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-test-apk-1.9.58-152
+          name: campingcar-roadmap-test-apk-1.9.59-153
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
 
