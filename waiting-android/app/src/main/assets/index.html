@@ -152,7 +152,6 @@ html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 <div class="note" style="margin-top:18px">매장명과 식별자는 이 기기에 저장됩니다.<br>매장 식별자는 구분용이며 관리자 인증 비밀번호가 아닙니다.</div>
 </section>
 <section id="form" class="hide">
-<div class="top"><div><h1 id="formName"></h1><div class="note">회원가입과 전화번호 본인인증 없이 접수합니다</div></div><span class="tag" id="storeIdentity">고객 접수</span></div>
 <div class="waiting-summary" role="status" aria-live="polite" aria-atomic="true">
 <div><div class="waiting-summary-title">현재 대기팀</div><div class="waiting-summary-hint" id="waitingCountHint">현재 현황 확인 중</div></div>
 <div class="waiting-summary-count"><strong id="currentWaitingCount">—</strong><span>팀</span></div>
@@ -212,8 +211,8 @@ function showSavedStore(saved){
  e('setupDescription').textContent='저장된 매장명과 식별자를 확인한 후 대기등록을 시작하세요.';
  e('savedStoreName').textContent=names[saved.store];
  e('savedStoreIdentifier').textContent='식별자 · '+saved.identifier;
- e('headerName').textContent=names[saved.store];
- e('headerId').textContent='확인 대기 · '+names[saved.store]+'  |  식별자 · '+saved.identifier;
+ e('headerName').textContent='웨이팅 고객접수';
+ e('headerId').textContent='매장 확인 후 대기등록을 시작해 주세요.';
  e('availability').textContent='매장 확인 필요';
  e('availability').className='pill closed';
  hide('storeLoginForm');show('savedStoreConfirm');page('setup');fitKiosk();
@@ -230,6 +229,8 @@ function changeSavedStore(){
  var saved=readSavedLogin();
  e('storeIdentifier').value=saved?saved.identifier:'';
  hide('loginError');hide('savedStoreConfirm');show('storeLoginForm');
+ e('headerName').textContent='웨이팅 고객접수';
+ e('headerId').textContent='변경할 매장을 입력해 주세요.';
  e('availability').textContent='매장 확인 필요';
  e('availability').className='pill closed';
  page('setup');fitKiosk();
@@ -248,9 +249,7 @@ function loginStore(){
 }
 function apply(s,id){
  store=s;storeId=id;e('headerName').textContent=names[s];
- e('headerId').textContent='등록 매장 · '+names[s]+'  |  식별자 · '+id;
- e('formName').textContent=names[s];
- e('storeIdentity').textContent='매장 ID · '+id;
+ e('headerId').textContent='전화번호와 방문 인원만 입력하면 접수됩니다.';
  page('form');clearForm();e('currentWaitingCount').textContent='—';e('waitingCountHint').textContent='현재 현황 확인 중';status();fitKiosk()
 }
 function status(){if(!store)return;var original=store;api('restaurant-waiting-status?store='+encodeURIComponent(store),'GET',null,function(err,res){if(original!==store)return;
@@ -275,7 +274,7 @@ api('restaurant-waiting-register-v2','POST',{store:store,phone:phone,party_size:
 busy=false;e('register').textContent='웨이팅 등록하기';checkForm();if(savedStore!==store)return;
 if(err){formError(message(err));if(err==='REGISTRATION_CLOSED')status();return}
 if(!res.token||!res.queue_number){formError('접수번호를 확인할 수 없습니다. 매장에 문의해 주세요.');return}
-token=res.token;e('successTitle').textContent='웨이팅 접수 완료';e('queueNum').textContent=res.queue_number;e('successName').textContent=names[store]+' · 대기번호 '+res.queue_number+'번';
+token=res.token;e('successTitle').textContent='웨이팅 접수 완료';e('queueNum').textContent=res.queue_number;e('successName').textContent='접수가 정상적으로 완료되었습니다.';
 e('successParty').textContent=people+'명';e('successAhead').textContent='조회 중';hide('successError');phone='';e('consent').checked=false;page('success');showNotify(res.notification_status);readTicket();status();startTimer();fitKiosk()
 })}
 function showNotify(state){
