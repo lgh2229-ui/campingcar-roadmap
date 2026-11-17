@@ -1,0 +1,45 @@
+name: Deploy waiting customer status page
+on:
+  push:
+    branches: [waiting-android]
+    paths:
+      - 'waiting-web/**'
+      - '.github/workflows/waiting-web-pages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: waiting-customer-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify ticket page is valid HTML with working cancellation controls
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          h=Path('waiting-web/index.html').read_text()
+          for x in ('<!doctype html>','<meta charset="utf-8">','restaurant-waiting-ticket','#([tc])=','이 대기번호 취소하기','function update()','request("cancel"'):
+              assert x in h,x
+          assert "SUPABASE_SERVICE_ROLE_KEY" not in h
+          print("PASS: safe static HTML waiting ticket page")
+          PY
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Upload customer page
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: waiting-web
+      - name: Deploy site
+        id: publish
+        uses: actions/deploy-pages@v4
