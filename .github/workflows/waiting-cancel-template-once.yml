@@ -1,0 +1,14 @@
+name: One-time create and request review for waiting cancel button
+on:
+  push:
+    branches: [waiting-android]
+    paths:
+      - '.github/workflows/waiting-cancel-template-once.yml'
+jobs:
+  create-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create reviewed two-button Kakao template
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 40 --request POST 'https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/waiting-create-cancel-template-20261117' | python3 -m json.tool
