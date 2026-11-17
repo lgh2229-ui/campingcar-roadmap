@@ -12,3 +12,5 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 20 'https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/waiting-solapi-readonly-diagnostic-1711' | python3 -m json.tool
+
+# Read-only diagnostics include provider error metadata.
