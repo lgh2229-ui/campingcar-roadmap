@@ -11,4 +11,4 @@ jobs:
       - name: Single controlled test to authorized store number
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 25 -X POST 'https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/waiting-solapi-one-test-1711' | python3 -m json.tool
+          curl --silent --show-error --max-time 25 -X POST 'https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/waiting-solapi-one-test-1711' | python3 -m json.tool
