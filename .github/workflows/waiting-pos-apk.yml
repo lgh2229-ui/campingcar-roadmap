@@ -38,6 +38,19 @@ jobs:
             echo "ERROR: signing key has changed. Refusing to build."
             exit 1
           fi
+      - name: Validate kiosk login screen and JavaScript
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('waiting-android/app/src/main/assets/index.html','utf8');
+          const script = html.match(/<script>([\s\S]*?)<\/script>/);
+          if (!script) throw Error('Kiosk JavaScript missing');
+          new Function(script[1]);
+          for (const required of ['waiting_kiosk_login_v3','loginStore()','storeIdentifier','headerId','storeIdentity']) {
+            if (!html.includes(required)) throw Error('Missing kiosk login feature: '+required);
+          }
+          console.log('Kiosk login and JavaScript syntax verified');
+          NODE
       - name: Build installable APK
         run: gradle --no-daemon -p waiting-android :app:assembleDebug
       - name: Verify real APK package and persistent signing certificate
@@ -59,8 +72,8 @@ jobs:
             echo "ERROR: final APK not signed by persistent test certificate"
             exit 1
           fi
-          cp "$APK" waiting-customer-install-fixed-v2.apk
-          sha256sum waiting-customer-install-fixed-v2.apk
+          cp "$APK" waiting-customer-login-v2.1.apk
+          sha256sum waiting-customer-login-v2.1.apk
       - name: Enable hardware acceleration for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -72,13 +85,13 @@ jobs:
           api-level: 29
           arch: x86_64
           script: |
-            adb install -r waiting-customer-install-fixed-v2.apk
+            adb install -r waiting-customer-login-v2.1.apk
             adb shell am start -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.MainActivity
             sleep 5
             adb shell pidof kr.co.waitingprogram.kiosk
       - name: Upload only tested APK
         uses: actions/upload-artifact@v4
         with:
-          name: waiting-customer-install-fixed-v2-apk
-          path: waiting-customer-install-fixed-v2.apk
+          name: waiting-customer-login-v2.1-apk
+          path: waiting-customer-login-v2.1.apk
           retention-days: 30
