@@ -41,6 +41,11 @@ small,.note{font-size:14px;color:#627589;line-height:1.6}
 @media(max-width:760px){header{padding:14px 18px}.brand{font-size:23px}.clock{font-size:14px}main{padding:11px}.top h1{font-size:26px}.grid{grid-template-columns:1fr;gap:12px}.section{padding:19px}.key{min-height:58px}.numberbox{font-size:31px}.success{margin:10px auto;padding:20px}.big{font-size:76px}.setup{margin:20px auto;padding:22px}}
 @media(max-width:410px){.actions{flex-direction:column}.round{width:65px;height:65px}.counter{gap:10px}}
 
+.saved-store-panel{background:#f0f8ff;border:2px solid #c6dff2;border-radius:17px;padding:23px 18px;margin:22px auto 19px;text-align:center}
+.saved-store-label{font-size:15px;font-weight:800;color:#53748a;margin-bottom:9px}
+.saved-store-name{font-size:35px;line-height:1.3;font-weight:900;color:#145e97;overflow-wrap:anywhere}
+.saved-store-identifier{margin-top:10px;font-size:19px;font-weight:750;color:#356582;overflow-wrap:anywhere}
+.secondary-button{width:100%;min-height:58px;margin-top:12px;background:#f3f8fc;border:2px solid #b8d2e5;border-radius:14px;color:#225578;font-size:19px;font-weight:800;cursor:pointer}
 .login-field{display:block;text-align:left;margin:18px 0 8px;font-size:16px;font-weight:800;color:#205273}
 .login-input{display:block;width:100%;min-height:65px;border:2px solid #b3ccdf;border-radius:13px;font-size:24px;font-weight:700;padding:12px 15px;margin:8px 0 15px;color:#143758;background:#fff}
 .login-input:focus{outline:none;border-color:#176ba9;box-shadow:0 0 0 3px #d8ebfc}
@@ -114,13 +119,26 @@ html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 <header><div><div id="headerName" class="brand">웨이팅 고객접수</div><div class="sub" id="headerId">매장 로그인 필요</div></div>
 <div class="headright"><div class="clock" id="clock"></div><span id="availability" class="pill">연결 확인 중</span></div></header>
 <main>
-<section id="setup" class="card setup hide"><h1>매장 최초 로그인</h1>
-<p>매장 상호명 또는 매장 식별자를 입력하세요.<br>로그인 후에는 이 기기에 매장명과 식별자가 저장되어 자동으로 접속합니다.</p>
+<section id="setup" class="card setup hide">
+<h1 id="setupTitle">매장 최초 로그인</h1>
+<p id="setupDescription">매장 상호명 또는 식별자를 입력하세요.<br>저장된 매장명과 식별자는 앱을 다시 실행하면 확인 화면에 표시됩니다.</p>
+<div id="savedStoreConfirm" class="hide">
+<div class="saved-store-panel">
+<div class="saved-store-label">이 기기에 저장된 매장</div>
+<div id="savedStoreName" class="saved-store-name"></div>
+<div id="savedStoreIdentifier" class="saved-store-identifier"></div>
+</div>
+<button class="primary" type="button" onclick="confirmSavedStore()">매장 확인 · 대기등록 시작</button>
+<button class="secondary-button" type="button" onclick="changeSavedStore()">다른 매장으로 변경</button>
+</div>
+<div id="storeLoginForm">
 <label for="storeIdentifier" class="login-field">상호명 또는 매장 식별자</label>
 <input id="storeIdentifier" class="login-input" type="text" placeholder="예: 도원부산양곱창 또는 dowon" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="40" onkeydown="if(event.key==='Enter'){event.preventDefault();loginStore()}">
-<button class="primary" onclick="loginStore()">매장 로그인</button>
+<button class="primary" type="button" onclick="loginStore()">매장 확인 · 대기등록 시작</button>
 <div id="loginError" class="error hide" role="alert"></div>
-<div class="note">매장 변경은 기기 설정에서 앱 데이터 초기화 후 가능합니다.<br>식별자는 매장 구분용이며 관리자 인증 비밀번호가 아닙니다.</div></section>
+</div>
+<div class="note" style="margin-top:18px">매장명과 식별자는 이 기기에 저장됩니다.<br>매장 식별자는 구분용이며 관리자 인증 비밀번호가 아닙니다.</div>
+</section>
 <section id="form" class="hide">
 <div class="top"><div><h1 id="formName"></h1><div class="note">회원가입과 전화번호 본인인증 없이 접수합니다</div></div><span class="tag" id="storeIdentity">고객 접수</span></div>
 <div class="grid">
@@ -165,6 +183,41 @@ if(x.status>=200&&x.status<300)cb(null,body);else cb(body.error||'NETWORK_ERROR'
 x.onerror=function(){cb('NETWORK_ERROR',{})};x.ontimeout=function(){cb('TIMEOUT',{})};if(verb==='POST')x.setRequestHeader('Content-Type','application/json');
 x.send(verb==='POST'?JSON.stringify(data||{}):null)}
 function message(code){var msgs={REGISTRATION_CLOSED:'현재 웨이팅 접수를 받지 않습니다.',REGISTRATION_NOT_CONFIGURED:'서버 접수 설정이 완료되지 않았습니다. 매장에 문의하세요.',ALREADY_WAITING:'이 번호는 이미 대기 중입니다. 중복 접수할 수 없습니다.',RATE_LIMITED:'등록 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',INVALID_INPUT:'전화번호, 인원수, 개인정보 동의를 확인해 주세요.',REGISTRATION_FAILED:'등록에 실패했습니다. 매장에 문의하세요.',NETWORK_ERROR:'인터넷 연결을 확인한 후 다시 시도하세요.',TIMEOUT:'처리 여부가 불분명합니다. 중복 접수하지 말고 매장에 문의하세요.'};return msgs[code]||'서버에 연결할 수 없습니다. 매장에 문의하세요.'}
+function readSavedLogin(){
+ try{
+  var saved=JSON.parse(localStorage.getItem('waiting_kiosk_login_v3')||'null');
+  if(saved&&names[saved.store]&&typeof saved.identifier==='string'&&saved.identifier.trim().length>0)return saved;
+ }catch(err){}
+ return null;
+}
+function showSavedStore(saved){
+ store='';storeId='';open=false;busy=false;
+ e('setupTitle').textContent='매장 확인';
+ e('setupDescription').textContent='저장된 매장명과 식별자를 확인한 후 대기등록을 시작하세요.';
+ e('savedStoreName').textContent=names[saved.store];
+ e('savedStoreIdentifier').textContent='식별자 · '+saved.identifier;
+ e('headerName').textContent=names[saved.store];
+ e('headerId').textContent='확인 대기 · '+names[saved.store]+'  |  식별자 · '+saved.identifier;
+ e('availability').textContent='매장 확인 필요';
+ e('availability').className='pill closed';
+ hide('storeLoginForm');show('savedStoreConfirm');page('setup');fitKiosk();
+}
+function confirmSavedStore(){
+ var saved=readSavedLogin();
+ if(!saved){changeSavedStore();return}
+ apply(saved.store,saved.identifier);
+}
+function changeSavedStore(){
+ store='';storeId='';open=false;
+ e('setupTitle').textContent='매장 상호명 또는 식별자 확인';
+ e('setupDescription').textContent='변경할 매장의 상호명 또는 매장 식별자를 입력하세요.';
+ var saved=readSavedLogin();
+ e('storeIdentifier').value=saved?saved.identifier:'';
+ hide('loginError');hide('savedStoreConfirm');show('storeLoginForm');
+ e('availability').textContent='매장 확인 필요';
+ e('availability').className='pill closed';
+ page('setup');fitKiosk();
+}
 function loginStore(){
  var raw=e('storeIdentifier').value.trim().replace(/\s+/g,' ');
  var key=raw.toLowerCase().replace(/\s/g,'');
@@ -174,8 +227,8 @@ function loginStore(){
  try{
   localStorage.setItem('waiting_kiosk_login_v3',JSON.stringify({store:s,identifier:raw,name:names[s],loginAt:Date.now()}));
   localStorage.removeItem('waiting_kiosk_store');
- }catch(err){e('loginError').textContent='매장 로그인 정보를 저장하지 못했습니다. 저장공간을 확인해 주세요.';show('loginError');return}
- hide('loginError');apply(s,raw);fitKiosk();
+ }catch(err){e('loginError').textContent='매장 정보를 저장하지 못했습니다. 저장공간을 확인해 주세요.';show('loginError');return}
+ hide('loginError');hide('savedStoreConfirm');apply(s,raw);fitKiosk();
 }
 function apply(s,id){
  store=s;storeId=id;e('headerName').textContent=names[s];
@@ -227,12 +280,19 @@ function startTimer(){stopTimer();left=40;e('countdown').textContent=left+'초 �
 timer=setInterval(function(){left--;e('countdown').textContent=Math.max(left,0)+'초 후 다음 고객 접수 화면으로 돌아갑니다';if(left<=0)reset()},1000)}
 function reset(){stopTimer();token='';clearForm();page(store?'form':'setup');if(store)status()}
 function kioskBack(){if(!e('success').classList.contains('hide'))reset()}
-function init(){now();setInterval(now,15000);setInterval(function(){if(store&&e('success').classList.contains('hide'))status()},30000);
-var login=null;try{login=JSON.parse(localStorage.getItem('waiting_kiosk_login_v3')||'null')}catch(err){}
-if(login&&names[login.store]&&typeof login.identifier==='string'&&login.identifier.length>0){
- apply(login.store,login.identifier)
-}else{page('setup');e('availability').textContent='매장 로그인 필요';e('headerId').textContent='상호명 또는 식별자로 최초 로그인';}
-fitKiosk();
+function init(){
+ now();
+ setInterval(now,15000);
+ setInterval(function(){if(store&&e('success').classList.contains('hide'))status()},30000);
+ var saved=readSavedLogin();
+ if(saved){showSavedStore(saved)}
+ else{
+  hide('savedStoreConfirm');show('storeLoginForm');
+  e('setupTitle').textContent='매장 최초 로그인';
+  page('setup');e('availability').textContent='매장 로그인 필요';
+  e('headerId').textContent='상호명 또는 식별자로 매장을 확인하세요.';
+ }
+ fitKiosk();
 }
 init();
 
