@@ -76,9 +76,10 @@ jobs:
               document:{getElementById:node,documentElement:{clientWidth:420,clientHeight:900},addEventListener:()=>{}},
               window:{innerWidth:420,innerHeight:900,addEventListener:()=>{}},
               XMLHttpRequest:class{
-                open(){ }setRequestHeader(){}
+                open(method,url){this.url=url;}setRequestHeader(){}
                 send(){
-                  this.responseText=JSON.stringify({registration_open:true});this.status=200;this.readyState=4;
+                  const count=this.url.includes('starbam')?2:7;
+                  this.responseText=JSON.stringify({registration_open:true,active_waiting_count:count});this.status=200;this.readyState=4;
                   if(this.onreadystatechange)this.onreadystatechange();
                 }
               }
@@ -97,6 +98,8 @@ jobs:
           initial.ctx.confirmSavedStore();
           assert.equal(initial.ctx.store,'dowon');
           assert.equal(initial.node('form').classList.contains('hide'),false);
+          assert.equal(initial.node('currentWaitingCount').textContent,'7');
+          assert.equal(initial.node('waitingCountHint').textContent,'대기 및 호출 중 · 30초마다 갱신');
           assert.equal(initial.node('formName').textContent,'도원부산양곱창');
           initial.ctx.changeSavedStore();
           assert.equal(initial.node('storeLoginForm').classList.contains('hide'),false);
@@ -110,11 +113,41 @@ jobs:
           assert.equal(reopened.node('savedStoreName').textContent,'별밤포차');
           reopened.ctx.confirmSavedStore();
           assert.equal(reopened.ctx.store,'starbam');
+          assert.equal(reopened.node('currentWaitingCount').textContent,'2');
           const fresh=boot(null);
           assert.equal(fresh.node('setup').classList.contains('hide'),false);
           assert.equal(fresh.node('storeLoginForm').classList.contains('hide'),false);
           assert.equal(fresh.node('form').classList.contains('hide'),true);
           console.log('PASS: saved store requires a tap on every cold launch; switching and first launch work');
+          NODE
+
+      - name: Verify live waiting-team count endpoint for both stores
+        run: |
+          python3 - <<'PY'
+          import json
+          from urllib.request import urlopen
+          for slug in ('dowon','starbam'):
+              url=f'https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/restaurant-waiting-status?store={slug}'
+              with urlopen(url, timeout=15) as response:
+                  value=json.load(response)
+              count=value.get('active_waiting_count')
+              assert type(count) is int and count >= 0, (slug, value)
+              assert isinstance(value.get('registration_open'),bool), (slug, value)
+              assert value.get('store')==slug, (slug, value)
+              print(f'PASS: {slug} currently {count} active waiting/called teams')
+          PY
+      - name: Check customer waiting-team card remains prominent
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const html=fs.readFileSync('waiting-android/app/src/main/assets/index.html','utf8');
+          assert(html.includes('waiting-summary-title">현재 대기팀'));
+          assert(html.includes('id="currentWaitingCount"'));
+          assert(html.indexOf('id="currentWaitingCount"')<html.indexOf('class="grid"'));
+          assert(html.includes('readTicket();status();startTimer()'));
+          assert(html.includes('visibilitychange'));
+          assert(html.includes('setInterval(function(){if(store)status()},30000)'));
+          console.log('PASS: prominent waiting-team card updates after registration and on refresh');
           NODE
       - name: Build installable APK
         run: gradle --no-daemon -p waiting-android :app:assembleDebug
@@ -137,8 +170,8 @@ jobs:
             echo "ERROR: final APK not signed by persistent test certificate"
             exit 1
           fi
-          cp "$APK" waiting-customer-store-confirm-v2.2.apk
-          sha256sum waiting-customer-store-confirm-v2.2.apk
+          cp "$APK" waiting-customer-live-count-v2.3.apk
+          sha256sum waiting-customer-live-count-v2.3.apk
       - name: Enable hardware acceleration for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -150,13 +183,13 @@ jobs:
           api-level: 29
           arch: x86_64
           script: |
-            adb install -r waiting-customer-store-confirm-v2.2.apk
+            adb install -r waiting-customer-live-count-v2.3.apk
             adb shell am start -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.MainActivity
             sleep 5
             adb shell pidof kr.co.waitingprogram.kiosk
       - name: Upload only tested APK
         uses: actions/upload-artifact@v4
         with:
-          name: waiting-customer-store-confirm-v2.2-apk
-          path: waiting-customer-store-confirm-v2.2.apk
+          name: waiting-customer-live-count-v2.3-apk
+          path: waiting-customer-live-count-v2.3.apk
           retention-days: 30
