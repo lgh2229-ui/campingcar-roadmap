@@ -15,7 +15,7 @@ jobs:
           node <<'NODE'
           const fs = require('fs');
           const html = fs.readFileSync('waiting-page.html','utf8');
-          const match = html.match(/<script>([\\s\\S]*?)<\\/script>/);
+          const match = html.includes('<script>') ? [null,html.split('<script>')[1].split('</script>')[0]] : null;
           if(!match) throw Error('Missing JS');
           new Function(match[1]);
           for (const s of ['#([tc])=', 'cancelBanner', 'cancelMode', '이 대기번호 취소하기', '대기순서를 복구할 수 없습니다.', 'request("cancel"']) {
