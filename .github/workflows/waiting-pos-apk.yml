@@ -46,7 +46,7 @@ jobs:
           const script = html.match(/<script>([\s\S]*?)<\/script>/);
           if (!script) throw Error('Kiosk JavaScript missing');
           new Function(script[1]);
-          for (const required of ['waiting_kiosk_login_v3','loginStore()','storeIdentifier','headerId','storeIdentity']) {
+          for (const required of ['waiting_kiosk_login_v3','loginStore()','storeIdentifier','headerId','savedStoreName','currentWaitingCount']) {
             if (!html.includes(required)) throw Error('Missing kiosk login feature: '+required);
           }
           console.log('Kiosk login and JavaScript syntax verified');
@@ -100,7 +100,11 @@ jobs:
           assert.equal(initial.node('form').classList.contains('hide'),false);
           assert.equal(initial.node('currentWaitingCount').textContent,'7');
           assert.equal(initial.node('waitingCountHint').textContent,'대기 및 호출 중 · 30초마다 갱신');
-          assert.equal(initial.node('formName').textContent,'도원부산양곱창');
+          assert.equal(initial.node('headerName').textContent,'도원부산양곱창');
+          assert.equal(initial.node('headerId').textContent,'전화번호와 방문 인원만 입력하면 접수됩니다.');
+          assert.equal(initial.node('headerId').textContent.includes('도원부산양곱창'),false);
+          assert.equal(html.includes('id="formName"'),false);
+          assert.equal(html.includes('id="storeIdentity"'),false);
           initial.ctx.changeSavedStore();
           assert.equal(initial.node('storeLoginForm').classList.contains('hide'),false);
           assert.equal(initial.node('setup').classList.contains('hide'),false);
@@ -149,6 +153,22 @@ jobs:
           assert(html.includes('setInterval(function(){if(store)status()},30000)'));
           console.log('PASS: prominent waiting-team card updates after registration and on refresh');
           NODE
+      - name: Verify a single visible store name in registration layout
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const html=fs.readFileSync('waiting-android/app/src/main/assets/index.html','utf8');
+          const header=html.slice(html.indexOf('<header>'),html.indexOf('</header>')+9);
+          const registration=html.slice(html.indexOf('<section id="form"'),html.indexOf('<section id="success"'));
+          assert(header.includes('id="headerName"'));
+          assert(!header.includes('식별자 ·'));
+          assert(!registration.includes('id="formName"'));
+          assert(!registration.includes('id="storeIdentity"'));
+          assert(!registration.includes('상호명'));
+          assert(registration.includes('waiting-summary-title">현재 대기팀'));
+          assert(html.includes("e('headerId').textContent='전화번호와 방문 인원만 입력하면 접수됩니다.'"));
+          console.log('PASS: store name shown only in header on registration; waiting count preserved');
+          NODE
       - name: Build installable APK
         run: gradle --no-daemon -p waiting-android :app:assembleDebug
       - name: Verify real APK package and persistent signing certificate
@@ -170,8 +190,8 @@ jobs:
             echo "ERROR: final APK not signed by persistent test certificate"
             exit 1
           fi
-          cp "$APK" waiting-customer-live-count-v2.3.apk
-          sha256sum waiting-customer-live-count-v2.3.apk
+          cp "$APK" waiting-customer-clean-title-v2.4.apk
+          sha256sum waiting-customer-clean-title-v2.4.apk
       - name: Enable hardware acceleration for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -183,13 +203,13 @@ jobs:
           api-level: 29
           arch: x86_64
           script: |
-            adb install -r waiting-customer-live-count-v2.3.apk
+            adb install -r waiting-customer-clean-title-v2.4.apk
             adb shell am start -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.MainActivity
             sleep 5
             adb shell pidof kr.co.waitingprogram.kiosk
       - name: Upload only tested APK
         uses: actions/upload-artifact@v4
         with:
-          name: waiting-customer-live-count-v2.3-apk
-          path: waiting-customer-live-count-v2.3.apk
+          name: waiting-customer-clean-title-v2.4-apk
+          path: waiting-customer-clean-title-v2.4.apk
           retention-days: 30
