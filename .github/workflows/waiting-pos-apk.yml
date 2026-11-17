@@ -51,6 +51,71 @@ jobs:
           }
           console.log('Kiosk login and JavaScript syntax verified');
           NODE
+      - name: Test cold-start store confirmation and persisted identity
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+          const html=fs.readFileSync('waiting-android/app/src/main/assets/index.html','utf8');
+          const script=html.split('<script>')[1].split('</script>')[0];
+          function boot(value){
+            const nodes=new Map(), data=new Map();
+            if(value)data.set('waiting_kiosk_login_v3',JSON.stringify(value));
+            const node=id=>{
+              if(!nodes.has(id)){
+                const classes=new Set(['hide']);
+                nodes.set(id,{id,classList:{
+                  add:(x)=>classes.add(x),remove:(x)=>classes.delete(x),contains:(x)=>classes.has(x)
+                },style:{},textContent:'',innerHTML:'',value:'',checked:false,disabled:false,
+                scrollHeight:390,offsetHeight:390});
+              }
+              return nodes.get(id);
+            };
+            const ctx={console,Date,encodeURIComponent,clearInterval:()=>{},
+              setTimeout:()=>0,setInterval:()=>0,
+              localStorage:{getItem:k=>data.has(k)?data.get(k):null,setItem:(k,v)=>data.set(k,v),removeItem:k=>data.delete(k)},
+              document:{getElementById:node,documentElement:{clientWidth:420,clientHeight:900},addEventListener:()=>{}},
+              window:{innerWidth:420,innerHeight:900,addEventListener:()=>{}},
+              XMLHttpRequest:class{
+                open(){ }setRequestHeader(){}
+                send(){
+                  this.responseText=JSON.stringify({registration_open:true});this.status=200;this.readyState=4;
+                  if(this.onreadystatechange)this.onreadystatechange();
+                }
+              }
+            };
+            vm.createContext(ctx);vm.runInContext(script,ctx);
+            return {ctx,node,data};
+          }
+          const saved={store:'dowon',identifier:'도원부산양곱창',name:'도원부산양곱창',loginAt:123};
+          const initial=boot(saved);
+          assert.equal(initial.ctx.store,'','cold start must not automatically select store');
+          assert.equal(initial.node('setup').classList.contains('hide'),false,'confirmation must be visible');
+          assert.equal(initial.node('form').classList.contains('hide'),true,'registration form must be blocked');
+          assert.equal(initial.node('savedStoreConfirm').classList.contains('hide'),false);
+          assert.equal(initial.node('savedStoreName').textContent,'도원부산양곱창');
+          assert.equal(initial.node('savedStoreIdentifier').textContent,'식별자 · 도원부산양곱창');
+          initial.ctx.confirmSavedStore();
+          assert.equal(initial.ctx.store,'dowon');
+          assert.equal(initial.node('form').classList.contains('hide'),false);
+          assert.equal(initial.node('formName').textContent,'도원부산양곱창');
+          initial.ctx.changeSavedStore();
+          assert.equal(initial.node('storeLoginForm').classList.contains('hide'),false);
+          assert.equal(initial.node('setup').classList.contains('hide'),false);
+          initial.node('storeIdentifier').value='starbam';
+          initial.ctx.loginStore();
+          assert.equal(initial.ctx.store,'starbam');
+          assert.equal(JSON.parse(initial.data.get('waiting_kiosk_login_v3')).store,'starbam');
+          const reopened=boot(JSON.parse(initial.data.get('waiting_kiosk_login_v3')));
+          assert.equal(reopened.ctx.store,'','a changed saved store must be re-confirmed next cold launch');
+          assert.equal(reopened.node('savedStoreName').textContent,'별밤포차');
+          reopened.ctx.confirmSavedStore();
+          assert.equal(reopened.ctx.store,'starbam');
+          const fresh=boot(null);
+          assert.equal(fresh.node('setup').classList.contains('hide'),false);
+          assert.equal(fresh.node('storeLoginForm').classList.contains('hide'),false);
+          assert.equal(fresh.node('form').classList.contains('hide'),true);
+          console.log('PASS: saved store requires a tap on every cold launch; switching and first launch work');
+          NODE
       - name: Build installable APK
         run: gradle --no-daemon -p waiting-android :app:assembleDebug
       - name: Verify real APK package and persistent signing certificate
@@ -72,8 +137,8 @@ jobs:
             echo "ERROR: final APK not signed by persistent test certificate"
             exit 1
           fi
-          cp "$APK" waiting-customer-login-v2.1.apk
-          sha256sum waiting-customer-login-v2.1.apk
+          cp "$APK" waiting-customer-store-confirm-v2.2.apk
+          sha256sum waiting-customer-store-confirm-v2.2.apk
       - name: Enable hardware acceleration for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -85,13 +150,13 @@ jobs:
           api-level: 29
           arch: x86_64
           script: |
-            adb install -r waiting-customer-login-v2.1.apk
+            adb install -r waiting-customer-store-confirm-v2.2.apk
             adb shell am start -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.MainActivity
             sleep 5
             adb shell pidof kr.co.waitingprogram.kiosk
       - name: Upload only tested APK
         uses: actions/upload-artifact@v4
         with:
-          name: waiting-customer-login-v2.1-apk
-          path: waiting-customer-login-v2.1.apk
+          name: waiting-customer-store-confirm-v2.2-apk
+          path: waiting-customer-store-confirm-v2.2.apk
           retention-days: 30
