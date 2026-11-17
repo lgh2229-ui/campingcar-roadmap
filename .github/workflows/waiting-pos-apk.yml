@@ -169,6 +169,23 @@ jobs:
           assert(html.includes("e('headerId').textContent='전화번호와 방문 인원만 입력하면 접수됩니다.'"));
           console.log('PASS: store name shown only in header on registration; waiting count preserved');
           NODE
+      - name: Verify automatic boot launch and optional HOME launcher configuration
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          xml=pathlib.Path('waiting-android/app/src/main/AndroidManifest.xml').read_text()
+          java=pathlib.Path('waiting-android/app/src/main/java/kr/co/waitingprogram/pos/BootReceiver.java').read_text()
+          assert 'android.permission.RECEIVE_BOOT_COMPLETED' in xml
+          assert 'android.intent.action.BOOT_COMPLETED' in xml
+          assert 'android:name=".BootReceiver"' in xml
+          assert 'android:exported="false"' in xml
+          assert 'android.intent.category.HOME' in xml
+          assert 'android.intent.category.DEFAULT' in xml
+          assert 'android.intent.category.LAUNCHER' in xml
+          assert 'Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())' in java
+          assert 'context.startActivity(kiosk)' in java
+          print('PASS: protected boot receiver, permission and opt-in Home launcher')
+          PY
       - name: Build installable APK
         run: gradle --no-daemon -p waiting-android :app:assembleDebug
       - name: Verify real APK package and persistent signing certificate
@@ -190,8 +207,8 @@ jobs:
             echo "ERROR: final APK not signed by persistent test certificate"
             exit 1
           fi
-          cp "$APK" waiting-customer-clean-title-v2.4.apk
-          sha256sum waiting-customer-clean-title-v2.4.apk
+          cp "$APK" waiting-customer-auto-start-v2.5.apk
+          sha256sum waiting-customer-auto-start-v2.5.apk
       - name: Enable hardware acceleration for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -203,13 +220,23 @@ jobs:
           api-level: 29
           arch: x86_64
           script: |
-            adb install -r waiting-customer-clean-title-v2.4.apk
+            adb install -r waiting-customer-auto-start-v2.5.apk
             adb shell am start -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.MainActivity
             sleep 5
+            adb shell pidof kr.co.waitingprogram.kiosk
+            # Test the protected boot broadcast and verify receiver execution.
+            adb shell logcat -c
+            adb shell am broadcast -a android.intent.action.BOOT_COMPLETED -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.BootReceiver
+            sleep 3
+            adb shell logcat -d -s WaitingBootReceiver:I -v brief | grep -F "Received BOOT_COMPLETED"
+            adb shell logcat -d -s WaitingBootReceiver:I -v brief | grep -F "Kiosk launch requested after boot"
+            # The customer kiosk can also become the default Home launcher for
+            # devices that block background activity starts after boot.
+            adb shell dumpsys package kr.co.waitingprogram.kiosk | grep -F "android.intent.category.HOME"
             adb shell pidof kr.co.waitingprogram.kiosk
       - name: Upload only tested APK
         uses: actions/upload-artifact@v4
         with:
-          name: waiting-customer-clean-title-v2.4-apk
-          path: waiting-customer-clean-title-v2.4.apk
+          name: waiting-customer-auto-start-v2.5-apk
+          path: waiting-customer-auto-start-v2.5.apk
           retention-days: 30
