@@ -166,8 +166,8 @@ x.onerror=function(){cb('NETWORK_ERROR',{})};x.ontimeout=function(){cb('TIMEOUT'
 x.send(verb==='POST'?JSON.stringify(data||{}):null)}
 function message(code){var msgs={REGISTRATION_CLOSED:'현재 웨이팅 접수를 받지 않습니다.',REGISTRATION_NOT_CONFIGURED:'서버 접수 설정이 완료되지 않았습니다. 매장에 문의하세요.',ALREADY_WAITING:'이 번호는 이미 대기 중입니다. 중복 접수할 수 없습니다.',RATE_LIMITED:'등록 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',INVALID_INPUT:'전화번호, 인원수, 개인정보 동의를 확인해 주세요.',REGISTRATION_FAILED:'등록에 실패했습니다. 매장에 문의하세요.',NETWORK_ERROR:'인터넷 연결을 확인한 후 다시 시도하세요.',TIMEOUT:'처리 여부가 불분명합니다. 중복 접수하지 말고 매장에 문의하세요.'};return msgs[code]||'서버에 연결할 수 없습니다. 매장에 문의하세요.'}
 function loginStore(){
- var raw=e('storeIdentifier').value.trim().replace(/\\s+/g,' ');
- var key=raw.toLowerCase().replace(/\\s/g,'');
+ var raw=e('storeIdentifier').value.trim().replace(/\s+/g,' ');
+ var key=raw.toLowerCase().replace(/\s/g,'');
  var aliases={dowon:'dowon',starbam:'starbam','도원부산양곱창':'dowon','별밤포차':'starbam','별밤':'starbam'};
  var s=aliases[key];
  if(!s){e('loginError').textContent='매장 상호명 또는 발급된 식별자를 확인해 주세요.';show('loginError');fitKiosk();return}
