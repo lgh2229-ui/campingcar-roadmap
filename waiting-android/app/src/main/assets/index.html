@@ -233,6 +233,7 @@ if(login&&names[login.store]&&typeof login.identifier==='string'&&login.identifi
  apply(login.store,login.identifier)
 }else{page('setup');e('availability').textContent='매장 로그인 필요';e('headerId').textContent='상호명 또는 식별자로 최초 로그인';}
 fitKiosk();
+}
 init();
 
 /* Fits the entire current page onto the physical Android WebView viewport. */
