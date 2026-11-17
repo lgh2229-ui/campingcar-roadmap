@@ -1,0 +1,14 @@
+name: Validate approved Solapi waiting template (read-only)
+on:
+  push:
+    branches: [waiting-android]
+    paths:
+      - '.github/workflows/waiting-solapi-probe.yml'
+jobs:
+  template-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check approved sender template without sending messages
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 --retry 2 'https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/waiting-solapi-check-20261117' | python3 -c 'import json,sys; x=json.load(sys.stdin); print(json.dumps(x,ensure_ascii=False)); assert x.get("apiConfigured") and x.get("httpStatus")==200 and x.get("approvedTemplateFound") and x.get("approved") and x.get("channelMatched") and x.get("webLinkButton"), "Solapi approved template/channel/button mismatch"'
