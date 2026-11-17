@@ -224,15 +224,15 @@ jobs:
             adb shell am start -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.MainActivity
             sleep 5
             adb shell pidof kr.co.waitingprogram.kiosk
-            # Test the protected boot broadcast and verify receiver execution.
-            adb shell logcat -c
-            adb shell am broadcast -a android.intent.action.BOOT_COMPLETED -n kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.BootReceiver
-            sleep 3
-            adb shell logcat -d -s WaitingBootReceiver:I -v brief | grep -F "Received BOOT_COMPLETED"
-            adb shell logcat -d -s WaitingBootReceiver:I -v brief | grep -F "Kiosk launch requested after boot"
-            # The customer kiosk can also become the default Home launcher for
-            # devices that block background activity starts after boot.
+            # Android protects BOOT_COMPLETED from fake shell broadcasts.
+            # Verify Android registered the real boot receiver instead.
+            adb shell dumpsys package kr.co.waitingprogram.kiosk | grep -F "android.intent.action.BOOT_COMPLETED"
+            # HOME is the reliable background-launch fallback on Android 10+.
             adb shell dumpsys package kr.co.waitingprogram.kiosk | grep -F "android.intent.category.HOME"
+            # Simulate the store tablet owner selecting this app as HOME.
+            adb shell cmd package set-home-activity kr.co.waitingprogram.kiosk/kr.co.waitingprogram.pos.MainActivity
+            adb shell input keyevent KEYCODE_HOME
+            sleep 3
             adb shell pidof kr.co.waitingprogram.kiosk
       - name: Upload only tested APK
         uses: actions/upload-artifact@v4
