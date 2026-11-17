@@ -41,6 +41,15 @@ small,.note{font-size:14px;color:#627589;line-height:1.6}
 @media(max-width:760px){header{padding:14px 18px}.brand{font-size:23px}.clock{font-size:14px}main{padding:11px}.top h1{font-size:26px}.grid{grid-template-columns:1fr;gap:12px}.section{padding:19px}.key{min-height:58px}.numberbox{font-size:31px}.success{margin:10px auto;padding:20px}.big{font-size:76px}.setup{margin:20px auto;padding:22px}}
 @media(max-width:410px){.actions{flex-direction:column}.round{width:65px;height:65px}.counter{gap:10px}}
 
+.login-field{display:block;text-align:left;margin:18px 0 8px;font-size:16px;font-weight:800;color:#205273}
+.login-input{display:block;width:100%;min-height:65px;border:2px solid #b3ccdf;border-radius:13px;font-size:24px;font-weight:700;padding:12px 15px;margin:8px 0 15px;color:#143758;background:#fff}
+.login-input:focus{outline:none;border-color:#176ba9;box-shadow:0 0 0 3px #d8ebfc}
+#kioskStage .setup{max-width:710px}
+#kioskStage.portrait .setup{max-width:540px}
+#kioskStage .login-input{min-height:58px}
+#kioskStage .setup .primary{min-height:58px}
+#headerId{font-size:14px;max-width:680px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#storeIdentity{white-space:nowrap;max-width:390px;overflow:hidden;text-overflow:ellipsis;font-size:14px}
 /* Adaptive kiosk viewport: no scroll bars, one screen in any orientation. */
 html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 #kioskStage{position:absolute;top:0;left:0;transform-origin:0 0;width:1024px;overflow:visible}
@@ -102,14 +111,18 @@ html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 
 </style></head><body>
 <div id="kioskStage">
-<header><div><div id="headerName" class="brand">웨이팅 고객접수</div><div class="sub">전화번호 · 방문 인원 · 동의 후 바로 접수</div></div>
+<header><div><div id="headerName" class="brand">웨이팅 고객접수</div><div class="sub" id="headerId">매장 로그인 필요</div></div>
 <div class="headright"><div class="clock" id="clock"></div><span id="availability" class="pill">연결 확인 중</span></div></header>
 <main>
-<section id="setup" class="card setup hide"><h1>태블릿 매장 설정</h1><p>처음 한 번만 이 태블릿을 사용할 매장을 선택하세요.<br>접수하는 고객에게는 매장 선택 메뉴가 나오지 않습니다.</p>
-<button class="store" onclick="setStore('dowon')">도원부산양곱창</button><button class="store" onclick="setStore('starbam')">별밤포차</button>
-<div class="note">매장 변경: Android 설정에서 이 앱의 데이터 초기화</div></section>
+<section id="setup" class="card setup hide"><h1>매장 최초 로그인</h1>
+<p>매장 상호명 또는 매장 식별자를 입력하세요.<br>로그인 후에는 이 기기에 매장명과 식별자가 저장되어 자동으로 접속합니다.</p>
+<label for="storeIdentifier" class="login-field">상호명 또는 매장 식별자</label>
+<input id="storeIdentifier" class="login-input" type="text" placeholder="예: 도원부산양곱창 또는 dowon" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="40" onkeydown="if(event.key==='Enter'){event.preventDefault();loginStore()}">
+<button class="primary" onclick="loginStore()">매장 로그인</button>
+<div id="loginError" class="error hide" role="alert"></div>
+<div class="note">매장 변경은 기기 설정에서 앱 데이터 초기화 후 가능합니다.<br>식별자는 매장 구분용이며 관리자 인증 비밀번호가 아닙니다.</div></section>
 <section id="form" class="hide">
-<div class="top"><div><h1 id="formName"></h1><div class="note">회원가입과 전화번호 본인인증 없이 접수합니다</div></div><span class="tag">고객 접수</span></div>
+<div class="top"><div><h1 id="formName"></h1><div class="note">회원가입과 전화번호 본인인증 없이 접수합니다</div></div><span class="tag" id="storeIdentity">고객 접수</span></div>
 <div class="grid">
 <div class="card section"><h2>1. 휴대전화번호</h2>
 <div class="numberbox empty" id="phoneBox">010-0000-0000</div>
@@ -140,7 +153,7 @@ html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 <script>
 var BASE='https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/';
 var names={dowon:'도원부산양곱창',starbam:'별밤포차'};
-var store='',phone='',people=2,open=false,busy=false,token='',timer=null,left=40;
+var store='',storeId='',phone='',people=2,open=false,busy=false,token='',timer=null,left=40;
 function e(id){return document.getElementById(id)}
 function hide(id){e(id).classList.add('hide')}
 function show(id){e(id).classList.remove('hide')}
@@ -152,8 +165,25 @@ if(x.status>=200&&x.status<300)cb(null,body);else cb(body.error||'NETWORK_ERROR'
 x.onerror=function(){cb('NETWORK_ERROR',{})};x.ontimeout=function(){cb('TIMEOUT',{})};if(verb==='POST')x.setRequestHeader('Content-Type','application/json');
 x.send(verb==='POST'?JSON.stringify(data||{}):null)}
 function message(code){var msgs={REGISTRATION_CLOSED:'현재 웨이팅 접수를 받지 않습니다.',REGISTRATION_NOT_CONFIGURED:'서버 접수 설정이 완료되지 않았습니다. 매장에 문의하세요.',ALREADY_WAITING:'이 번호는 이미 대기 중입니다. 중복 접수할 수 없습니다.',RATE_LIMITED:'등록 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.',INVALID_INPUT:'전화번호, 인원수, 개인정보 동의를 확인해 주세요.',REGISTRATION_FAILED:'등록에 실패했습니다. 매장에 문의하세요.',NETWORK_ERROR:'인터넷 연결을 확인한 후 다시 시도하세요.',TIMEOUT:'처리 여부가 불분명합니다. 중복 접수하지 말고 매장에 문의하세요.'};return msgs[code]||'서버에 연결할 수 없습니다. 매장에 문의하세요.'}
-function setStore(s){if(!names[s])return;if(!confirm(names[s]+' 전용 접수 태블릿으로 설정하시겠습니까?'))return;try{localStorage.setItem('waiting_kiosk_store',s)}catch(err){}apply(s)}
-function apply(s){store=s;e('headerName').textContent=names[s];e('formName').textContent=names[s];page('form');clearForm();status()}
+function loginStore(){
+ var raw=e('storeIdentifier').value.trim().replace(/\\s+/g,' ');
+ var key=raw.toLowerCase().replace(/\\s/g,'');
+ var aliases={dowon:'dowon',starbam:'starbam','도원부산양곱창':'dowon','별밤포차':'starbam','별밤':'starbam'};
+ var s=aliases[key];
+ if(!s){e('loginError').textContent='매장 상호명 또는 발급된 식별자를 확인해 주세요.';show('loginError');fitKiosk();return}
+ try{
+  localStorage.setItem('waiting_kiosk_login_v3',JSON.stringify({store:s,identifier:raw,name:names[s],loginAt:Date.now()}));
+  localStorage.removeItem('waiting_kiosk_store');
+ }catch(err){e('loginError').textContent='매장 로그인 정보를 저장하지 못했습니다. 저장공간을 확인해 주세요.';show('loginError');return}
+ hide('loginError');apply(s,raw);fitKiosk();
+}
+function apply(s,id){
+ store=s;storeId=id;e('headerName').textContent=names[s];
+ e('headerId').textContent='등록 매장 · '+names[s]+'  |  식별자 · '+id;
+ e('formName').textContent=names[s];
+ e('storeIdentity').textContent='매장 ID · '+id;
+ page('form');clearForm();status();fitKiosk()
+}
 function status(){if(!store)return;var original=store;api('restaurant-waiting-status?store='+encodeURIComponent(store),'GET',null,function(err,res){if(original!==store)return;
 open=!err&&res.registration_open===true;
 e('availability').textContent=err?'연결 확인 불가':open?'접수 가능':'접수 마감';e('availability').className='pill '+(open?'open':'closed');
@@ -198,7 +228,11 @@ timer=setInterval(function(){left--;e('countdown').textContent=Math.max(left,0)+
 function reset(){stopTimer();token='';clearForm();page(store?'form':'setup');if(store)status()}
 function kioskBack(){if(!e('success').classList.contains('hide'))reset()}
 function init(){now();setInterval(now,15000);setInterval(function(){if(store&&e('success').classList.contains('hide'))status()},30000);
-var s='';try{s=localStorage.getItem('waiting_kiosk_store')||''}catch(err){}if(names[s])apply(s);else{page('setup');e('availability').textContent='초기 설정'}}
+var login=null;try{login=JSON.parse(localStorage.getItem('waiting_kiosk_login_v3')||'null')}catch(err){}
+if(login&&names[login.store]&&typeof login.identifier==='string'&&login.identifier.length>0){
+ apply(login.store,login.identifier)
+}else{page('setup');e('availability').textContent='매장 로그인 필요';e('headerId').textContent='상호명 또는 식별자로 최초 로그인';}
+fitKiosk();
 init();
 
 /* Fits the entire current page onto the physical Android WebView viewport. */
