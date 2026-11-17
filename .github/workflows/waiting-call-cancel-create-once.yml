@@ -1,0 +1,14 @@
+name: One-time create call cancellation Alimtalk template
+on:
+  push:
+    branches: [waiting-android]
+    paths:
+      - '.github/workflows/waiting-call-cancel-create-once.yml'
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create call template with cancellation link
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-time 35 -X POST 'https://xlpwxkcxpxorrmkgzhft.supabase.co/functions/v1/waiting-call-cancel-template-create-1117' | python3 -m json.tool
