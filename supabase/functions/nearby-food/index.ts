@@ -273,18 +273,27 @@ Deno.serve(async (req: Request) => {
         discovered = cached.results as Spot[];
       }
     }
-    const { data: rated, error: ratedErr } = await userDb.rpc(
-      "nearby_diningcode_top20", { p_lat: lat, p_lon: lon },
-    );
-    if (ratedErr) console.warn("curated_food_lookup", ratedErr.message);
-    const scored: Spot[] = (Array.isArray(rated) ? rated : []).map((r) => ({
+    // The old RPC did not expose manually verified business hours, so
+    // scored places became "영업시간 정보 없음" even when a source was known.
+    // Read scored and hours-enriched records together. Bounding box is only
+    // an index-friendly prefilter; final 1000 m Haversine filter is required.
+    const { data: rated, error: ratedErr } = await userDb
+      .from("diningcode_restaurants")
+      .select("name,category,address,latitude,longitude,diningcode_score,diningcode_url,opening_hours")
+      .eq("active", true)
+      .gte("latitude", lat - 0.01).lte("latitude", lat + 0.01)
+      .gte("longitude", lon - 0.012).lte("longitude", lon + 0.012)
+      .limit(100);
+    if (ratedErr) console.warn("verified_food_lookup", ratedErr.message);
+    const scored: Spot[] = (rated || []).map((r) => ({
       name: String(r.name), category: String(r.category),
       address: String(r.address), latitude: Number(r.latitude),
-      longitude: Number(r.longitude), distance_m: Number(r.distance_m),
+      longitude: Number(r.longitude),
+      distance_m: Math.round(distance(lat, lon, Number(r.latitude), Number(r.longitude))),
       score: typeof r.diningcode_score === "number" ? r.diningcode_score : null,
       url: String(r.diningcode_url || ""), source: "curated" as const,
-      opening_hours: null,
-    }));
+      opening_hours: typeof r.opening_hours === "string" ? r.opening_hours : null,
+    })).filter((r) => r.distance_m <= RADIUS);
     const { data: recommendations, error: recError } = await userDb
       .from("food_recommendations")
       .select("name,category,address,latitude,longitude,comment")
@@ -325,10 +334,19 @@ Deno.serve(async (req: Request) => {
       a.distance_m - b.distance_m ||
       a.name.localeCompare(b.name)
     );
-    const top = all.slice(0, 20).map((r, i) => ({ ...r, rank: i + 1 }));
+    // Display numbered positions only for businesses with published
+    // restaurant scores. Other nearby businesses are a separate distance
+    // listing and must NEVER be presented as the top-ranked restaurants.
+    let scoredPosition = 0;
+    const top = all.slice(0, 20).map((r) => ({
+      ...r,
+      rank: r.score == null ? null : ++scoredPosition,
+    }));
     return json({
       spots: top, radius_m: RADIUS, max_results: 20,
-      source_status: providerAvailable ? "ok" : "partial",
+      scored_count: scoredPosition,
+      ordering: "verified_score_then_distance",
+      source_status: providerAvailable || scored.length ? "ok" : "partial",
       cache_hit: Boolean(isFresh),
     });
   } catch (e) {
