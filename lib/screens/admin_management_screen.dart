@@ -6,6 +6,7 @@ import 'admin_home_screen.dart';
 import 'home_screen.dart';
 import 'activity_candidate_admin_screen.dart';
 import 'activity_report_admin_screen.dart';
+import 'food_recommendation_admin_screen.dart';
 import '../models/place.dart';
 import '../repositories/supabase_repository.dart';
 import '../repositories/auth_repository.dart';
@@ -235,6 +236,12 @@ Padding(padding:const EdgeInsets.fromLTRB(12,9,12,0),child:SizedBox(width:double
 Padding(padding:const EdgeInsets.fromLTRB(12,12,12,0),child:SizedBox(width:double.infinity,child:FilledButton.tonalIcon(
  onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>const ActivityCandidateAdminScreen())),
  icon:const Icon(Icons.travel_explore_outlined),label:const Text('3km 주변 관광·레저 자동 조사 / 검토')))),
+Padding(padding:const EdgeInsets.fromLTRB(12,12,12,0),
+ child:SizedBox(width:double.infinity,child:FilledButton.tonalIcon(
+  onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(
+    builder:(_)=>const FoodRecommendationAdminScreen())),
+  icon:const Icon(Icons.restaurant_menu_outlined),
+  label:const Text('맛집 추천 승인 / 반려')))),
 Padding(padding:const EdgeInsets.fromLTRB(12,12,12,4),child:SegmentedButton<bool>(segments:[ButtonSegment(value:false,label:Text('처리대기 (${pending.length})')),ButtonSegment(value:true,label:Text('처리완료 (${done.length})'))],selected:{approvalCompleted},onSelectionChanged:(v)=>setState(()=>approvalCompleted=v.first))),Expanded(child:_approvalList(r,approvalCompleted))]);}
  Widget _approvalList(List<Place> r,bool done)=>r.isEmpty?Center(child:Text(done?'처리 완료 내역이 없습니다.':'승인 대기 장소가 없습니다.')):ListView.builder(itemCount:r.length,itemBuilder:(_,i){final p=r[i];return ListTile(leading:Icon(done?Icons.check_circle:Icons.hourglass_top),title:Text(p.name.replaceFirst(RegExp(r'^\\[(승인 대기|승인 반려)\\]\\s*'),'')),subtitle:Text('${p.address}\n등록자: ${p.ownerNickname.trim().isEmpty?'닉네임 없음':p.ownerNickname} · ${_dt(p.createdAt)}'),isThreeLine:true,trailing:done?Text(p.approvalStatus=='approved'?'승인완료':'반려완료'):const Icon(Icons.chevron_right),onTap:done?null:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>AdminPlaceReviewScreen(place:p,data:SupabaseRepository(db)))).then((_)=>_load()));});
  Widget _feedbackTab(){final r=feedback.where((x)=>(x['status']=='answered')==feedbackCompleted).toList();return Column(children:[Padding(padding:const EdgeInsets.fromLTRB(12,12,12,4),child:SegmentedButton<bool>(segments:[ButtonSegment(value:false,label:Text('처리대기 (${feedback.where((x)=>x['status']!='answered').length})')),ButtonSegment(value:true,label:Text('처리완료 (${feedback.where((x)=>x['status']=='answered').length})'))],selected:{feedbackCompleted},onSelectionChanged:(v)=>setState(()=>feedbackCompleted=v.first))),Expanded(child:r.isEmpty?Center(child:Text(feedbackCompleted?'처리 완료된 의견이 없습니다.':'처리 대기 중인 의견이 없습니다.')):ListView.builder(itemCount:r.length,itemBuilder:(_,i){final x=r[i];return ListTile(title:Text('${x['title']}'),subtitle:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('${x['body']}\n작성자: ${_name(x['author_id'])} · 요청: ${_dt(x['created_at'])}\n${x['status']=='answered'?'처리완료':'처리대기'}'),_photos(x['photo_urls'])]),trailing:Text(x['status']=='answered'?'완료':'대기'),onTap:()=>_reply(x));}))]);}

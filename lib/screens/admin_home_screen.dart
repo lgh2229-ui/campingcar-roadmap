@@ -18,7 +18,7 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
-  bool busy=false; int pendingCount=0, reportCount=0, feedbackCount=0, marketReportCount=0, mapRefreshSignal=0;
+  bool busy=false; int pendingCount=0, foodPendingCount=0, reportCount=0, feedbackCount=0, marketReportCount=0, mapRefreshSignal=0;
   StreamSubscription<Map<String,dynamic>>? _pushSub;
   Timer? _refreshTimer;
   @override void initState(){super.initState();_refreshCounts();_pushSub=PushNotificationService.instance.events.listen((_){_refreshCounts();});_refreshTimer=Timer.periodic(const Duration(seconds:20),(_)=>_refreshCounts());}
@@ -26,13 +26,13 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   void _msg(String text){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(text)));}
   String _dt(DateTime? d)=>d==null?'-':d.toLocal().toString().substring(0,16);
   String _owner(Place p)=>p.ownerNickname.trim().isEmpty?'닉네임 없음':p.ownerNickname.trim();
-  Future<void> _refreshCounts() async {try{final db=Supabase.instance.client;final a=await Future.wait([widget.data.pendingPlaces(),widget.data.adminReviewTasks(),db.from('app_feedback').select('id').neq('status','answered'),db.from('vehicle_market_reports').select('id').neq('status','resolved')]);if(mounted)setState((){pendingCount=(a[0] as List).length;reportCount=(a[1] as List).length;feedbackCount=(a[2] as List).length;marketReportCount=(a[3] as List).length;});}catch(_){} }
+  Future<void> _refreshCounts() async {try{final db=Supabase.instance.client;final a=await Future.wait([widget.data.pendingPlaces(),widget.data.adminReviewTasks(),db.from('app_feedback').select('id').neq('status','answered'),db.from('vehicle_market_reports').select('id').neq('status','resolved'),db.from('food_recommendations').select('id').eq('status','pending')]);if(mounted)setState((){pendingCount=(a[0] as List).length;reportCount=(a[1] as List).length;feedbackCount=(a[2] as List).length;marketReportCount=(a[3] as List).length;foodPendingCount=(a[4] as List).length;});}catch(_){} }
   Widget _badge(Widget child,int count)=>Stack(clipBehavior:Clip.none,children:[child,if(count>0)Positioned(right:-7,top:-8,child:Container(padding:const EdgeInsets.symmetric(horizontal:6,vertical:2),decoration:BoxDecoration(color:Colors.red,borderRadius:BorderRadius.circular(12)),constraints:const BoxConstraints(minWidth:20),child:Text(count>99?'99+':'$count',textAlign:TextAlign.center,style:const TextStyle(color:Colors.white,fontSize:11,fontWeight:FontWeight.bold))))]);
 
   @override Widget build(BuildContext context)=>Stack(children:[
     HomeScreen(user:widget.user,auth:widget.auth,data:widget.data,onUserChanged:widget.onUserChanged,onLogout:widget.onLogout,refreshSignal:mapRefreshSignal,focusPlaceId:widget.focusPlaceId),
     Positioned(top:MediaQuery.of(context).padding.top+12,right:12,child:SafeArea(child:
-      _badge(FloatingActionButton(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){if(mounted)setState(()=>mapRefreshSignal++);_refreshCounts();}),child:const Icon(Icons.admin_panel_settings_outlined)),pendingCount+reportCount+feedbackCount+marketReportCount)
+      _badge(FloatingActionButton(heroTag:'adminManage',onPressed:()=>Navigator.of(context).push(MaterialPageRoute(builder:(_)=>const AdminManagementScreen())).then((_){if(mounted)setState(()=>mapRefreshSignal++);_refreshCounts();}),child:const Icon(Icons.admin_panel_settings_outlined)),pendingCount+foodPendingCount+reportCount+feedbackCount+marketReportCount)
     )),
   ]);
 }
