@@ -196,7 +196,7 @@ jobs:
       - name: Upload release APK for device validation
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-1.9.59-153-release-apk
+          name: campingcar-roadmap-1.9.60-154-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 3
       - name: Verify final APK signer
@@ -209,6 +209,6 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-1.9.59-153-debug-apk
+          name: campingcar-roadmap-1.9.60-154-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 3
