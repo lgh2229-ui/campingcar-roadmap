@@ -12,6 +12,8 @@ on:
       - lib/widgets/activity_insight_sheet.dart
       - lib/widgets/place_detail_sheet.dart
       - lib/widgets/nearby_diningcode_section.dart
+      - lib/utils/nearby_food_naver_link.dart
+      - test/nearby_food_naver_link_test.dart
       - lib/widgets/food_recommendation_form.dart
       - lib/screens/food_recommendation_admin_screen.dart
       - supabase/functions/nearby-food/index.ts
@@ -166,7 +168,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-test-apk-1.9.62-156
+          name: campingcar-roadmap-test-apk-1.9.63-157
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
 

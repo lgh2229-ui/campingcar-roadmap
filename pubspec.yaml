@@ -1,8 +1,8 @@
 name: campingcar_roadmap
 description: 캠핑카족 로드맵 Flutter MVP
 publish_to: 'none'
-version: 1.9.62+156
-# 1km automatic food discovery and admin-approved member recommendations + previous fixes
+version: 1.9.63+157
+# Use Naver Map search for restaurant name + local district instead of wrong place link
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
