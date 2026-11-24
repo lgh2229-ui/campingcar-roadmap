@@ -142,13 +142,11 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   }
   final Map<String, int> _nearbyActivityCounts = {};
   int _activityLookupNumber = 0;
-  int _nearbyFoodCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadNearbyActivityCounts();
-    _loadNearbyFoodCount();
     _resolveIncompleteAddress();
   }
 
@@ -180,23 +178,6 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     }
   }
 
-  Future<void> _loadNearbyFoodCount() async {
-    try {
-      final result = await Supabase.instance.client.rpc(
-        'nearby_diningcode_top20',
-        params: {
-          'p_lat': widget.place.latitude,
-          'p_lon': widget.place.longitude,
-        },
-      );
-      if (mounted) {
-        setState(() => _nearbyFoodCount = result is List ? result.length : 0);
-      }
-    } catch (_) {
-      // Keep the tile tappable when the count is temporarily unavailable.
-    }
-  }
-
   void _openNearbyFood() {
     showModalBottomSheet<void>(
       context: context,
@@ -216,7 +197,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
               )),
             ]),
             const SizedBox(height: 6),
-            const Text('반경 1km · 맛집 점수순 · 최대 20곳',
+            const Text('반경 1km · 자동 검색 · 점수 확인 매장 우선 · 최대 20곳',
               style: TextStyle(fontSize: 12)),
             const SizedBox(height: 12),
             Expanded(child: NearbyDiningCodeSection(
@@ -333,19 +314,16 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             ? p.services.contains('노지/차박') &&
                 p.services.contains('전기차 충전기')
             : p.services.contains(service);
-    final foundCount = activity
-        ? (service == '주변맛집' ? _nearbyFoodCount
-            : (_nearbyActivityCounts[service] ?? 0))
-        : 0;
-    final active = isConfirmedAvailable(service) || (activity && foundCount > 0);
+    final foundCount = activity ? (_nearbyActivityCounts[service] ?? 0) : 0;
+    final active = service == '주변맛집' || isConfirmedAvailable(service) || (activity && foundCount > 0);
     final price = (p.prices[service] ??
         (service == '노지/차박' ? p.prices['캠핑장'] : null) ?? '').trim();
     // The blue card marks a registered service, not guaranteed permission.
     final entryUnverified = service == '노지/차박' &&
         placeCampingAccessNeedsConfirmation(p);
     final uncertain = listed && !active;
-    final display = activity && service == '주변맛집' && foundCount == 0
-        ? '반경 1km · 눌러서 확인'
+    final display = activity && service == '주변맛집'
+        ? '반경 1km · 자동 검색'
         : activity && foundCount > 0
         ? '주변 $foundCount곳 확인'
         : !listed
@@ -404,7 +382,8 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             ),
           )),
           if (active)
-            Icon(entryUnverified ? Icons.info_outline_rounded
+            Icon(service == '주변맛집' ? Icons.chevron_right_rounded
+                : entryUnverified ? Icons.info_outline_rounded
                 : Icons.check_circle_rounded, size: 17, color: blueText),
         ]),
         SizedBox(height: activity ? 5 : 11),
