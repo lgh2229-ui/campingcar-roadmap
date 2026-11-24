@@ -42,11 +42,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tile, findsOneWidget);
-    expect(find.text('반경 1km · 맛집 점수순 · 최대 20곳'), findsNothing);
+    expect(find.text('반경 1km · 자동 검색 · 점수 확인 매장 우선 · 최대 20곳'), findsNothing);
     expect(find.textContaining('다이닝코드'), findsNothing);
     await tester.tap(tile);
     await tester.pumpAndSettle();
-    expect(find.text('반경 1km · 맛집 점수순 · 최대 20곳'), findsOneWidget);
+    expect(find.text('반경 1km · 자동 검색 · 점수 확인 매장 우선 · 최대 20곳'), findsOneWidget);
     expect(find.textContaining('다이닝코드'), findsNothing);
+    expect(find.text('내 맛집 추천하기'), findsOneWidget);
+    expect(find.text('주변 맛집 검색'), findsNothing);
   });
 }
