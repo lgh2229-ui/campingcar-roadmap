@@ -37,7 +37,9 @@ void main() {
       )),
     ));
     final tile = find.text('주변맛집');
-    await tester.ensureVisible(tile);
+    await tester.scrollUntilVisible(
+      tile, 300, scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     expect(tile, findsOneWidget);
     expect(find.text('반경 1km · 맛집 점수순 · 최대 20곳'), findsNothing);
