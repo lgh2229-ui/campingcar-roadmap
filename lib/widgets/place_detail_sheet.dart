@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -184,29 +185,37 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: 0.84,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Row(children: [
-              Icon(Icons.restaurant_menu_rounded, size: 22),
-              SizedBox(width: 9),
-              Text('주변맛집', style: TextStyle(
-                fontSize: 20, fontWeight: FontWeight.w800,
+      builder: (sheetContext) {
+        // With edge-to-edge Android navigation, the modal can extend behind
+        // the translucent gesture / system navigation area. Reserve an actual
+        // bottom touch clearance (at least 64 dp) so '내 맛집 추천하기' stays
+        // fully visible and clickable above the phone navigation bar.
+        final navigationInset = MediaQuery.viewPaddingOf(sheetContext).bottom;
+        final bottomClearance = math.max(64.0, navigationInset + 24.0);
+        return FractionallySizedBox(
+          heightFactor: 0.84,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, bottomClearance),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Row(children: [
+                Icon(Icons.restaurant_menu_rounded, size: 22),
+                SizedBox(width: 9),
+                Text('주변맛집', style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w800,
+                )),
+              ]),
+              const SizedBox(height: 6),
+              const Text('반경 1km · 자동 검색 · 점수 확인 매장 우선 · 최대 20곳',
+                style: TextStyle(fontSize: 12)),
+              const SizedBox(height: 12),
+              Expanded(child: NearbyDiningCodeSection(
+                key: ValueKey('nearby-food-results-' + widget.place.id),
+                place: widget.place,
               )),
             ]),
-            const SizedBox(height: 6),
-            const Text('반경 1km · 자동 검색 · 점수 확인 매장 우선 · 최대 20곳',
-              style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 12),
-            Expanded(child: NearbyDiningCodeSection(
-              key: ValueKey('nearby-food-results-' + widget.place.id),
-              place: widget.place,
-            )),
-          ]),
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

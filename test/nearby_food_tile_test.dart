@@ -50,5 +50,16 @@ void main() {
     expect(find.textContaining('다이닝코드'), findsNothing);
     expect(find.text('내 맛집 추천하기'), findsOneWidget);
     expect(find.text('주변 맛집 검색'), findsNothing);
+
+    // Regression: the recommendation CTA cannot sit inside the system
+    // navigation / gesture area at the bottom of Android edge-to-edge UI.
+    final recommendationButton = find.widgetWithText(
+      FilledButton, '내 맛집 추천하기',
+    );
+    expect(recommendationButton, findsOneWidget);
+    final buttonBottom = tester.getBottomLeft(recommendationButton).dy;
+    final screenHeight =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    expect(buttonBottom, lessThanOrEqualTo(screenHeight - 56));
   });
 }
