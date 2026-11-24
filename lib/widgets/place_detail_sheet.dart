@@ -142,11 +142,13 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
   }
   final Map<String, int> _nearbyActivityCounts = {};
   int _activityLookupNumber = 0;
+  int _nearbyFoodCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadNearbyActivityCounts();
+    _loadNearbyFoodCount();
     _resolveIncompleteAddress();
   }
 
@@ -176,6 +178,55 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     } catch (_) {
       // The detail UI still works when the network is unavailable.
     }
+  }
+
+  Future<void> _loadNearbyFoodCount() async {
+    try {
+      final result = await Supabase.instance.client.rpc(
+        'nearby_diningcode_top20',
+        params: {
+          'p_lat': widget.place.latitude,
+          'p_lon': widget.place.longitude,
+        },
+      );
+      if (mounted) {
+        setState(() => _nearbyFoodCount = result is List ? result.length : 0);
+      }
+    } catch (_) {
+      // Keep the tile tappable when the count is temporarily unavailable.
+    }
+  }
+
+  void _openNearbyFood() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.84,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Row(children: [
+              Icon(Icons.restaurant_menu_rounded, size: 22),
+              SizedBox(width: 9),
+              Text('주변맛집', style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.w800,
+              )),
+            ]),
+            const SizedBox(height: 6),
+            const Text('반경 1km · 맛집 점수순 · 최대 20곳',
+              style: TextStyle(fontSize: 12)),
+            const SizedBox(height: 12),
+            Expanded(child: NearbyDiningCodeSection(
+              key: ValueKey('nearby-food-results-' + widget.place.id),
+              place: widget.place,
+            )),
+          ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _onActivitySelected(String activity) async {
@@ -246,6 +297,7 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     '온천·스파': Icons.hot_tub_outlined,
     '문화체험': Icons.museum_outlined,
     '시장·쇼핑': Icons.storefront_outlined,
+    '주변맛집': Icons.restaurant_menu_rounded,
   };
 
   Color get muted => Theme.of(context).colorScheme.onSurfaceVariant;
@@ -281,7 +333,10 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             ? p.services.contains('노지/차박') &&
                 p.services.contains('전기차 충전기')
             : p.services.contains(service);
-    final foundCount = activity ? (_nearbyActivityCounts[service] ?? 0) : 0;
+    final foundCount = activity
+        ? (service == '주변맛집' ? _nearbyFoodCount
+            : (_nearbyActivityCounts[service] ?? 0))
+        : 0;
     final active = isConfirmedAvailable(service) || (activity && foundCount > 0);
     final price = (p.prices[service] ??
         (service == '노지/차박' ? p.prices['캠핑장'] : null) ?? '').trim();
@@ -289,7 +344,9 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
     final entryUnverified = service == '노지/차박' &&
         placeCampingAccessNeedsConfirmation(p);
     final uncertain = listed && !active;
-    final display = activity && foundCount > 0
+    final display = activity && service == '주변맛집' && foundCount == 0
+        ? '반경 1km · 눌러서 확인'
+        : activity && foundCount > 0
         ? '주변 $foundCount곳 확인'
         : !listed
         ? (activity ? '눌러서 주변 확인' : (business || service == '전기차 충전기') ? '정보 없음' : '이용불가')
@@ -317,7 +374,11 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         : const Color(0xFF205FA1);
     final ink = active ? blueText : muted;
     return InkWell(
-      onTap: activity ? () => _onActivitySelected(service) : null,
+      onTap: activity
+          ? () => service == '주변맛집'
+              ? _openNearbyFood()
+              : _onActivitySelected(service)
+          : null,
       borderRadius: BorderRadius.circular(14),
       child: Container(
       constraints: BoxConstraints(minHeight: activity ? 73 : 100),
@@ -614,9 +675,14 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
       (service) => service == '전기',
     )];
     final businesses = <String>[...businessServices, ...businessExtras];
-    final activities = showAllActivities
-        ? recreationActivities
-        : recreationActivities.take(8).toList();
+    // Keep the food tile among the tourism/leisure tiles, even collapsed.
+    // It is a nearby query, not a new Place.services registration tag.
+    final activities = <String>[
+      ...(showAllActivities
+          ? recreationActivities
+          : recreationActivities.take(8)),
+      '주변맛집',
+    ];
     final others = otherServices.where((service) =>
         service != '전기').toList();
     final hasOperation = p.hours.isNotEmpty ||
@@ -812,13 +878,10 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
             label: Text(showAllActivities ? '접기' : '활동 더 보기'),
           ),
         ),
-        Text('카드를 누르면 이 장소에서 3km 이내의 관광·레저 정보를 확인할 수 있습니다.', style: TextStyle(fontSize: 12, color: muted)),
+        Text('관광·레저는 반경 3km, 주변맛집은 반경 1km 이내를 확인할 수 있습니다.', style: TextStyle(fontSize: 12, color: muted)),
         Text('현장 이용 가능 여부, 허가, 운영시간 및 요금은 방문 전 확인하세요.',
             style: TextStyle(fontSize: 12, height: 1.4, color: muted)),
-        const SizedBox(height: 24),
-        heading(Icons.restaurant_menu_rounded, '주변맛집'),
-        NearbyDiningCodeSection(key: ValueKey('nearby-food-' + p.id), place: p),
-        if (!p.isApproved) ...[
+         if (!p.isApproved) ...[
           const SizedBox(height: 16),
           panel(Text(
             p.isPending
