@@ -6,6 +6,7 @@ import '../models/place.dart';
 import 'food_recommendation_form.dart';
 import '../utils/nearby_food_naver_link.dart';
 import '../utils/food_open_status.dart';
+import '../utils/nearby_food_ranking.dart';
 
 /// Every tap fetches one-kilometre food results automatically. The server
 /// caches nearby external places and includes admin-approved member picks.
@@ -30,7 +31,7 @@ class _DiningSpot {
     required this.comment,
     required this.openingHours,
   });
-  final int rank;
+  final int? rank;
   final String name;
   final String category;
   final String address;
@@ -42,7 +43,8 @@ class _DiningSpot {
   final String? openingHours;
 
   factory _DiningSpot.fromJson(Map<String, dynamic> row) => _DiningSpot(
-    rank: (row['rank'] as num?)?.toInt() ?? 0,
+    rank: verifiedNearbyFoodRank(
+      (row['score'] as num?)?.toInt(), (row['rank'] as num?)?.toInt()),
     name: (row['name'] ?? '').toString(),
     category: (row['category'] ?? '').toString(),
     address: (row['address'] ?? '').toString(),
@@ -176,14 +178,16 @@ class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
       child: ListTile(
         dense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        leading: CircleAvatar(
-          radius: 17,
-          backgroundColor: scheme.primaryContainer,
-          child: Text(spot.rank.toString(), style: TextStyle(
-            fontSize: 13, fontWeight: FontWeight.bold,
-            color: scheme.onPrimaryContainer,
-          )),
-        ),
+        leading: spot.rank == null
+            ? Icon(Icons.place_outlined, size: 24, color: scheme.onSurfaceVariant)
+            : CircleAvatar(
+                radius: 17,
+                backgroundColor: scheme.primaryContainer,
+                child: Text(spot.rank.toString(), style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.bold,
+                  color: scheme.onPrimaryContainer,
+                )),
+              ),
         title: Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           spacing: 7,
@@ -257,9 +261,29 @@ class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
                 '반경 1km 내 검색된 맛집이 없습니다.',
               ));
             }
-            return ListView.builder(
-              itemCount: rows.length,
-              itemBuilder: (_, i) => _spotTile(rows[i]),
+            final scored = rows.where((item) => item.score != null).toList();
+            final other = rows.where((item) => item.score == null).toList();
+            final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+            return ListView(
+              children: [
+                if (scored.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(8, 5, 8, 8),
+                    child: Text('맛집 점수가 확인된 곳 · 점수 높은 순',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  ),
+                  ...scored.map(_spotTile),
+                ],
+                if (other.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 15, 8, 8),
+                    child: Text('그 밖의 주변 음식점 · 거리순 (맛집 순위 아님)',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                        color: muted)),
+                  ),
+                  ...other.map(_spotTile),
+                ],
+              ],
             );
           },
         ),
