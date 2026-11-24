@@ -23,6 +23,8 @@ type Spot = {
   score: number | null; url: string;
   source: "kakao" | "curated" | "community" | "osm";
   comment?: string; kakao_id?: string;
+  /** Documented OSM/verified weekly schedule; absent for providers without hours. */
+  opening_hours?: string | null;
 };
 function categoryLabel(source: string) {
   if (/카페|커피|coffee|디저트/i.test(source)) return "카페";
@@ -75,6 +77,7 @@ function fromKakao(d: Record<string, unknown>, lat: number, lon: number): Spot |
     url: String(d.place_url || ""),
     source: "kakao",
     kakao_id: String(d.id || ""),
+    opening_hours: null, // Kakao Local Search does not provide business hours.
   };
 }
 async function discover(key: string, lat: number, lon: number) {
@@ -145,6 +148,7 @@ async function osmDiscover(lat: number, lon: number): Promise<{
           address: String(tags["addr:full"] || tags["addr:street"] || ""),
           score: null, source: "osm",
           url: "https://www.openstreetmap.org/" + el.type + "/" + el.id,
+          opening_hours: String(tags.opening_hours || "").trim().slice(0, 160) || null,
         };
         if (!spots.some((x) => isDuplicate(x, item))) spots.push(item);
       }
@@ -233,21 +237,31 @@ Deno.serve(async (req: Request) => {
       Math.abs(Number(cached.latitude) - lat) < 0.000001 &&
       Math.abs(Number(cached.longitude) - lon) < 0.000001 &&
       new Date(String(cached.expires_at)).getTime() > Date.now() &&
-      Array.isArray(cached.results);
+      Array.isArray(cached.results) &&
+      // Invalidate v2 cached spots once to fetch actual OSM business hours.
+      cached.results.every((item: Spot) =>
+        Object.prototype.hasOwnProperty.call(item, "opening_hours"));
     let discovered: Spot[] = isFresh ? cached.results as Spot[] : [];
     let providerAvailable = Boolean(kakao);
     if (!isFresh) {
       const kakaoFound = kakao
         ? await discover(kakao, lat, lon)
         : { spots: [] as Spot[], provider_available: false };
-      const osmFound = kakaoFound.spots.length < 20
-        ? await osmDiscover(lat, lon)
-        : { spots: [] as Spot[], provider_available: false };
+      // Obtain business-hour tags even in dense areas with plenty of
+      // Kakao results, as Kakao's public Local Search omits hours.
+      const osmFound = await osmDiscover(lat, lon);
       providerAvailable = kakaoFound.provider_available || osmFound.provider_available;
       if (providerAvailable) {
         discovered = [...kakaoFound.spots];
         for (const item of osmFound.spots) {
-          if (!discovered.some((r) => isDuplicate(r, item))) discovered.push(item);
+          const match = discovered.find((r) => isDuplicate(r, item));
+          if (match) {
+            if (!match.opening_hours && item.opening_hours) {
+              match.opening_hours = item.opening_hours;
+            }
+          } else {
+            discovered.push(item);
+          }
         }
         const now = Date.now();
         await adminDb.from("nearby_food_cache").upsert({
@@ -269,6 +283,7 @@ Deno.serve(async (req: Request) => {
       longitude: Number(r.longitude), distance_m: Number(r.distance_m),
       score: typeof r.diningcode_score === "number" ? r.diningcode_score : null,
       url: String(r.diningcode_url || ""), source: "curated" as const,
+      opening_hours: null,
     }));
     const { data: recommendations, error: recError } = await userDb
       .from("food_recommendations")
@@ -285,6 +300,7 @@ Deno.serve(async (req: Request) => {
       distance_m: Math.round(distance(lat, lon, Number(r.latitude), Number(r.longitude))),
       score: null, url: "", source: "community" as const,
       comment: String(r.comment || ""),
+      opening_hours: null,
     })).filter((r) => r.distance_m <= RADIUS);
 
     const all: Spot[] = [];
@@ -292,7 +308,16 @@ Deno.serve(async (req: Request) => {
     // then location-discovered spots, with no invented review scores.
     for (const source of [scored, community, discovered]) for (const item of source) {
       if (item.distance_m > RADIUS) continue;
-      if (!all.some((r) => isDuplicate(r, item))) all.push(item);
+      const matching = all.find((r) => isDuplicate(r, item));
+      if (matching) {
+        // Score-ranked entries and approved recommendations are preferred,
+        // but inherit an actual weekly schedule from the OSM source.
+        if (!matching.opening_hours && item.opening_hours) {
+          matching.opening_hours = item.opening_hours;
+        }
+      } else {
+        all.push(item);
+      }
     }
     all.sort((a, b) =>
       (b.score ?? -1) - (a.score ?? -1) ||

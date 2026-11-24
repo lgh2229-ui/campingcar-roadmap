@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
 import 'food_recommendation_form.dart';
 import '../utils/nearby_food_naver_link.dart';
+import '../utils/food_open_status.dart';
 
 /// Every tap fetches one-kilometre food results automatically. The server
 /// caches nearby external places and includes admin-approved member picks.
@@ -26,6 +28,7 @@ class _DiningSpot {
     required this.url,
     required this.source,
     required this.comment,
+    required this.openingHours,
   });
   final int rank;
   final String name;
@@ -36,6 +39,7 @@ class _DiningSpot {
   final String url;
   final String source;
   final String comment;
+  final String? openingHours;
 
   factory _DiningSpot.fromJson(Map<String, dynamic> row) => _DiningSpot(
     rank: (row['rank'] as num?)?.toInt() ?? 0,
@@ -47,11 +51,27 @@ class _DiningSpot {
     url: (row['url'] ?? '').toString(),
     source: (row['source'] ?? '').toString(),
     comment: (row['comment'] ?? '').toString(),
+    openingHours: (row['opening_hours'] as String?)?.trim(),
   );
 }
 
 class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
   late Future<List<_DiningSpot>> result = _fetch();
+  Timer? _statusRefreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _statusRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusRefreshTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant NearbyDiningCodeSection oldWidget) {
@@ -128,9 +148,25 @@ class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
 
   Widget _spotTile(_DiningSpot spot) {
     final scheme = Theme.of(context).colorScheme;
+    final status = foodOpenState(spot.openingHours, DateTime.now().toUtc());
+    final statusText = switch (status) {
+      FoodOpenState.open => '영업중',
+      FoodOpenState.closed => '영업종료',
+      FoodOpenState.unknown => '영업시간 정보 없음',
+    };
+    final statusForeground = switch (status) {
+      FoodOpenState.open => const Color(0xFF187A37),
+      FoodOpenState.closed => const Color(0xFFC03236),
+      FoodOpenState.unknown => scheme.onSurfaceVariant,
+    };
+    final statusBackground = switch (status) {
+      FoodOpenState.open => const Color(0xFFE5F5EA),
+      FoodOpenState.closed => const Color(0xFFFFECEC),
+      FoodOpenState.unknown => scheme.surfaceContainerHighest,
+    };
     final description = <String>[
-      spot.category, '${spot.distanceM}m',
-      if (spot.score != null) '점수 ${spot.score}점',
+      spot.category, spot.distanceM.toString() + 'm',
+      if (spot.score != null) '점수 ' + spot.score.toString() + '점',
       if (spot.source == 'community') '회원 추천',
     ].join(' · ');
     return Card(
@@ -143,20 +179,40 @@ class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
         leading: CircleAvatar(
           radius: 17,
           backgroundColor: scheme.primaryContainer,
-          child: Text('${spot.rank}', style: TextStyle(
+          child: Text(spot.rank.toString(), style: TextStyle(
             fontSize: 13, fontWeight: FontWeight.bold,
             color: scheme.onPrimaryContainer,
           )),
         ),
-        title: Text(spot.name, style: const TextStyle(
-          fontSize: 14, fontWeight: FontWeight.w700,
-        )),
+        title: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 7,
+          runSpacing: 4,
+          children: [
+            Text(spot.name, style: const TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w700,
+            )),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(7),
+                color: statusBackground,
+              ),
+              child: Text(statusText, style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                color: statusForeground,
+              )),
+            ),
+          ],
+        ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             description
-                + (spot.address.isEmpty ? '' : '\n${spot.address}')
-                + (spot.comment.isEmpty ? '' : '\n추천 이유: ${spot.comment}'),
+                + (spot.address.isEmpty ? '' : '\n' + spot.address)
+                + (spot.comment.isEmpty ? '' : '\n추천 이유: ' + spot.comment)
+                + (status == FoodOpenState.unknown ? '' : '\n등록 영업시간 기준 · 변동 가능'),
             style: const TextStyle(fontSize: 12, height: 1.4),
           ),
         ),
