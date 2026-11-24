@@ -21,7 +21,7 @@ type Spot = {
   name: string; category: string; address: string;
   latitude: number; longitude: number; distance_m: number;
   score: number | null; url: string;
-  source: "kakao" | "curated" | "community";
+  source: "kakao" | "curated" | "community" | "osm";
   comment?: string; kakao_id?: string;
 };
 function categoryLabel(source: string) {
@@ -102,6 +102,62 @@ async function discover(key: string, lat: number, lon: number) {
   return { spots, provider_available: pages.some((p) => p !== null) };
 }
 
+
+/** OpenStreetMap fallback, used only when nearby provider results are sparse. */
+async function osmDiscover(lat: number, lon: number): Promise<{
+  spots: Spot[]; provider_available: boolean;
+}> {
+  const query = '[out:json][timeout:8];('
+    + 'nwr(around:1000,' + lat + ',' + lon
+    + ')["amenity"~"^(restaurant|cafe|fast_food|food_court)$"];'
+    + 'nwr(around:1000,' + lat + ',' + lon
+    + ')["shop"~"^(bakery|pastry)$"];'
+    + ');out center tags;';
+  const sites = [
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+  ];
+  for (const base of sites) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6500);
+    try {
+      const response = await fetch(base + "?data=" + encodeURIComponent(query), {
+        signal: ctrl.signal,
+        headers: { "User-Agent": "CampingcarRoadmap/1.0" },
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
+      if (!Array.isArray(data.elements)) continue;
+      const spots: Spot[] = [];
+      for (const el of data.elements) {
+        const tags = el.tags ?? {};
+        const name = String(tags["name:ko"] || tags.name || "").trim();
+        if (name.length < 2) continue;
+        const latitude = Number(el.lat ?? el.center?.lat);
+        const longitude = Number(el.lon ?? el.center?.lon);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) continue;
+        const distance_m = Math.round(distance(lat, lon, latitude, longitude));
+        if (distance_m > RADIUS) continue;
+        const category = tags.shop === "bakery" || tags.shop === "pastry" ? "베이커리"
+          : tags.amenity === "cafe" ? "카페" : "식당";
+        const item: Spot = {
+          name, category, latitude, longitude, distance_m,
+          address: String(tags["addr:full"] || tags["addr:street"] || ""),
+          score: null, source: "osm",
+          url: "https://www.openstreetmap.org/" + el.type + "/" + el.id,
+        };
+        if (!spots.some((x) => isDuplicate(x, item))) spots.push(item);
+      }
+      return { spots, provider_available: true };
+    } catch (e) {
+      console.warn("OSM restaurant fallback:", String(e));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { spots: [], provider_available: false };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -139,21 +195,34 @@ Deno.serve(async (req: Request) => {
     if (mode === "lookup") {
       const query = String(body.query ?? "").trim().slice(0, 80);
       if (query.length < 2) return json({ error: "query_too_short" }, 400);
-      if (!kakao) return json({ error: "search_unavailable" }, 503);
-      const url = new URL("https://dapi.kakao.com/v2/local/search/keyword.json");
-      url.search = new URLSearchParams({
-        query, x: String(lon), y: String(lat),
-        radius: "1000", size: "15", sort: "distance",
-      }).toString();
-      const data = await kakaoQuery(kakao, url);
-      if (!data) return json({ error: "search_unavailable" }, 503);
-      const raw = Array.isArray(data.documents) ? data.documents : [];
-      const spots = raw.map((d) => fromKakao(d, lat, lon)).filter((x) =>
-        x !== null && ["FD6", "CE7"].includes(
-          String(raw.find((d) => String(d.id) === x!.kakao_id)?.category_group_code || ""),
-        )
-      ).slice(0, 12);
-      return json({ spots });
+      let spots: Spot[] = [];
+      let providerAvailable = false;
+      if (kakao) {
+        const url = new URL("https://dapi.kakao.com/v2/local/search/keyword.json");
+        url.search = new URLSearchParams({
+          query, x: String(lon), y: String(lat),
+          radius: "1000", size: "15", sort: "distance",
+        }).toString();
+        const data = await kakaoQuery(kakao, url);
+        if (data) {
+          providerAvailable = true;
+          const raw = Array.isArray(data.documents) ? data.documents : [];
+          spots = raw.filter((d) => ["FD6", "CE7"].includes(
+            String(d.category_group_code || ""),
+          )).map((d) => fromKakao(d, lat, lon)).filter(
+            (x): x is Spot => x !== null,
+          );
+        }
+      }
+      if (!spots.length) {
+        const osm = await osmDiscover(lat, lon);
+        providerAvailable ||= osm.provider_available;
+        const requested = tidy(query);
+        spots = osm.spots.filter((x) => tidy(x.name).includes(requested)
+          || requested.includes(tidy(x.name)));
+      }
+      if (!providerAvailable) return json({ error: "search_unavailable" }, 503);
+      return json({ spots: spots.slice(0, 12) });
     }
     if (mode !== "list") return json({ error: "unknown_mode" }, 400);
 
@@ -167,11 +236,19 @@ Deno.serve(async (req: Request) => {
       Array.isArray(cached.results);
     let discovered: Spot[] = isFresh ? cached.results as Spot[] : [];
     let providerAvailable = Boolean(kakao);
-    if (!isFresh && kakao) {
-      const found = await discover(kakao, lat, lon);
-      providerAvailable = found.provider_available;
+    if (!isFresh) {
+      const kakaoFound = kakao
+        ? await discover(kakao, lat, lon)
+        : { spots: [] as Spot[], provider_available: false };
+      const osmFound = kakaoFound.spots.length < 20
+        ? await osmDiscover(lat, lon)
+        : { spots: [] as Spot[], provider_available: false };
+      providerAvailable = kakaoFound.provider_available || osmFound.provider_available;
       if (providerAvailable) {
-        discovered = found.spots;
+        discovered = [...kakaoFound.spots];
+        for (const item of osmFound.spots) {
+          if (!discovered.some((r) => isDuplicate(r, item))) discovered.push(item);
+        }
         const now = Date.now();
         await adminDb.from("nearby_food_cache").upsert({
           place_id: placeId, latitude: lat, longitude: lon,
