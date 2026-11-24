@@ -6,6 +6,7 @@ import '../models/place.dart';
 import 'food_recommendation_form.dart';
 import '../utils/nearby_food_naver_link.dart';
 import '../utils/food_open_status.dart';
+import '../utils/nearby_food_ranking.dart';
 
 /// Every tap fetches one-kilometre food results automatically. The server
 /// caches nearby external places and includes admin-approved member picks.
@@ -42,7 +43,8 @@ class _DiningSpot {
   final String? openingHours;
 
   factory _DiningSpot.fromJson(Map<String, dynamic> row) => _DiningSpot(
-    rank: (row['rank'] as num?)?.toInt(),
+    rank: verifiedNearbyFoodRank(
+      (row['score'] as num?)?.toInt(), (row['rank'] as num?)?.toInt()),
     name: (row['name'] ?? '').toString(),
     category: (row['category'] ?? '').toString(),
     address: (row['address'] ?? '').toString(),
