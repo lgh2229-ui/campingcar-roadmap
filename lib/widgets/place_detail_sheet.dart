@@ -7,6 +7,7 @@ import '../models/recreation_activities.dart';
 import '../models/place_review.dart';
 import 'place_marker_icons.dart';
 import 'linked_place_note.dart';
+import 'nearby_diningcode_section.dart';
 
 
 /// Blue means the service was selected for this place, not that camping is legally permitted.
@@ -814,6 +815,9 @@ class _PlaceDetailSheetState extends State<PlaceDetailSheet> {
         Text('카드를 누르면 이 장소에서 3km 이내의 관광·레저 정보를 확인할 수 있습니다.', style: TextStyle(fontSize: 12, color: muted)),
         Text('현장 이용 가능 여부, 허가, 운영시간 및 요금은 방문 전 확인하세요.',
             style: TextStyle(fontSize: 12, height: 1.4, color: muted)),
+        const SizedBox(height: 24),
+        heading(Icons.restaurant_menu_rounded, '주변맛집'),
+        NearbyDiningCodeSection(key: ValueKey('nearby-food-' + p.id), place: p),
         if (!p.isApproved) ...[
           const SizedBox(height: 16),
           panel(Text(
