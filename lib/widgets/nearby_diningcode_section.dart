@@ -117,7 +117,7 @@ class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
           padding: const EdgeInsets.only(top: 4),
           child: Text(
             spot.category + ' · ' + spot.distanceM.toString() + 'm' +
-                (spot.score == null ? '' : ' · 다코 ' + spot.score.toString() + '점') +
+                (spot.score == null ? '' : ' · 점수 ' + spot.score.toString() + '점') +
                 (spot.address.isEmpty ? '' : '\n' + spot.address),
             style: const TextStyle(fontSize: 12, height: 1.4),
           ),
@@ -129,75 +129,36 @@ class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
     );
   }
 
-  void _openAll(List<_DiningSpot> rows) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (_) => FractionallySizedBox(
-        heightFactor: .82,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('주변맛집', style: TextStyle(
-              fontSize: 20, fontWeight: FontWeight.w800,
-            )),
-            const SizedBox(height: 4),
-            const Text('다이닝코드 점수순 · 직선거리 1km · 최대 20곳',
-              style: TextStyle(fontSize: 12)),
-            const SizedBox(height: 12),
-            Expanded(child: ListView.builder(
-              itemCount: rows.length,
-              itemBuilder: (_, index) => _spotTile(rows[index]),
-            )),
-          ]),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<_DiningSpot>>(
       future: result,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text('맛집 정보를 불러오지 못했습니다.'));
         }
         final rows = snapshot.data ?? const <_DiningSpot>[];
-        if (snapshot.hasError || rows.isEmpty) {
-          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('반경 1km 내 등록된 다이닝코드 맛집 목록이 없습니다.',
-              style: TextStyle(fontSize: 12)),
-            TextButton.icon(
-              onPressed: () => _openUrl(_searchUrl),
-              icon: const Icon(Icons.open_in_new, size: 17),
-              label: const Text('다이닝코드에서 주변 맛집 검색'),
-            ),
-          ]);
+        if (rows.isEmpty) {
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('반경 1km 안에 등록된 맛집이 없습니다.'),
+              const SizedBox(height: 10),
+              TextButton.icon(
+                onPressed: () => _openUrl(_searchUrl),
+                icon: const Icon(Icons.open_in_new, size: 17),
+                label: const Text('주변 맛집 검색'),
+              ),
+            ],
+          );
         }
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('다이닝코드 점수순 · 직선거리 1km · ' +
-              rows.length.toString() + '곳 (최대 20곳)',
-            style: TextStyle(
-              fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...rows.take(3).map(_spotTile),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => _openAll(rows),
-              icon: const Icon(Icons.list_alt_outlined, size: 18),
-              label: Text('전체 ' + rows.length.toString() + '곳 보기'),
-            ),
-          ),
-        ]);
+        return ListView.builder(
+          itemCount: rows.length,
+          itemBuilder: (_, index) => _spotTile(rows[index]),
+        );
       },
     );
   }

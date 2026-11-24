@@ -12,6 +12,7 @@ on:
       - lib/widgets/activity_insight_sheet.dart
       - lib/widgets/place_detail_sheet.dart
       - lib/widgets/nearby_diningcode_section.dart
+      - test/nearby_food_tile_test.dart
       - lib/widgets/linked_place_note.dart
       - lib/widgets/price_thousands_formatter.dart
       - test/price_and_links_test.dart
@@ -162,7 +163,7 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: campingcar-roadmap-test-apk-1.9.60-154
+          name: campingcar-roadmap-test-apk-1.9.61-155
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
 
