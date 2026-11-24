@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/place.dart';
 import 'food_recommendation_form.dart';
+import '../utils/nearby_food_naver_link.dart';
 
 /// Every tap fetches one-kilometre food results automatically. The server
 /// caches nearby external places and includes admin-approved member picks.
@@ -78,22 +79,32 @@ class _NearbyDiningCodeSectionState extends State<NearbyDiningCodeSection> {
   }
 
   Future<void> _openSpot(_DiningSpot spot) async {
-    final url = spot.url.startsWith('https://')
-        ? spot.url
-        : Uri.https('map.naver.com',
-            '/p/search/${spot.name} ${spot.address}').toString();
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
+    // Do not open Kakao/OSM/DiningCode place links: Naver Map cannot reliably
+    // resolve their external POI IDs and may display "알 수 없는 장소".
+    // Always pass "상호명 + 시·군·구 + 읍·면·동" as a normal search query.
+    final appUri = nearbyFoodNaverAppUri(spot.name, spot.address);
+    final webUri = nearbyFoodNaverWebUri(spot.name, spot.address);
     try {
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('매장 상세 페이지를 열 수 없습니다.')),
-        );
-      }
+      final opened = await launchUrl(
+        appUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('매장 상세 페이지를 열 수 없습니다.')),
+      // Naver Map is not installed or the device cannot handle nmap://.
+    }
+    try {
+      final opened = await launchUrl(
+        webUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
+    } catch (_) {
+      // Both app and browser unavailable.
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('네이버지도 검색을 열 수 없습니다.')),
       );
     }
   }
