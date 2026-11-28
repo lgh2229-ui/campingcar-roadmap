@@ -102,7 +102,10 @@ class _AdminScreenState extends State<AdminScreen> {
       ]))),
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('저장'))],
     )));
-    if (save != true) return;
+    if (save != true) {
+      if (widget.initialEditPlaceId != null && mounted) Navigator.of(context).pop(false);
+      return;
+    }
     if (name.text.trim().isEmpty || selected.isEmpty || address.text.trim().isEmpty) return _msg('장소명·주소·시설을 확인해주세요.');
     final editLat=double.tryParse(latitude.text.trim()), editLon=double.tryParse(longitude.text.trim());
     if(editLat==null||editLon==null||editLat.abs()>90||editLon.abs()>180)return _msg('위도·경도를 확인해주세요.');
@@ -128,7 +131,11 @@ class _AdminScreenState extends State<AdminScreen> {
       }
       p.photoUrls = [...keptPhotos, ...uploaded];
       _msg('장소 정보를 수정했습니다.');
-      await _load();
+      if (widget.initialEditPlaceId != null && mounted) {
+        Navigator.of(context).pop(true);
+      } else {
+        await _load();
+      }
     } catch (e) {
       _msg('장소 수정에 실패했습니다: $e');
     }
