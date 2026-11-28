@@ -1,8 +1,8 @@
 name: campingcar_roadmap
 description: 캠핑카족 로드맵 Flutter MVP
 publish_to: 'none'
-version: 1.9.66+160
-# Reserve bottom navigation safe space for nearby restaurant recommendation button
+version: 1.9.67+161
+# Place-request notification opens map/photo review, direct editing and approval
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
