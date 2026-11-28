@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/place.dart';
+import '../repositories/supabase_repository.dart';
+import 'admin_home_screen.dart';
 
 /// Permanent admin notification history. Reading never deletes an event.
 class AdminNotificationLogScreen extends StatefulWidget {
@@ -38,6 +41,30 @@ class _AdminNotificationLogScreenState extends State<AdminNotificationLogScreen>
         if (mounted) setState(() => n['is_read'] = true);
       }
       final kind = '${n['kind'] ?? ''}', id = '${n['reference_id'] ?? ''}';
+      // A place approval request is an actionable task, not just a text log.
+      // Open its exact pending/processed place, including map and photos.
+      if (kind == 'place_request' && id.isNotEmpty) {
+        final row = await db.from('places_view').select()
+          .eq('id', id).maybeSingle();
+        if (row != null) {
+          final place = Place.fromJson(Map<String, dynamic>.from(row));
+          final photos = await db.from('place_photos')
+            .select('public_url').eq('place_id', place.id);
+          place.photoUrls = <String>{
+            ...place.photoUrls,
+            ...photos.map((p) => '${p['public_url'] ?? ''}')
+              .where((url) => url.isNotEmpty),
+          }.toList();
+          if (!mounted) return;
+          await Navigator.of(context).push(MaterialPageRoute<void>(
+            builder: (_) => AdminPlaceReviewScreen(
+              place: place, data: SupabaseRepository(db),
+            ),
+          ));
+          if (mounted) await load();
+          return;
+        }
+      }
       String title = '${n['title'] ?? '알림'}';
       final lines = <String>[];
       final photos = <String>[];
