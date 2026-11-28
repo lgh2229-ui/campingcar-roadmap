@@ -8,11 +8,12 @@ import '../repositories/app_data_repository.dart';
 import '../repositories/auth_repository.dart';
 
 class AdminScreen extends StatefulWidget {
-  const AdminScreen({super.key, required this.user, required this.auth, required this.data, required this.onLogout});
+  const AdminScreen({super.key, required this.user, required this.auth, required this.data, required this.onLogout, this.initialEditPlaceId});
   final AppUser user;
   final AuthRepository auth;
   final AppDataRepository data;
   final Future<void> Function() onLogout;
+  final String? initialEditPlaceId;
 
   @override
   State<AdminScreen> createState() => _AdminScreenState();
@@ -22,6 +23,7 @@ class _AdminScreenState extends State<AdminScreen> {
   List<Place> pending = [];
   List<AdminReviewTask> tasks = [];
   bool loading = true;
+  bool _openedInitialEdit = false;
 
   @override
   void initState() {
@@ -34,6 +36,15 @@ class _AdminScreenState extends State<AdminScreen> {
     try {
       pending = await widget.data.pendingPlaces();
       tasks = await widget.data.adminReviewTasks();
+      if (!_openedInitialEdit && widget.initialEditPlaceId != null) {
+        final target = pending.where((p) => p.id == widget.initialEditPlaceId).toList();
+        _openedInitialEdit = true;
+        if (target.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _editPlace(target.first);
+          });
+        }
+      }
     } catch (e) {
       if (mounted) _msg('관리자 데이터를 불러오지 못했습니다: $e');
     } finally {
@@ -46,11 +57,13 @@ class _AdminScreenState extends State<AdminScreen> {
   Future<void> _editPlace(Place p) async {
     final name = TextEditingController(text: p.name.replaceFirst(RegExp(r'^\[(승인 대기|승인 반려)\]\s*'), ''));
     final address = TextEditingController(text: p.address);
+    final latitude = TextEditingController(text: p.latitude.toStringAsFixed(6));
+    final longitude = TextEditingController(text: p.longitude.toStringAsFixed(6));
     final hours = TextEditingController(text: p.hours);
     final height = TextEditingController(text: p.maxHeightMm == null ? '' : (p.maxHeightMm! / 1000).toStringAsFixed(2));
     final phone = TextEditingController(text: p.phone);
     final note = TextEditingController(text: p.note);
-    final services = ['급수', '블랙탱크 비움', '노지/차박', '공중화장실'];
+    final services = <String>{'급수', '블랙탱크 비움', '노지/차박', '캠핑장', '공중화장실', '전기차 충전기', '전기', '매매', '수리', '제작', 'A/S', '부품·용품', ...p.services}.toList();
     final selected = p.services.toSet();
     final prices = <String, TextEditingController>{for (final s in services) s: TextEditingController(text: p.prices[s] ?? '')};
     String reservation = p.reservation.isEmpty ? '예약불필요' : p.reservation;
@@ -62,6 +75,8 @@ class _AdminScreenState extends State<AdminScreen> {
       content: SizedBox(width: 440, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소')),
+        Row(children: [Expanded(child: TextField(controller: latitude, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), decoration: const InputDecoration(labelText: '위도'))),const SizedBox(width:8),Expanded(child:TextField(controller:longitude,keyboardType:const TextInputType.numberWithOptions(decimal:true,signed:true),decoration:const InputDecoration(labelText:'경도')))]),
+        const Text('승인 화면 지도의 위치를 참고해 위도·경도를 변경할 수 있습니다.', style: TextStyle(fontSize: 12)),
         const SizedBox(height: 8),
         ...services.map((s) => Row(children: [
           Checkbox(value: selected.contains(s), onChanged: (v) => setS(() { if (v == true) { selected.add(s); } else { selected.remove(s); } })),
@@ -88,9 +103,13 @@ class _AdminScreenState extends State<AdminScreen> {
       actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')), FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('저장'))],
     )));
     if (save != true) return;
-    if (name.text.trim().isEmpty || selected.isEmpty) return _msg('장소명과 서비스 항목을 확인해주세요.');
+    if (name.text.trim().isEmpty || selected.isEmpty || address.text.trim().isEmpty) return _msg('장소명·주소·시설을 확인해주세요.');
+    final editLat=double.tryParse(latitude.text.trim()), editLon=double.tryParse(longitude.text.trim());
+    if(editLat==null||editLon==null||editLat.abs()>90||editLon.abs()>180)return _msg('위도·경도를 확인해주세요.');
     p.name = name.text.trim();
     p.address = address.text.trim();
+    p.latitude=editLat;
+    p.longitude=editLon;
     p.services = selected.toList();
     p.prices = {for (final s in selected) s: prices[s]!.text.trim()};
     p.hours = hours.text.trim();
@@ -99,11 +118,15 @@ class _AdminScreenState extends State<AdminScreen> {
     p.maxHeightMm = meters == null ? null : (meters * 1000).round();
     p.phone = phone.text.trim();
     p.note = note.text.trim();
-    if (keptPhotos.isEmpty && newPhotos.isEmpty) return _msg('장소사진을 1장 이상 남겨주세요.');
+    // An applicant may have no photos; editing must remain possible.
+    // The review screen explicitly shows an attachment warning when empty.
     try {
       final uploaded = newPhotos.isEmpty ? <String>[] : await widget.data.uploadPlacePhotos(p.id, newPhotos.map((e) => File(e.path)).toList());
-      p.photoUrls = [...keptPhotos, ...uploaded];
       await widget.data.updatePlace(p);
+      for(final url in [...p.photoUrls]) {
+        if(!keptPhotos.contains(url))await widget.data.deletePlacePhoto(p.id,url);
+      }
+      p.photoUrls = [...keptPhotos, ...uploaded];
       _msg('장소 정보를 수정했습니다.');
       await _load();
     } catch (e) {
