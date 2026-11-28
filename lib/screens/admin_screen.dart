@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/admin_review_task.dart';
 import '../models/app_user.dart';
 import '../models/place.dart';
@@ -59,6 +61,7 @@ class _AdminScreenState extends State<AdminScreen> {
     final address = TextEditingController(text: p.address);
     final latitude = TextEditingController(text: p.latitude.toStringAsFixed(6));
     final longitude = TextEditingController(text: p.longitude.toStringAsFixed(6));
+    LatLng markerPosition=LatLng(p.latitude,p.longitude);
     final hours = TextEditingController(text: p.hours);
     final height = TextEditingController(text: p.maxHeightMm == null ? '' : (p.maxHeightMm! / 1000).toStringAsFixed(2));
     final phone = TextEditingController(text: p.phone);
@@ -76,7 +79,26 @@ class _AdminScreenState extends State<AdminScreen> {
         TextField(controller: name, decoration: const InputDecoration(labelText: '장소명')),
         TextField(controller: address, decoration: const InputDecoration(labelText: '주소')),
         Row(children: [Expanded(child: TextField(controller: latitude, keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true), decoration: const InputDecoration(labelText: '위도'))),const SizedBox(width:8),Expanded(child:TextField(controller:longitude,keyboardType:const TextInputType.numberWithOptions(decimal:true,signed:true),decoration:const InputDecoration(labelText:'경도')))]),
-        const Text('승인 화면 지도의 위치를 참고해 위도·경도를 변경할 수 있습니다.', style: TextStyle(fontSize: 12)),
+        const Text('지도를 이동한 뒤 원하는 지점을 탭하면 핀과 좌표를 바꿀 수 있습니다.', style: TextStyle(fontSize: 12)),
+        const SizedBox(height: 8),
+        SizedBox(height: 190, child: FlutterMap(
+          key: ValueKey('edit-position-'+markerPosition.latitude.toString()+'-'+markerPosition.longitude.toString()),
+          options: MapOptions(initialCenter: markerPosition, initialZoom: 17,
+            onTap: (_, point) => setS(() {
+              markerPosition=point;
+              latitude.text=point.latitude.toStringAsFixed(6);
+              longitude.text=point.longitude.toStringAsFixed(6);
+            })),
+          children: [
+            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'kr.co.campingcarroadmap.app'),
+            MarkerLayer(markers: [Marker(
+              point: markerPosition, width: 58, height: 58,
+              child: const Icon(Icons.location_pin, size: 48, color: Colors.red),
+            )]),
+          ],
+        )),
+
         const SizedBox(height: 8),
         ...services.map((s) => Row(children: [
           Checkbox(value: selected.contains(s), onChanged: (v) => setS(() { if (v == true) { selected.add(s); } else { selected.remove(s); } })),
